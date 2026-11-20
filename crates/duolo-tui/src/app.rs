@@ -1,12 +1,15 @@
 //! 界面状态和所有用户操作。这里不涉及绘制，绘制见 `ui`。
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use duolo_core::{AgentKey, ProjectId, Task, TaskId};
-use duolo_engine::Engine;
+use duolo_engine::{check_environment, Check, Engine};
 use duolo_pty::Size;
 use duolo_voice::OrganizeContext;
+use ratatui::layout::Rect;
 
 use crate::line_input::LineInput;
 use crate::voice::{Delivery, Voice, VoiceTarget};
@@ -14,23 +17,39 @@ use crate::voice::{Delivery, Voice, VoiceTarget};
 /// 提示消息显示多久。
 const FLASH_TTL: Duration = Duration::from_secs(4);
 
-/// 当前的交互模式。
-#[derive(Debug)]
+/// 需要用户确认或阅读的弹出状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    /// 按键交给当前 Agent（没有 Agent 时由 Duolo 处理）。
     Normal,
-    /// 按了 `Ctrl+]`，等待下一个键。
-    Prefix,
-    NewTask {
-        input: LineInput,
-        project: usize,
-    },
-    AddProject {
-        input: LineInput,
-    },
     ConfirmClose(TaskId),
     ConfirmQuit,
     Help,
+}
+
+/// 键盘焦点在哪一侧。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    /// 右侧：首页输入框，或当前 Agent。
+    Main,
+    /// 左侧边栏：方向键选择，回车打开。
+    Sidebar,
+}
+
+/// 侧边栏里可以选中的一行。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Item {
+    NewTask,
+    Task(TaskId),
+    Agent(AgentKey),
+    AddProject,
+}
+
+/// 首页输入框：平时用来新建任务，`adding_project` 时用来添加项目。
+#[derive(Debug, Default)]
+pub struct Home {
+    pub input: LineInput,
+    pub project: usize,
+    pub adding_project: bool,
 }
 
 #[derive(Debug)]
@@ -44,33 +63,66 @@ pub struct Flash {
 pub struct App {
     pub engine: Engine,
     pub mode: Mode,
+    pub focus: Focus,
+    /// 侧边栏获得焦点时的光标。
+    pub cursor: Item,
     pub voice: Voice,
+    pub home: Home,
     pub sidebar_visible: bool,
+    /// 上一帧侧边栏每一行的位置，用于鼠标点击。
+    pub sidebar_hits: Vec<(u16, Item)>,
+    pub sidebar_area: Rect,
+    pub pane_area: Rect,
     selected_task: Option<TaskId>,
+    last_task: Option<TaskId>,
     selected_agent: u32,
     flash: Option<Flash>,
     quit: bool,
+    env: Arc<Mutex<Option<Vec<Check>>>>,
 }
 
 impl App {
     pub fn new(mut engine: Engine, cwd: &Path) -> Self {
         // 在 git 仓库里启动时，自动把它加入项目。不在仓库里不算错误。
         let current = engine.add_project(cwd).ok();
-        let selected_task = current
-            .as_ref()
-            .and_then(|p| engine.state().tasks_of(p).next().map(|t| t.id))
-            .or_else(|| engine.state().tasks.first().map(|t| t.id));
+        let project =
+            current.as_ref().and_then(|id| engine.state().projects.iter().position(|p| &p.id == id)).unwrap_or(0);
+
+        // 环境检查要调用各个命令，放到后台，不拖慢启动。
+        let env = Arc::new(Mutex::new(None));
+        {
+            let env = Arc::clone(&env);
+            let config = engine.config().clone();
+            thread::spawn(move || {
+                let checks = check_environment(&config);
+                *env.lock().unwrap_or_else(|p| p.into_inner()) = Some(checks);
+            });
+        }
+
         let mut app = Self {
             engine,
             mode: Mode::Normal,
+            focus: Focus::Main,
+            cursor: Item::NewTask,
             voice: Voice::default(),
+            home: Home { project, ..Home::default() },
             sidebar_visible: true,
-            selected_task,
+            sidebar_hits: Vec::new(),
+            sidebar_area: Rect::default(),
+            pane_area: Rect::default(),
+            selected_task: None,
+            last_task: None,
             selected_agent: 0,
             flash: None,
             quit: false,
+            env,
         };
         app.start_pending_agents();
+        // 有任务时打开第一个（优先等你确认的），没有任务时停在首页。
+        let first = app.ordered_tasks().into_iter().next();
+        if let Some(id) = first {
+            app.open_task(id);
+        }
         app
     }
 
@@ -78,6 +130,18 @@ impl App {
 
     pub fn should_quit(&self) -> bool {
         self.quit
+    }
+
+    pub fn is_home(&self) -> bool {
+        self.selected_task().is_none()
+    }
+
+    pub fn has_previous_task(&self) -> bool {
+        self.last_task.is_some_and(|id| self.engine.state().task(id).is_some())
+    }
+
+    pub fn env_checks(&self) -> Option<Vec<Check>> {
+        self.env.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     pub fn selected_task(&self) -> Option<&Task> {
@@ -105,10 +169,27 @@ impl App {
         state.projects.iter().flat_map(|p| state.tasks_of(&p.id).map(|t| t.id)).collect()
     }
 
-    /// 新建任务时默认的项目：当前任务所在的项目，否则第一个。
-    fn default_project_index(&self) -> usize {
-        let projects = &self.engine.state().projects;
-        self.selected_task().and_then(|t| projects.iter().position(|p| p.id == t.project)).unwrap_or(0)
+    /// 侧边栏里所有可选中的行，从上到下。
+    pub fn items(&self) -> Vec<Item> {
+        let state = self.engine.state();
+        let mut items = vec![Item::NewTask];
+        for project in &state.projects {
+            for task in state.tasks_of(&project.id) {
+                items.push(Item::Task(task.id));
+                items.extend(task.agents.iter().map(|a| Item::Agent(task.key(a.id))));
+            }
+        }
+        items.push(Item::AddProject);
+        items
+    }
+
+    /// 右侧当前显示的内容对应侧边栏的哪一行。
+    pub fn current_item(&self) -> Item {
+        match self.selected_key() {
+            Some(key) => Item::Agent(key),
+            None if self.home.adding_project => Item::AddProject,
+            None => Item::NewTask,
+        }
     }
 
     // ---- 提示 ----
@@ -121,58 +202,134 @@ impl App {
         self.flash = Some(Flash { text: err.to_string(), is_error: true, at: Instant::now() });
     }
 
-    // ---- 选择 ----
+    // ---- 焦点和选择 ----
 
-    pub fn select_task(&mut self, id: TaskId) {
+    pub fn focus_sidebar(&mut self) {
+        self.sidebar_visible = true;
+        self.focus = Focus::Sidebar;
+        self.cursor = self.current_item();
+    }
+
+    pub fn focus_main(&mut self) {
+        self.focus = Focus::Main;
+    }
+
+    /// 在侧边栏里上下移动；移到任务或 Agent 上时右侧同步预览。
+    pub fn move_cursor(&mut self, delta: isize) {
+        let items = self.items();
+        let current = items.iter().position(|i| *i == self.cursor).unwrap_or(0) as isize;
+        let next = (current + delta).clamp(0, items.len() as isize - 1) as usize;
+        self.cursor = items[next];
+        self.preview(self.cursor);
+    }
+
+    fn preview(&mut self, item: Item) {
+        match item {
+            Item::NewTask => self.show_home(false),
+            Item::AddProject => self.show_home(true),
+            Item::Task(id) => self.select_task(id),
+            Item::Agent(key) => {
+                self.select_task(key.task);
+                self.selected_agent = key.agent;
+            }
+        }
+    }
+
+    /// 打开侧边栏里的一行：预览它，把焦点交给右侧，需要时启动 Agent。
+    pub fn activate(&mut self, item: Item) {
+        self.cursor = item;
+        self.preview(item);
+        self.focus_main();
+        if matches!(item, Item::Task(_) | Item::Agent(_)) {
+            self.ensure_selected_agent_running();
+        }
+    }
+
+    pub fn open_task(&mut self, id: TaskId) {
+        self.activate(Item::Task(id));
+    }
+
+    fn select_task(&mut self, id: TaskId) {
         if self.selected_task != Some(id) {
             self.selected_task = Some(id);
             self.selected_agent = 0;
         }
-    }
-
-    pub fn move_task(&mut self, delta: isize) {
-        let tasks = self.ordered_tasks();
-        if tasks.is_empty() {
-            return;
-        }
-        let current = self.selected_task.and_then(|id| tasks.iter().position(|t| *t == id)).unwrap_or(0);
-        let len = tasks.len() as isize;
-        let next = (current as isize + delta).rem_euclid(len) as usize;
-        self.select_task(tasks[next]);
+        self.home.adding_project = false;
     }
 
     pub fn select_nth_task(&mut self, n: usize) {
-        if let Some(id) = self.ordered_tasks().get(n) {
-            self.select_task(*id);
+        if let Some(id) = self.ordered_tasks().get(n).copied() {
+            self.open_task(id);
         }
     }
 
-    pub fn move_agent(&mut self, delta: isize) {
-        let Some(task) = self.selected_task() else { return };
-        let ids: Vec<u32> = task.agents.iter().map(|a| a.id).collect();
-        let current = ids.iter().position(|id| *id == self.selected_agent).unwrap_or(0);
-        let len = ids.len() as isize;
-        self.selected_agent = ids[(current as isize + delta).rem_euclid(len) as usize];
+    // ---- 首页 ----
+
+    fn show_home(&mut self, adding_project: bool) {
+        if let Some(id) = self.selected_task.take() {
+            self.last_task = Some(id);
+        }
+        let adding = adding_project || self.engine.state().projects.is_empty();
+        if adding != self.home.adding_project {
+            self.home.input = LineInput::default();
+        }
+        self.home.adding_project = adding;
     }
 
-    // ---- 任务和 Agent ----
+    /// 回到首页输入框新建任务。
+    pub fn new_task(&mut self) {
+        self.activate(Item::NewTask);
+    }
 
-    pub fn open_new_task(&mut self) {
-        if self.engine.state().projects.is_empty() {
-            self.mode = Mode::AddProject { input: LineInput::default() };
-            self.info("先添加一个项目（git 仓库路径）");
+    pub fn add_project(&mut self) {
+        self.activate(Item::AddProject);
+    }
+
+    /// 首页按 Esc：添加项目时退回新建任务，否则回到上一个任务。
+    pub fn leave_home(&mut self) {
+        if self.home.adding_project && !self.engine.state().projects.is_empty() {
+            self.show_home(false);
+        } else if let Some(id) = self.last_task.filter(|id| self.engine.state().task(*id).is_some()) {
+            self.open_task(id);
+        }
+    }
+
+    pub fn cycle_home_project(&mut self) {
+        let count = self.engine.state().projects.len();
+        if count > 1 {
+            self.home.project = (self.home.project + 1) % count;
+        }
+    }
+
+    pub fn home_project_name(&self) -> Option<&str> {
+        self.engine.state().projects.get(self.home.project).map(|p| p.name.as_str())
+    }
+
+    pub fn submit_home(&mut self) {
+        let text = self.home.input.text().trim().to_string();
+        if text.is_empty() {
             return;
         }
-        self.mode = Mode::NewTask { input: LineInput::default(), project: self.default_project_index() };
-    }
-
-    pub fn submit_new_task(&mut self, prompt: String, project: usize) {
-        let Some(project_id) = self.engine.state().projects.get(project).map(|p| p.id.clone()) else {
+        if self.home.adding_project {
+            match self.engine.add_project(Path::new(&expand_home(&text))) {
+                Ok(id) => {
+                    self.home.project = self.engine.state().projects.iter().position(|p| p.id == id).unwrap_or(0);
+                    self.home.adding_project = false;
+                    self.home.input = LineInput::default();
+                    self.info(format!("已添加项目 {id}，现在可以新建任务了"));
+                }
+                Err(err) => self.error(format!("{err:#}")),
+            }
+            return;
+        }
+        let Some(project) = self.engine.state().projects.get(self.home.project).map(|p| p.id.clone()) else {
             return;
         };
-        self.mode = Mode::Normal;
-        match self.create_and_start(&project_id, &prompt) {
-            Ok(id) => self.select_task(id),
+        match self.create_and_start(&project, &text) {
+            Ok(id) => {
+                self.home.input = LineInput::default();
+                self.open_task(id);
+            }
             Err(err) => self.error(format!("{err:#}")),
         }
     }
@@ -184,45 +341,65 @@ impl App {
         Ok(id)
     }
 
-    pub fn submit_add_project(&mut self, path: String) {
-        let path = expand_home(path.trim());
-        self.mode = Mode::Normal;
-        match self.engine.add_project(Path::new(&path)) {
-            Ok(id) => self.info(format!("已添加项目 {id}")),
-            Err(err) => self.error(format!("{err:#}")),
+    // ---- 任务和 Agent ----
+
+    /// 选中的 Agent 没在运行时启动它（第一次启动或恢复会话）。
+    pub fn ensure_selected_agent_running(&mut self) {
+        let Some(key) = self.selected_key() else { return };
+        if self.engine.agent_status(key).is_live() {
+            return;
+        }
+        if let Err(err) = self.engine.start_agent(key) {
+            self.error(format!("{err:#}"));
         }
     }
 
-    pub fn start_selected_agent(&mut self) {
-        if let Some(key) = self.selected_key() {
-            if let Err(err) = self.engine.start_agent(key) {
-                self.error(format!("{err:#}"));
-            }
+    /// 侧边栏光标所在的任务；不在任务上时用右侧当前的任务。
+    pub fn task_under_cursor(&self) -> Option<TaskId> {
+        match (self.focus, self.cursor) {
+            (Focus::Sidebar, Item::Task(id)) => Some(id),
+            (Focus::Sidebar, Item::Agent(key)) => Some(key.task),
+            _ => self.selected_task().map(|t| t.id),
         }
     }
 
     pub fn start_reviewer(&mut self) {
-        let Some(task) = self.selected_task().map(|t| t.id) else { return };
+        let Some(task) = self.task_under_cursor() else {
+            self.info("先选中一个任务");
+            return;
+        };
         match self.engine.start_reviewer(task) {
             Ok(key) => {
-                self.selected_agent = key.agent;
+                self.activate(Item::Agent(key));
                 self.info("已启动审阅（只读）");
             }
             Err(err) => self.error(format!("{err:#}")),
         }
     }
 
+    pub fn request_close(&mut self) {
+        match self.task_under_cursor() {
+            Some(id) => self.mode = Mode::ConfirmClose(id),
+            None => self.info("先选中一个任务"),
+        }
+    }
+
     pub fn close_task(&mut self, id: TaskId) {
         self.mode = Mode::Normal;
-        let next = {
-            let tasks = self.ordered_tasks();
-            let pos = tasks.iter().position(|t| *t == id);
-            pos.and_then(|i| tasks.get(i + 1).or_else(|| i.checked_sub(1).and_then(|j| tasks.get(j)))).copied()
-        };
+        let tasks = self.ordered_tasks();
+        let next = tasks
+            .iter()
+            .position(|t| *t == id)
+            .and_then(|i| tasks.get(i + 1).or_else(|| i.checked_sub(1).and_then(|j| tasks.get(j))).copied());
         match self.engine.close_task(id) {
             Ok(()) => {
-                self.selected_task = next;
-                self.selected_agent = 0;
+                if self.last_task == Some(id) {
+                    self.last_task = None;
+                }
+                match next {
+                    Some(next) => self.open_task(next),
+                    None => self.new_task(),
+                }
                 self.info("任务已关闭，分支保留");
             }
             Err(err) => self.error(format!("{err:#}")),
@@ -267,6 +444,14 @@ impl App {
         self.engine.set_pane_size(size);
     }
 
+    /// 查看历史输出：正数向上翻。
+    pub fn scroll(&mut self, lines: isize) {
+        let Some(key) = self.selected_key() else { return };
+        let Some(session) = self.engine.session(key) else { return };
+        let offset = session.scrollback() as isize;
+        session.set_scrollback((offset + lines).max(0) as usize);
+    }
+
     // ---- 语音 ----
 
     pub fn toggle_voice(&mut self, target: VoiceTarget) {
@@ -277,7 +462,7 @@ impl App {
             return;
         }
         if !cfg.is_configured() {
-            self.error("还没有配置语音命令：在 ~/.duolo/config.toml 里设置 voice.command，见 README");
+            self.error("语音还没配置：在 ~/.duolo/config.toml 里设置 voice.command，见 README");
             return;
         }
         if let Err(err) = self.voice.start(&cfg, target) {
@@ -288,7 +473,10 @@ impl App {
     fn organize_context(&self) -> OrganizeContext {
         let task = self.selected_task();
         OrganizeContext {
-            project: task.and_then(|t| self.engine.state().project(&t.project)).map(|p| p.name.clone()),
+            project: task
+                .and_then(|t| self.engine.state().project(&t.project))
+                .map(|p| p.name.clone())
+                .or_else(|| self.home_project_name().map(Into::into)),
             task: task.map(|t| t.title.clone()),
         }
     }
@@ -309,11 +497,7 @@ impl App {
             return self.voice.recording_elapsed().is_some();
         };
         match delivery {
-            Delivery::NewTaskText(text) => {
-                if let Mode::NewTask { input, .. } = &mut self.mode {
-                    input.insert_str(&text);
-                }
-            }
+            Delivery::HomeText(text) => self.home.input.insert_str(&text),
             Delivery::Error(err) => self.error(format!("语音：{err}")),
         }
         true

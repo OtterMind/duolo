@@ -22,8 +22,8 @@ use duolo_voice::{organize, OrganizeContext, Recorder};
 pub enum VoiceTarget {
     /// 某个 Agent 的输入行。
     Agent(AgentKey),
-    /// 新建任务的输入框。
-    NewTask,
+    /// 首页的输入框。
+    Home,
 }
 
 #[derive(Debug)]
@@ -55,8 +55,8 @@ enum Outcome {
 /// 一次后台处理完成后，交给 App 的结果。
 #[derive(Debug)]
 pub enum Delivery {
-    /// 送进新建任务输入框的文字。
-    NewTaskText(String),
+    /// 送进首页输入框的文字。
+    HomeText(String),
     /// 出错提示。
     Error(String),
 }
@@ -180,9 +180,9 @@ impl Voice {
                 let raw = join(&prefix, &raw);
                 let text = organized.map_or_else(|| raw.clone(), |o| join(&prefix, &o));
                 match target {
-                    VoiceTarget::NewTask => {
+                    VoiceTarget::Home => {
                         self.phase = Phase::Idle;
-                        Some(Delivery::NewTaskText(text))
+                        Some(Delivery::HomeText(text))
                     }
                     VoiceTarget::Agent(_) => {
                         self.phase = Phase::Pending { target, raw, text };

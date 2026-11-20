@@ -6,13 +6,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use duolo_engine::AgentStatus;
 use ratatui::style::{Color, Modifier, Style};
 
-pub const MUTED: Color = Color::Rgb(150, 150, 150);
-pub const DIM: Color = Color::Rgb(105, 105, 105);
-pub const FAINT: Color = Color::Rgb(60, 60, 60);
+pub const MUTED: Color = Color::Rgb(160, 160, 160);
+pub const DIM: Color = Color::Rgb(112, 112, 112);
+pub const FAINT: Color = Color::Rgb(70, 70, 70);
 pub const NEED: Color = Color::Rgb(227, 164, 60);
 pub const ADD: Color = Color::Rgb(124, 197, 138);
 pub const DEL: Color = Color::Rgb(224, 122, 114);
-pub const SELECTED_BG: Color = Color::Rgb(42, 42, 42);
+/// 右侧正在显示的那一行。
+pub const SELECTED_BG: Color = Color::Rgb(38, 38, 38);
+/// 侧边栏有焦点时，光标所在的行。
+pub const CURSOR_BG: Color = Color::Rgb(60, 60, 60);
 pub const PREEDIT_BG: Color = Color::Rgb(48, 48, 48);
 
 pub fn muted() -> Style {
@@ -33,6 +36,11 @@ pub fn strong() -> Style {
 
 pub fn need() -> Style {
     Style::new().fg(NEED)
+}
+
+/// 按键提示里的键名。
+pub fn key() -> Style {
+    Style::new().fg(MUTED)
 }
 
 const SPINNER: [&str; 4] = ["◐", "◓", "◑", "◒"];

@@ -501,6 +501,7 @@ dependencies = [
  "duolo-pty",
  "duolo-voice",
  "ratatui",
+ "tempfile",
  "tui-term",
  "unicode-width",
  "vt100",

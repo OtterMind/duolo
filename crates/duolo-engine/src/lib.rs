@@ -4,8 +4,10 @@
 //! 这里的公开方法就是守护进程对外提供的接口，终端、手机和网页客户端都通过它操作。
 
 mod engine;
+mod env;
 mod status;
 
 pub use duolo_git::DiffStat;
 pub use engine::Engine;
+pub use env::{check_environment, Check};
 pub use status::{AgentStatus, Summary};

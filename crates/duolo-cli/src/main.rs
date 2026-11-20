@@ -1,13 +1,13 @@
 //! `duolo` 命令行入口。
 
 use std::path::PathBuf;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::ExitCode;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
 use duolo_core::{Paths, ProjectId};
-use duolo_engine::Engine;
+use duolo_engine::{check_environment, Engine};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -117,31 +117,13 @@ fn doctor(paths: &Paths) -> Result<()> {
     let engine = Engine::open(paths.clone())?;
     let config = engine.config();
     println!("数据目录  {}", paths.root().display());
-    check("git", "git");
-    for (name, profile) in &config.agents {
-        check(name, &profile.command);
+    for check in check_environment(config) {
+        println!("{} {:<8} {}", if check.ok { "✓" } else { "✕" }, check.name, check.detail);
     }
     println!("写代码    {}", config.writer.display_name());
     println!("审阅      {}", config.reviewer.display_name());
-    if config.voice.is_configured() {
-        println!("语音      {}", config.voice.command.join(" "));
-    } else {
-        println!("语音      未配置（在 {} 设置 voice.command）", paths.config_file().display());
+    if !config.voice.is_configured() {
+        println!("语音命令在 {} 的 voice.command 里设置，见 README", paths.config_file().display());
     }
     Ok(())
-}
-
-fn check(label: &str, command: &str) {
-    let found = Command::new(command)
-        .arg("--version")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").trim().to_string());
-    match found {
-        Some(version) => println!("✓ {label:<8} {version}"),
-        None => println!("✕ {label:<8} 没有找到 {command}"),
-    }
 }

@@ -1,13 +1,16 @@
 //! 根据 App 状态绘制画面。
 //!
-//! 布局：左侧边栏 | 右侧（Agent 标签、Agent 终端、底栏）。弹出的输入框和帮助画在右侧上方。
+//! 布局：左侧边栏 | 右侧（首页输入框，或当前任务的 Agent 终端）。帮助浮层画在最上面。
 
 mod overlay;
 mod pane;
 mod sidebar;
 mod theme;
 
-use ratatui::layout::{Constraint, Layout};
+#[cfg(test)]
+mod tests;
+
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::Frame;
 
 use crate::app::App;
@@ -22,6 +25,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         sidebar::render(frame, app, side);
         main
     } else {
+        app.sidebar_area = Rect::default();
+        app.sidebar_hits.clear();
         area
     };
     pane::render(frame, app, main);

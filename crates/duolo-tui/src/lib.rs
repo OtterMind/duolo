@@ -22,7 +22,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use duolo_engine::Engine;
-use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste};
+use ratatui::crossterm::event::{
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+};
 use ratatui::crossterm::execute;
 
 use crate::app::App;
@@ -42,9 +44,9 @@ pub fn run(mut engine: Engine, cwd: &Path) -> Result<()> {
     let mut app = App::new(engine, cwd);
 
     let mut terminal = ratatui::init();
-    execute!(stdout(), EnableBracketedPaste)?;
+    execute!(stdout(), EnableBracketedPaste, EnableMouseCapture)?;
     let result = event_loop(&mut terminal, &mut app, &dirty);
-    let _ = execute!(stdout(), DisableBracketedPaste);
+    let _ = execute!(stdout(), DisableBracketedPaste, DisableMouseCapture);
     ratatui::restore();
     app.shutdown();
     result

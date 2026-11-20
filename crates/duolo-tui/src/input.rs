@@ -1,81 +1,134 @@
-//! 把键盘和粘贴事件翻译成 App 上的操作。
+//! 把键盘、鼠标和粘贴事件翻译成 App 上的操作。
 //!
 //! 规则：
-//! - 当前 Agent 在运行时，按键原样交给它；Duolo 只截获 `Ctrl+]`（前缀键）和 `Ctrl+Space`（语音）；
-//! - 没有运行中的 Agent 时，单键直接是 Duolo 的操作（n 新任务、a 添加项目、q 退出……）；
-//! - 弹出的输入框、确认框打开时，按键都交给它们。
+//! - `⌃]` 在右侧和侧边栏之间切换焦点；
+//! - 侧边栏：↑↓ 选择、↵ 打开，单键执行操作（n 新任务、r 审阅、x 关闭……）；
+//! - 右侧首页：直接打字新建任务；
+//! - 右侧 Agent 在运行时，按键原样交给它，Duolo 只截获 `⌃]` 和 `⌃Space`（语音）；
+//! - 鼠标点击侧边栏打开对应的行，在 Agent 窗格滚动查看历史输出。
 
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use ratatui::layout::Position;
 
-use crate::app::{App, Mode};
+use crate::app::{App, Focus, Mode};
 use crate::keys;
+use crate::line_input::LineInput;
 use crate::voice::VoiceTarget;
+
+/// 滚轮每格滚动的行数。
+const WHEEL_LINES: isize = 3;
 
 pub fn handle(app: &mut App, event: Event) {
     match event {
         Event::Key(key) if key.kind != KeyEventKind::Release => on_key(app, key),
         Event::Paste(text) => on_paste(app, &text),
+        Event::Mouse(mouse) => {
+            let at = Position::new(mouse.column, mouse.row);
+            match mouse.kind {
+                MouseEventKind::Down(MouseButton::Left) => on_click(app, at),
+                MouseEventKind::ScrollUp if app.pane_area.contains(at) => app.scroll(WHEEL_LINES),
+                MouseEventKind::ScrollDown if app.pane_area.contains(at) => app.scroll(-WHEEL_LINES),
+                _ => {}
+            }
+        }
         _ => {}
     }
 }
 
 fn on_key(app: &mut App, key: KeyEvent) {
-    match std::mem::replace(&mut app.mode, Mode::Normal) {
-        Mode::Normal => normal(app, key),
-        Mode::Prefix => prefix(app, key),
-        Mode::NewTask { mut input, mut project } => {
-            if keys::is_voice(&key) {
-                app.mode = Mode::NewTask { input, project };
-                app.toggle_voice(VoiceTarget::NewTask);
-                return;
-            }
-            match key.code {
-                KeyCode::Esc => app.voice.cancel(),
-                KeyCode::Enter if !input.is_empty() => {
-                    app.submit_new_task(input.text().to_string(), project);
-                }
-                KeyCode::Tab => {
-                    let count = app.engine.state().projects.len().max(1);
-                    project = (project + 1) % count;
-                    app.mode = Mode::NewTask { input, project };
-                }
-                _ => {
-                    edit_line(&mut input, &key);
-                    app.mode = Mode::NewTask { input, project };
-                }
-            }
-        }
-        Mode::AddProject { mut input } => match key.code {
-            KeyCode::Esc => {}
-            KeyCode::Enter if !input.is_empty() => app.submit_add_project(input.text().to_string()),
-            _ => {
-                edit_line(&mut input, &key);
-                app.mode = Mode::AddProject { input };
-            }
-        },
+    match app.mode {
         Mode::ConfirmClose(id) => {
-            if matches!(key.code, KeyCode::Char('y' | 'Y')) {
+            app.mode = Mode::Normal;
+            if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
                 app.close_task(id);
             }
         }
         Mode::ConfirmQuit => {
-            if matches!(key.code, KeyCode::Char('y' | 'Y')) {
+            app.mode = Mode::Normal;
+            if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
                 app.quit_now();
             }
         }
-        Mode::Help => {}
+        Mode::Help => app.mode = Mode::Normal,
+        Mode::Normal => {
+            if keys::is_prefix(&key) {
+                match app.focus {
+                    Focus::Main => app.focus_sidebar(),
+                    Focus::Sidebar => app.focus_main(),
+                }
+                return;
+            }
+            match app.focus {
+                Focus::Sidebar => sidebar(app, key),
+                Focus::Main if app.is_home() => home(app, key),
+                Focus::Main => agent(app, key),
+            }
+        }
     }
 }
 
-/// 普通模式：有运行中的 Agent 时转发按键，否则按 Duolo 的单键操作处理。
-fn normal(app: &mut App, key: KeyEvent) {
-    if keys::is_prefix(&key) {
-        app.mode = Mode::Prefix;
+fn sidebar(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => app.move_cursor(-1),
+        KeyCode::Down | KeyCode::Char('j') => app.move_cursor(1),
+        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => app.activate(app.cursor),
+        KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => app.focus_main(),
+        KeyCode::Char('n') => app.new_task(),
+        KeyCode::Char('a') => app.add_project(),
+        KeyCode::Char('r') => app.start_reviewer(),
+        KeyCode::Char('x') => app.request_close(),
+        KeyCode::Char(c @ '1'..='9') => app.select_nth_task(c as usize - '1' as usize),
+        KeyCode::Char('b') => {
+            app.sidebar_visible = false;
+            app.focus_main();
+        }
+        KeyCode::Char('?') => app.mode = Mode::Help,
+        KeyCode::Char('q') => app.request_quit(),
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => app.request_quit(),
+        _ => {}
+    }
+}
+
+/// 首页输入框。
+fn home(app: &mut App, key: KeyEvent) {
+    if keys::is_voice(&key) {
+        app.toggle_voice(VoiceTarget::Home);
         return;
     }
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    match key.code {
+        KeyCode::Enter => app.submit_home(),
+        KeyCode::Tab if !app.home.adding_project => app.cycle_home_project(),
+        KeyCode::Esc => {
+            if app.voice.recording_elapsed().is_some() {
+                app.voice.cancel();
+            } else {
+                app.leave_home();
+            }
+        }
+        KeyCode::Char('c') if ctrl => {
+            if app.home.input.is_empty() {
+                app.request_quit();
+            } else {
+                app.home.input = LineInput::default();
+            }
+        }
+        // 输入框为空时，上下键直接进入侧边栏选任务。
+        KeyCode::Up | KeyCode::Down if app.home.input.is_empty() => {
+            app.focus_sidebar();
+            app.move_cursor(if key.code == KeyCode::Up { -1 } else { 1 });
+        }
+        _ => edit_line(&mut app.home.input, &key),
+    }
+}
 
+/// 右侧是某个 Agent。
+fn agent(app: &mut App, key: KeyEvent) {
     let Some(agent) = app.focused_live_key() else {
-        idle_shortcuts(app, key);
+        // Agent 没在运行：回车启动或恢复，其余按键不起作用。
+        if key.code == KeyCode::Enter {
+            app.ensure_selected_agent_running();
+        }
         return;
     };
 
@@ -100,20 +153,15 @@ fn normal(app: &mut App, key: KeyEvent) {
         }
         return;
     }
-    // 录音中按 Esc 取消录音。
     if app.voice.recording_elapsed().is_some() && key.code == KeyCode::Esc {
         app.voice.cancel();
         return;
     }
 
-    // Shift+PageUp/PageDown 查看回滚，不发给 Agent。
+    // Shift+PageUp/PageDown 查看历史输出，不发给 Agent。
     if key.modifiers.contains(KeyModifiers::SHIFT) && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
-        if let Some(session) = app.engine.session(agent) {
-            let rows = usize::from(session.size().rows.saturating_sub(2)).max(1);
-            let offset = session.scrollback();
-            let next = if key.code == KeyCode::PageUp { offset + rows } else { offset.saturating_sub(rows) };
-            session.set_scrollback(next);
-        }
+        let page = app.engine.session(agent).map_or(10, |s| (s.size().rows.saturating_sub(2) as isize).max(1));
+        app.scroll(if key.code == KeyCode::PageUp { page } else { -page });
         return;
     }
 
@@ -129,63 +177,33 @@ fn normal(app: &mut App, key: KeyEvent) {
     }
 }
 
-/// 没有运行中的 Agent 时的单键操作。
-fn idle_shortcuts(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Enter => app.start_selected_agent(),
-        KeyCode::Char('n') => app.open_new_task(),
-        KeyCode::Char('a') => app.mode = Mode::AddProject { input: Default::default() },
-        KeyCode::Char('r') => app.start_reviewer(),
-        KeyCode::Char('x') => {
-            if let Some(task) = app.selected_task() {
-                app.mode = Mode::ConfirmClose(task.id);
-            }
-        }
-        KeyCode::Char('j') | KeyCode::Down => app.move_task(1),
-        KeyCode::Char('k') | KeyCode::Up => app.move_task(-1),
-        KeyCode::Char('l') | KeyCode::Right => app.move_agent(1),
-        KeyCode::Char('h') | KeyCode::Left => app.move_agent(-1),
-        KeyCode::Char('b') => app.sidebar_visible = !app.sidebar_visible,
-        KeyCode::Char('?') => app.mode = Mode::Help,
-        KeyCode::Char('q') => app.request_quit(),
-        _ => {}
-    }
-}
-
-/// `Ctrl+]` 之后的一个键。
-fn prefix(app: &mut App, key: KeyEvent) {
-    if keys::is_prefix(&key) {
-        // 连按两次：把 Ctrl+] 本身发给 Agent。
-        if let Some(agent) = app.focused_live_key() {
-            if let Some(session) = app.engine.session_mut(agent) {
-                let _ = session.write(&[0x1d]);
-            }
-        }
+fn on_click(app: &mut App, at: Position) {
+    if app.mode != Mode::Normal {
         return;
     }
-    match key.code {
-        KeyCode::Char(c @ '1'..='9') => app.select_nth_task(c as usize - '1' as usize),
-        KeyCode::Char('s') => app.start_selected_agent(),
-        KeyCode::Esc => {}
-        _ => idle_shortcuts(app, key),
+    if app.sidebar_area.contains(at) {
+        if let Some(item) = app.sidebar_hits.iter().find(|(y, _)| *y == at.y).map(|(_, item)| *item) {
+            app.activate(item);
+        }
+    } else if app.pane_area.contains(at) {
+        app.focus_main();
     }
 }
 
 fn on_paste(app: &mut App, text: &str) {
-    match &mut app.mode {
-        Mode::NewTask { input, .. } | Mode::AddProject { input } => input.insert_str(text),
-        Mode::Normal => {
-            if let Some(agent) = app.focused_live_key() {
-                if let Some(session) = app.engine.session_mut(agent) {
-                    let _ = session.paste(text);
-                }
-            }
+    if app.mode != Mode::Normal || app.focus != Focus::Main {
+        return;
+    }
+    if app.is_home() {
+        app.home.input.insert_str(text);
+    } else if let Some(agent) = app.focused_live_key() {
+        if let Some(session) = app.engine.session_mut(agent) {
+            let _ = session.paste(text);
         }
-        _ => {}
     }
 }
 
-fn edit_line(input: &mut crate::line_input::LineInput, key: &KeyEvent) {
+fn edit_line(input: &mut LineInput, key: &KeyEvent) {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
         KeyCode::Char('u') if ctrl => input.clear_before_cursor(),

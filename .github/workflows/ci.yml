@@ -9,14 +9,30 @@ jobs:
   check:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            exclude: ""
+          # Linux 上没有装 WebKitGTK，桌面应用只在 macOS 上构建。
+          - os: ubuntu-latest
+            exclude: "--exclude duolo-app"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: 界面类型检查和构建
+        working-directory: app
+        run: pnpm install --frozen-lockfile && pnpm build
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy --workspace ${{ matrix.exclude }} --all-targets -- -D warnings
+      - run: cargo test --workspace ${{ matrix.exclude }}

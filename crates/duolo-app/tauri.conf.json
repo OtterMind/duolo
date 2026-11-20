@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Duolo",
+  "mainBinaryName": "Duolo",
+  "version": "0.1.0",
+  "identifier": "ai.ottermind.duolo",
+  "build": {
+    "frontendDist": "../../app/dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": { "script": "pnpm dev", "cwd": "../../app" },
+    "beforeBuildCommand": { "script": "pnpm build", "cwd": "../../app" }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Duolo",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 760,
+        "minHeight": 480,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 20 },
+        "backgroundColor": "#161616"
+      }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "DeveloperTool",
+    "shortDescription": "Claude 写，Codex 审",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.png"],
+    "macOS": { "minimumSystemVersion": "12.0" }
+  }
+}

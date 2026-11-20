@@ -32,8 +32,38 @@ impl Size {
     }
 }
 
+/// 保留的原始输出字节数，新的界面接入时用来重放。超出后改用当前画面重放。
+const HISTORY_BYTES: usize = 8 * 1024 * 1024;
+
 /// 有新输出时的回调，界面层用它触发重绘。
 pub type OutputHook = Arc<dyn Fn() + Send + Sync>;
+
+/// 原始输出的订阅者。桌面端把字节原样交给 xterm.js 渲染。
+pub type OutputSink = Box<dyn FnMut(&[u8]) + Send>;
+
+/// 原始输出的历史和订阅者。读线程先更新解析器再更新这里，两把锁的顺序固定。
+#[derive(Default)]
+struct Tap {
+    history: Vec<u8>,
+    /// 历史被截断过，重放时改用解析器里的当前画面。
+    truncated: bool,
+    sink: Option<OutputSink>,
+}
+
+impl Tap {
+    fn push(&mut self, bytes: &[u8]) {
+        if self.history.len() + bytes.len() > HISTORY_BYTES {
+            self.history.clear();
+            self.truncated = true;
+        }
+        if !self.truncated {
+            self.history.extend_from_slice(bytes);
+        }
+        if let Some(sink) = &mut self.sink {
+            sink(bytes);
+        }
+    }
+}
 
 /// 启动一个会话所需的信息。
 #[derive(Clone)]
@@ -42,6 +72,8 @@ pub struct SessionSpec {
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub env: Vec<(String, String)>,
+    /// 不传给子进程的环境变量。
+    pub env_remove: Vec<String>,
     pub size: Size,
     pub on_output: Option<OutputHook>,
 }
@@ -86,6 +118,7 @@ impl Activity {
 /// 一个运行中的 Agent CLI。
 pub struct Session {
     terminal: Arc<Mutex<vt100::Parser>>,
+    tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
@@ -114,6 +147,9 @@ impl Session {
         cmd.cwd(&spec.cwd);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        for key in &spec.env_remove {
+            cmd.env_remove(key);
+        }
         for (key, value) in &spec.env {
             cmd.env(key, value);
         }
@@ -126,12 +162,14 @@ impl Session {
 
         let terminal = Arc::new(Mutex::new(vt100::Parser::new(spec.size.rows, spec.size.cols, SCROLLBACK_LINES)));
         let activity = Arc::new(Activity { origin: Instant::now(), last_output_ms: AtomicU64::new(0) });
+        let tap = Arc::new(Mutex::new(Tap::default()));
         let reader = pair.master.try_clone_reader().context("无法读取伪终端")?;
         let writer = pair.master.take_writer().context("无法写入伪终端")?;
-        spawn_reader(reader, Arc::clone(&terminal), Arc::clone(&activity), spec.on_output);
+        spawn_reader(reader, Arc::clone(&terminal), Arc::clone(&tap), Arc::clone(&activity), spec.on_output);
 
         Ok(Self {
             terminal,
+            tap,
             activity,
             writer,
             master: pair.master,
@@ -181,6 +219,23 @@ impl Session {
     pub fn with_screen<R>(&self, f: impl FnOnce(&vt100::Screen) -> R) -> R {
         let parser = self.lock();
         f(parser.screen())
+    }
+
+    /// 订阅原始输出：先把目前为止的输出交给 `sink` 重放，之后的新输出实时推送。
+    /// 同一时间只有一个订阅者，新的订阅会替换旧的。
+    pub fn attach(&self, mut sink: OutputSink) {
+        let parser = self.lock();
+        let mut tap = self.tap.lock().unwrap_or_else(|p| p.into_inner());
+        if tap.truncated {
+            sink(&parser.screen().state_formatted());
+        } else {
+            sink(&tap.history);
+        }
+        tap.sink = Some(sink);
+    }
+
+    pub fn detach(&self) {
+        self.tap.lock().unwrap_or_else(|p| p.into_inner()).sink = None;
     }
 
     /// 查看回滚：`offset` 为离开底部的行数，0 表示回到最新画面。
@@ -260,6 +315,7 @@ impl std::ops::DerefMut for ScreenGuard<'_> {
 fn spawn_reader(
     mut reader: Box<dyn Read + Send>,
     terminal: Arc<Mutex<vt100::Parser>>,
+    tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
     on_output: Option<OutputHook>,
 ) {
@@ -271,7 +327,10 @@ fn spawn_reader(
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        terminal.lock().unwrap_or_else(|p| p.into_inner()).process(&buf[..n]);
+                        let mut parser = terminal.lock().unwrap_or_else(|p| p.into_inner());
+                        parser.process(&buf[..n]);
+                        tap.lock().unwrap_or_else(|p| p.into_inner()).push(&buf[..n]);
+                        drop(parser);
                         activity.touch();
                         if let Some(hook) = &on_output {
                             hook();
@@ -305,6 +364,7 @@ mod tests {
             args: args.iter().map(|s| s.to_string()).collect(),
             cwd: std::env::temp_dir(),
             env: Vec::new(),
+            env_remove: Vec::new(),
             size: Size::new(10, 40),
             on_output: None,
         }
@@ -327,6 +387,22 @@ mod tests {
         wait_until(|| s.poll_exit().is_some());
         wait_until(|| s.with_screen(|scr| scr.contents().contains("world")));
         assert!(matches!(s.state(), AgentState::Exited(Exit { success: true, .. })));
+    }
+
+    #[test]
+    fn attach_replays_then_streams() {
+        let mut s = Session::spawn(spec("cat", &[])).unwrap();
+        s.write(b"one\r").unwrap();
+        wait_until(|| s.with_screen(|scr| scr.contents().contains("one")));
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink_seen = Arc::clone(&seen);
+        s.attach(Box::new(move |bytes| sink_seen.lock().unwrap().extend_from_slice(bytes)));
+        s.write(b"two\r").unwrap();
+        wait_until(|| String::from_utf8_lossy(&seen.lock().unwrap()).contains("two"));
+        let text = String::from_utf8_lossy(&seen.lock().unwrap()).into_owned();
+        assert!(text.find("one").unwrap() < text.find("two").unwrap(), "{text:?}");
+        s.kill();
     }
 
     #[test]

@@ -19,12 +19,14 @@ use duolo_engine::{check_environment, Engine};
 struct Cli {
     #[command(subcommand)]
     command: Option<Cmd>,
-    /// 打开工作台；目录是 git 仓库时自动加入项目（默认当前目录）
+    /// 打开 Duolo；目录是 git 仓库时自动加入项目（默认当前目录）
     path: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
+    /// 在终端里打开工作台（适合 SSH 远程使用）
+    Tui { path: Option<PathBuf> },
     /// 添加项目（git 仓库）
     Add { path: PathBuf },
     /// 新建任务；下次打开工作台时自动启动 Agent
@@ -58,8 +60,13 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         None => {
             let dir = cli.path.unwrap_or(cwd);
+            if open_app(&dir)? {
+                return Ok(());
+            }
+            eprintln!("没有找到 Duolo.app，先在终端里打开。安装桌面应用见 README。");
             duolo_tui::run(Engine::open(paths)?, &dir)
         }
+        Some(Cmd::Tui { path }) => duolo_tui::run(Engine::open(paths)?, &path.unwrap_or(cwd)),
         Some(Cmd::Add { path }) => {
             let mut engine = Engine::open(paths)?;
             let id = engine.add_project(&path)?;
@@ -82,7 +89,7 @@ fn run(cli: Cli) -> Result<()> {
             let task = engine.state().task(id).expect("刚创建的任务");
             println!("已创建任务 #{id}「{}」", task.title);
             println!("  分支 {}", task.branch);
-            println!("  运行 duolo 打开工作台，Agent 会自动启动");
+            println!("  运行 duolo 打开 Duolo，点开任务后 Agent 会自动启动");
             Ok(())
         }
         Some(Cmd::Ls) => {
@@ -111,6 +118,24 @@ fn run(cli: Cli) -> Result<()> {
         }
         Some(Cmd::Doctor) => doctor(&paths),
     }
+}
+
+/// 桌面应用的 Bundle ID，与 crates/duolo-app/tauri.conf.json 一致。
+const APP_BUNDLE_ID: &str = "ai.ottermind.duolo";
+
+/// 打开桌面应用；`dir` 是 git 仓库时交给应用加入项目。没有安装应用时返回 false。
+fn open_app(dir: &std::path::Path) -> Result<bool> {
+    if !cfg!(target_os = "macos") {
+        return Ok(false);
+    }
+    let mut cmd = std::process::Command::new("open");
+    match duolo_git::repo_root(dir) {
+        // -n 启动新实例，新实例会把目录转交给已经在运行的 Duolo 后退出。
+        Ok(root) => cmd.args(["-n", "-b", APP_BUNDLE_ID, "--args"]).arg(root),
+        Err(_) => cmd.args(["-b", APP_BUNDLE_ID]),
+    };
+    let status = cmd.stderr(std::process::Stdio::null()).status().context("无法运行 open")?;
+    Ok(status.success())
 }
 
 fn doctor(paths: &Paths) -> Result<()> {

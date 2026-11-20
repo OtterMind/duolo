@@ -8,6 +8,7 @@ mod env;
 mod status;
 
 pub use duolo_git::DiffStat;
+pub use duolo_pty::Size;
 pub use engine::Engine;
 pub use env::{check_environment, Check};
 pub use status::{AgentStatus, Summary};

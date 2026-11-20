@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -8,12 +8,28 @@ use duolo_core::{
     AgentKey, AgentKind, AgentRole, AgentSpec, Config, Paths, Project, ProjectId, State, Store, Task, TaskId,
 };
 use duolo_git::DiffStat;
-use duolo_pty::{OutputHook, Session, SessionSpec, Size};
+use duolo_pty::{OutputHook, OutputSink, Session, SessionSpec, Size};
 
 use crate::status::{AgentStatus, Summary};
 
 /// 改动统计的缓存时间，避免每帧都调用 git。
 const DIFF_TTL: Duration = Duration::from_secs(3);
+/// Claude Code 给自己子进程设置的会话标记。从 Claude Code 里启动 Duolo 时会被继承下来，
+/// 让 Agent 以为自己是子会话（例如不保存对话记录，之后就无法恢复），启动 Agent 前去掉。
+const INHERITED_SESSION_VARS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_PID",
+    "CLAUDE_EFFORT",
+];
+/// 恢复会话后在这段时间内异常退出，就认为没有可以恢复的会话。
+const RESUME_GRACE: Duration = Duration::from_secs(5);
 
 pub struct Engine {
     paths: Paths,
@@ -21,6 +37,11 @@ pub struct Engine {
     store: Store,
     state: State,
     sessions: HashMap<AgentKey, Session>,
+    /// 每次启动进程都分配一个新编号，界面据此判断要不要重新订阅输出。
+    session_ids: HashMap<AgentKey, u64>,
+    next_session_id: u64,
+    /// 以"恢复会话"方式启动、还在观察期内的 Agent。
+    resuming: HashSet<AgentKey>,
     pane: Size,
     on_output: Option<OutputHook>,
     diffs: HashMap<TaskId, (Instant, Option<DiffStat>)>,
@@ -50,6 +71,9 @@ impl Engine {
             store,
             state,
             sessions: HashMap::new(),
+            session_ids: HashMap::new(),
+            next_session_id: 1,
+            resuming: HashSet::new(),
             pane: Size::new(24, 80),
             on_output: None,
             diffs: HashMap::new(),
@@ -171,9 +195,52 @@ impl Engine {
                 return Ok(());
             }
         }
-        let spec = self.session_spec(key)?;
+        self.spawn(key, false)
+    }
+
+    /// 恢复会话很快就异常退出时（通常是上次还没产生对话就被关掉了），改为带着需求重新开始。
+    /// 界面定期调用，返回重新开始的 Agent。
+    pub fn retry_failed_resumes(&mut self) -> Vec<AgentKey> {
+        let mut retry = Vec::new();
+        let keys: Vec<AgentKey> = self.resuming.iter().copied().collect();
+        for key in keys {
+            let Some(session) = self.sessions.get_mut(&key) else {
+                self.resuming.remove(&key);
+                continue;
+            };
+            match session.poll_exit() {
+                Some(exit) if !exit.success => retry.push(key),
+                Some(_) => {
+                    self.resuming.remove(&key);
+                }
+                None if session.started().elapsed() >= RESUME_GRACE => {
+                    self.resuming.remove(&key);
+                }
+                None => {}
+            }
+        }
+        retry.retain(|&key| self.spawn(key, true).is_ok());
+        retry
+    }
+
+    /// 当前进程的编号；没有进程时为 None。
+    pub fn session_id(&self, key: AgentKey) -> Option<u64> {
+        self.sessions.contains_key(&key).then(|| self.session_ids.get(&key).copied()).flatten()
+    }
+
+    /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
+    fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
+        let spec = self.session_spec(key, fresh)?;
+        let resumed = !fresh && self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
         let session = Session::spawn(spec)?;
         self.sessions.insert(key, session);
+        self.session_ids.insert(key, self.next_session_id);
+        self.next_session_id += 1;
+        if resumed {
+            self.resuming.insert(key);
+        } else {
+            self.resuming.remove(&key);
+        }
         if let Some(agent) = self.state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
             if !agent.launched {
                 agent.launched = true;
@@ -185,6 +252,27 @@ impl Engine {
 
     pub fn stop_agent(&mut self, key: AgentKey) {
         self.sessions.remove(&key);
+    }
+
+    /// 订阅 Agent 的原始输出，先重放已有输出。Agent 没有运行时报错。
+    pub fn attach(&self, key: AgentKey, sink: OutputSink) -> Result<()> {
+        self.sessions.get(&key).context("Agent 没有运行")?.attach(sink);
+        Ok(())
+    }
+
+    /// 把按键或文字原样写给 Agent。
+    pub fn write(&mut self, key: AgentKey, bytes: &[u8]) -> Result<()> {
+        self.sessions.get_mut(&key).context("Agent 没有运行")?.write(bytes)
+    }
+
+    /// 粘贴一段文字（Agent 开启括号粘贴时带上标记），`submit` 为真时再按一次回车。
+    pub fn paste(&mut self, key: AgentKey, text: &str, submit: bool) -> Result<()> {
+        let session = self.sessions.get_mut(&key).context("Agent 没有运行")?;
+        session.paste(text)?;
+        if submit {
+            session.write(b"\r")?;
+        }
+        Ok(())
     }
 
     pub fn session(&self, key: AgentKey) -> Option<&Session> {
@@ -235,7 +323,7 @@ impl Engine {
         self.sessions.clear();
     }
 
-    fn session_spec(&self, key: AgentKey) -> Result<SessionSpec> {
+    fn session_spec(&self, key: AgentKey, fresh: bool) -> Result<SessionSpec> {
         let task = self.state.task(key.task).context("任务不存在")?;
         let agent = task.agent(key.agent).context("Agent 不存在")?;
         let profile = self.profile(&agent.kind)?;
@@ -244,7 +332,7 @@ impl Engine {
         if agent.role == AgentRole::Reviewer {
             args.extend(profile.review_args.iter().cloned());
         }
-        if agent.launched {
+        if agent.launched && !fresh {
             args.extend(profile.resume_args.iter().cloned());
         } else {
             args.push(match agent.role {
@@ -258,6 +346,7 @@ impl Engine {
             args,
             cwd: task.worktree.clone(),
             env: vec![("DUOLO_TASK_ID".into(), task.id.to_string())],
+            env_remove: INHERITED_SESSION_VARS.iter().map(|v| v.to_string()).collect(),
             size: self.pane,
             on_output: self.on_output.clone(),
         })
@@ -343,6 +432,33 @@ mod tests {
         assert!(!task.worktree.exists());
         assert!(engine.state().tasks.is_empty());
         assert_eq!(engine.agent_status(writer), AgentStatus::NotStarted);
+    }
+
+    #[test]
+    fn failed_resume_starts_fresh() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "订单导出 CSV").unwrap();
+        let key = engine.state().task(id).unwrap().key(0);
+        engine.start_agent(key).unwrap();
+        drop(engine);
+
+        // 恢复参数让进程立刻失败；重新开始时没有这个参数，进程正常运行。
+        let home = dir.path().join("home");
+        std::fs::write(
+            home.join("config.toml"),
+            "[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", \"test \\\"$0\\\" = resume && exit 3; cat\"]\n\
+             resume_args = [\"resume\"]\n",
+        )
+        .unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_agent(key).unwrap();
+        let first = engine.session_id(key).unwrap();
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(engine.retry_failed_resumes(), vec![key]);
+        assert!(engine.session_id(key).unwrap() > first);
+        thread::sleep(Duration::from_millis(300));
+        assert!(engine.agent_status(key).is_live());
+        assert!(engine.retry_failed_resumes().is_empty());
     }
 
     #[test]

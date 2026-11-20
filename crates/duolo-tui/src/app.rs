@@ -493,6 +493,9 @@ impl App {
 
     /// 处理后台任务的结果。返回是否需要重绘。
     pub fn poll_background(&mut self) -> bool {
+        if !self.engine.retry_failed_resumes().is_empty() {
+            return true;
+        }
         let Some(delivery) = self.voice.poll() else {
             return self.voice.recording_elapsed().is_some();
         };

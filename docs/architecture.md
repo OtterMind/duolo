@@ -9,12 +9,31 @@
 | `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态 | portable-pty、vt100 |
 | `duolo-voice` | 语音：调用外部录音转写命令、调用整理命令 | core |
 | `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、git、pty |
-| `duolo-tui` | 终端界面：侧边栏、Agent 窗格、语音输入行、按键路由 | engine、voice、ratatui |
-| `duolo-cli` | `duolo` 命令行入口 | 以上全部 |
+| `duolo-app` | 桌面应用后端（Tauri）：把 Engine 的能力作为命令提供给界面，推送状态快照和 Agent 输出 | engine、voice、tauri |
+| `app/` | 桌面应用界面（React + xterm.js）：侧边栏、首页、任务页、语音 | 只通过 Tauri 命令访问后端 |
+| `duolo-tui` | 终端界面（`duolo tui`，适合 SSH）：自己做 VT 合成 | engine、voice、ratatui |
+| `duolo-cli` | `duolo` 命令行入口，默认打开桌面应用 | 以上全部 |
 
 依赖只能自上而下：`core` 不依赖任何人，`engine` 不依赖 UI。
 
 ## 数据流
+
+桌面应用：
+
+```
+xterm.js 按键 ─▶ invoke("write") ─▶ Engine::write ─▶ PTY ─▶ claude / codex
+                                                        │
+xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤ 读线程
+侧边栏 ◀─ "snapshot" 事件 ◀─ 每 250ms 生成快照，变化才推送 ◀─ vt100 解析器（状态识别）
+```
+
+- Agent 的原始输出原样交给 xterm.js 渲染；`attach` 先重放已有输出再实时推送，两者在同一把锁内完成，不丢不重。
+- 每个 Agent 在界面里有一个常驻的 xterm 实例，切换任务只是挂到另一个位置，历史和光标都保留。
+- 每次启动进程都有新的会话编号（`AgentView.session`），界面看到编号变化就重新订阅。
+- 关闭窗口只隐藏，Agent 继续运行；`⌘Q` 才结束所有进程。
+- 从 Dock 启动的应用拿不到 shell 的 PATH，启动时从登录 shell 读取（`shell_env.rs`）。
+
+终端界面：
 
 ```
 键盘 ─▶ input::handle ─▶ App 操作 ─▶ Engine ─▶ Session.write ─▶ PTY ─▶ claude / codex
@@ -38,8 +57,9 @@
 
 ## 扩展点
 
-- **守护进程 `duolod`**：把 `Engine` 搬进常驻进程，TUI 通过 Unix socket 调用同样的方法；`duolo-pty` 无需改动。
-  拆分后退出终端不会结束 Agent，手机端也能连接。
+- **守护进程 `duolod`**：把 `Engine` 搬进常驻进程，桌面应用和 TUI 通过 Unix socket 调用同样的方法；`duolo-pty` 无需改动。
+  拆分后退出应用不会结束 Agent，手机端也能连接。`duolo-app/src/view.rs` 的快照格式就是以后的协议基础。
+- **网页端 / 手机端**：`app/` 的界面只依赖 `lib/api.ts` 这一层，换成 WebSocket 实现即可复用。
 - **hooks 和会话日志**：在 `duolo-pty::detect` 之上增加结构化来源（Claude hooks、`~/.claude/projects/*.jsonl`、
   `~/.codex/sessions/*.jsonl`），启发式规则保留为兜底。
 - **新的 Agent CLI**：在配置里加 `[agents.<name>]` 即可，无需改代码。

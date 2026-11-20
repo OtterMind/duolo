@@ -1,15 +1,9 @@
 import type { Agent, Project, Snapshot, Status, Task } from "./api";
+import type { MessageKey } from "../i18n";
 
-export const STATUS_LABEL: Record<Status, string> = {
-  not_started: "未启动",
-  running: "运行中",
-  needs_input: "等你确认",
-  idle: "等待输入",
-  exited: "已结束",
-  failed: "异常退出",
-};
+/** Agent 状态对应的文案键。 */
+export const statusKey = (s: Status) => `status.${s}` as MessageKey;
 
-export const ROLE_LABEL = { writer: "写", reviewer: "审" } as const;
 
 export const isLive = (s: Status) => s === "running" || s === "needs_input" || s === "idle";
 

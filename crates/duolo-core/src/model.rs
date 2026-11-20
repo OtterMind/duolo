@@ -119,6 +119,26 @@ pub struct Task {
     /// Unix 秒。
     pub created_at: u64,
     pub agents: Vec<AgentSpec>,
+    /// 最近一次后台审阅的结果。
+    #[serde(default)]
+    pub review: Option<Review>,
+}
+
+/// 一次后台审阅的结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Review {
+    /// Unix 秒。
+    pub finished_at: u64,
+    /// 审阅命令是否正常结束。失败时 `output` 是错误说明。
+    pub ok: bool,
+    pub output: String,
+}
+
+impl Review {
+    /// 结论的第一行，用作摘要。
+    pub fn summary(&self) -> &str {
+        self.output.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
+    }
 }
 
 impl Task {

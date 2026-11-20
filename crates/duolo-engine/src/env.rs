@@ -4,45 +4,77 @@ use std::process::{Command, Stdio};
 
 use duolo_core::{AgentKind, Config};
 
+/// 检查的是什么。界面按它选择对应语言的文案。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckKind {
+    Git,
+    Agent,
+    Voice,
+}
+
 /// 一项检查的结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
+    pub kind: CheckKind,
+    /// 显示名，例如 `git`、`Claude`。
     pub name: String,
     pub ok: bool,
-    /// 版本号或说明。
+    /// 检查的命令，例如 `claude`。
+    pub command: String,
+    /// 版本号，取不到时为空。
+    pub version: String,
+    /// 中文说明（终端界面和 `duolo doctor` 使用）：版本号或问题。
     pub detail: String,
 }
 
 /// 依次检查 git、写代码和审阅用的 Agent、语音。会调用各个命令的 `--version`，耗时约一秒，
 /// 界面里请在后台线程调用。
 pub fn check_environment(config: &Config) -> Vec<Check> {
-    let mut checks = vec![command_check("git", "git")];
+    let mut checks = vec![command_check(CheckKind::Git, "git", "git")];
     let mut kinds: Vec<&AgentKind> = vec![&config.writer];
     if config.reviewer != config.writer {
         kinds.push(&config.reviewer);
     }
     for kind in kinds {
         checks.push(match config.profile(kind) {
-            Some(profile) => command_check(&kind.display_name(), &profile.command),
-            None => Check { name: kind.display_name(), ok: false, detail: "配置里没有".into() },
+            Some(profile) => command_check(CheckKind::Agent, &kind.display_name(), &profile.command),
+            None => Check {
+                kind: CheckKind::Agent,
+                name: kind.display_name(),
+                ok: false,
+                command: kind.0.clone(),
+                version: String::new(),
+                detail: "配置里没有".into(),
+            },
         });
     }
     checks.push(Check {
+        kind: CheckKind::Voice,
         name: "语音".into(),
         ok: config.voice.is_configured(),
+        command: config.voice.command.first().cloned().unwrap_or_default(),
+        version: String::new(),
         detail: if config.voice.is_configured() { "已配置".into() } else { "未配置".into() },
     });
     checks
 }
 
-fn command_check(name: &str, command: &str) -> Check {
+fn command_check(kind: CheckKind, name: &str, command: &str) -> Check {
     let output = Command::new(command).arg("--version").stdin(Stdio::null()).stderr(Stdio::null()).output();
+    let base = Check {
+        kind,
+        name: name.into(),
+        ok: false,
+        command: command.into(),
+        version: String::new(),
+        detail: format!("没有找到 {command}"),
+    };
     match output {
         Ok(out) if out.status.success() => {
-            let text = String::from_utf8_lossy(&out.stdout);
-            Check { name: name.into(), ok: true, detail: version_of(&text).unwrap_or_default() }
+            let version = version_of(&String::from_utf8_lossy(&out.stdout)).unwrap_or_default();
+            Check { ok: true, detail: version.clone(), version, ..base }
         }
-        _ => Check { name: name.into(), ok: false, detail: format!("没有找到 {command}") },
+        _ => base,
     }
 }
 
@@ -69,7 +101,7 @@ mod tests {
 
     #[test]
     fn missing_command() {
-        let check = command_check("x", "duolo-no-such-command");
+        let check = command_check(CheckKind::Agent, "x", "duolo-no-such-command");
         assert!(!check.ok);
     }
 }

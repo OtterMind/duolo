@@ -20,8 +20,10 @@ pub struct Config {
     /// 每种 Agent 怎么启动。
     pub agents: BTreeMap<String, AgentProfile>,
     pub voice: VoiceConfig,
-    /// 发给审阅 Agent 的提示词，`{base}` 会替换成基准分支。
+    /// 发给审阅 Agent 的提示词，`{base}` 会替换成基准分支，`{language}` 会替换成界面语言。
     pub review_prompt: String,
+    /// 后台审阅用的命令：在任务的 worktree 里运行，提示词作为最后一个参数，结论从 stdout 读取。
+    pub review_command: Vec<String>,
 }
 
 impl Default for Config {
@@ -51,22 +53,31 @@ impl Default for Config {
             agents,
             voice: VoiceConfig::default(),
             review_prompt: DEFAULT_REVIEW_PROMPT.into(),
+            review_command: ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never"]
+                .map(String::from)
+                .to_vec(),
         }
     }
 }
 
+/// 默认的审阅提示词。`{base}` 换成基准分支，`{language}` 换成界面语言（英文名，例如 `Japanese`）。
 pub const DEFAULT_REVIEW_PROMPT: &str =
-    "请审阅当前 git worktree 相对于 {base} 分支的全部改动，包括还没有提交的修改（可以用 git diff {base}）。\
-你是只读审阅者，不要修改任何文件。\
-按「严重 / 建议 / 风格」三级列出问题，每条写明文件和行号。没有严重问题时请明确说明。";
+    "Review every change in this git worktree relative to the {base} branch, including uncommitted changes \
+(you can use `git diff {base}`). You are a read-only reviewer: do not modify any files.\n\
+Write your review in {language}.\n\
+On the first line, summarize the result in one short sentence, e.g. \"2 critical issues, 3 suggestions\" or \"No issues found\".\n\
+Then list issues grouped as Critical / Suggestion / Style. For each, give the file and line number and how to fix it.";
+
+/// 没有指定界面语言时，审阅结论使用的语言。
+pub const DEFAULT_REPLY_LANGUAGE: &str = "English";
 
 impl Config {
     /// 读取配置；文件不存在时返回默认值。
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read_to_string(path) {
-            Ok(text) => toml::from_str(&text).with_context(|| format!("配置文件格式有误：{}", path.display())),
+            Ok(text) => toml::from_str(&text).with_context(|| format!("invalid config file: {}", path.display())),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(err) => Err(err).with_context(|| format!("无法读取配置文件 {}", path.display())),
+            Err(err) => Err(err).with_context(|| format!("cannot read config file {}", path.display())),
         }
     }
 
@@ -74,8 +85,9 @@ impl Config {
         self.agents.get(&kind.0)
     }
 
-    pub fn review_prompt_for(&self, base: &str) -> String {
-        self.review_prompt.replace("{base}", base)
+    /// 填好基准分支和回答语言的审阅提示词。
+    pub fn review_prompt_for(&self, base: &str, language: &str) -> String {
+        self.review_prompt.replace("{base}", base).replace("{language}", language)
     }
 }
 
@@ -144,7 +156,9 @@ mod tests {
     #[test]
     fn review_prompt_mentions_base() {
         let cfg = Config::default();
-        assert!(cfg.review_prompt_for("main").contains("git diff main"));
+        let prompt = cfg.review_prompt_for("main", "Japanese");
+        assert!(prompt.contains("git diff main"));
+        assert!(prompt.contains("Write your review in Japanese."));
     }
 
     #[test]

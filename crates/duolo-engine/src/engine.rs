@@ -5,11 +5,13 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
-    AgentKey, AgentKind, AgentRole, AgentSpec, Config, Paths, Project, ProjectId, State, Store, Task, TaskId,
+    AgentKey, AgentKind, AgentRole, AgentSpec, Config, Paths, Project, ProjectId, Review, State, Store, Task, TaskId,
+    UserError,
 };
 use duolo_git::DiffStat;
 use duolo_pty::{OutputHook, OutputSink, Session, SessionSpec, Size};
 
+use crate::review::ReviewJob;
 use crate::status::{AgentStatus, Summary};
 
 /// 改动统计的缓存时间，避免每帧都调用 git。
@@ -42,6 +44,9 @@ pub struct Engine {
     next_session_id: u64,
     /// 以"恢复会话"方式启动、还在观察期内的 Agent。
     resuming: HashSet<AgentKey>,
+    reviews: HashMap<TaskId, ReviewJob>,
+    /// 审阅结论使用的语言（英文名），跟随界面语言。
+    reply_language: String,
     pane: Size,
     on_output: Option<OutputHook>,
     diffs: HashMap<TaskId, (Instant, Option<DiffStat>)>,
@@ -74,6 +79,8 @@ impl Engine {
             session_ids: HashMap::new(),
             next_session_id: 1,
             resuming: HashSet::new(),
+            reviews: HashMap::new(),
+            reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
             pane: Size::new(24, 80),
             on_output: None,
             diffs: HashMap::new(),
@@ -90,6 +97,11 @@ impl Engine {
 
     pub fn state(&self) -> &State {
         &self.state
+    }
+
+    /// 设置审阅结论使用的语言（英文名，例如 `Simplified Chinese`）。界面切换语言时调用。
+    pub fn set_reply_language(&mut self, language: &str) {
+        self.reply_language = language.to_string();
     }
 
     /// Agent 有新输出时调用，界面层用来触发重绘。
@@ -128,7 +140,7 @@ impl Engine {
     /// [`Engine::name_task`] 补上标题和分支名。
     pub fn create_task(&mut self, project: &ProjectId, prompt: &str) -> Result<TaskId> {
         let prompt = prompt.trim();
-        let project = self.state.project(project).cloned().context("项目不存在")?;
+        let project = self.state.project(project).cloned().ok_or(UserError::ProjectNotFound)?;
         let id = self.state.allocate_task_id();
         let title = derive_title(prompt);
         let dir_name = format!("{}-{}", id, slug(&title));
@@ -148,6 +160,7 @@ impl Engine {
             worktree,
             created_at: now_secs(),
             agents: vec![writer],
+            review: None,
         });
         self.save()?;
         Ok(id)
@@ -157,7 +170,7 @@ impl Engine {
     /// 已经有需求的任务不变。
     pub fn name_task(&mut self, id: TaskId, prompt: &str) -> Result<()> {
         let prompt = prompt.trim();
-        let task = self.state.task_mut(id).context("任务不存在")?;
+        let task = self.state.task_mut(id).ok_or(UserError::TaskNotFound)?;
         if prompt.is_empty() || !task.prompt.is_empty() {
             return Ok(());
         }
@@ -172,8 +185,9 @@ impl Engine {
 
     /// 结束任务的所有 Agent，删除 worktree（分支保留），并从列表中移除。
     pub fn close_task(&mut self, id: TaskId) -> Result<()> {
-        let task = self.state.task(id).cloned().context("任务不存在")?;
+        let task = self.state.task(id).cloned().ok_or(UserError::TaskNotFound)?;
         self.sessions.retain(|key, _| key.task != id);
+        self.reviews.remove(&id);
         self.diffs.remove(&id);
         if task.worktree.exists() {
             let root = self.state.project(&task.project).map(|p| p.root.clone());
@@ -189,7 +203,7 @@ impl Engine {
     /// 给任务加上审阅 Agent 并启动；已有审阅者时直接启动它。
     pub fn start_reviewer(&mut self, task: TaskId) -> Result<AgentKey> {
         let reviewer_kind = self.config.reviewer.clone();
-        let t = self.state.task_mut(task).context("任务不存在")?;
+        let t = self.state.task_mut(task).ok_or(UserError::TaskNotFound)?;
         let agent_id = match t.agent_with_role(AgentRole::Reviewer) {
             Some(existing) => existing.id,
             None => {
@@ -201,6 +215,54 @@ impl Engine {
         let key = AgentKey { task, agent: agent_id };
         self.start_agent(key)?;
         Ok(key)
+    }
+
+    // ---- 后台审阅 ----
+
+    /// 在后台审阅任务相对基准分支的全部改动。已经在审阅时什么也不做。
+    pub fn start_review(&mut self, id: TaskId) -> Result<()> {
+        if self.reviews.contains_key(&id) {
+            return Ok(());
+        }
+        let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
+        let prompt = self.config.review_prompt_for(&task.base, &self.reply_language);
+        let job =
+            ReviewJob::spawn(&self.config.review_command, &prompt, task.worktree.clone(), INHERITED_SESSION_VARS)?;
+        self.reviews.insert(id, job);
+        Ok(())
+    }
+
+    pub fn cancel_review(&mut self, id: TaskId) {
+        self.reviews.remove(&id);
+    }
+
+    /// 正在审阅时返回开始时间（Unix 秒）。
+    pub fn review_started_at(&self, id: TaskId) -> Option<u64> {
+        self.reviews.get(&id).map(ReviewJob::started_at)
+    }
+
+    /// 收集已经结束的审阅，保存结论。界面定期调用，返回有新结论的任务。
+    pub fn poll_reviews(&mut self) -> Vec<TaskId> {
+        let mut done = Vec::new();
+        for (&id, job) in &self.reviews {
+            if let Some(result) = job.take_result() {
+                let (ok, output) = match result {
+                    Ok(output) => (true, output),
+                    Err(err) => (false, err),
+                };
+                if let Some(task) = self.state.task_mut(id) {
+                    task.review = Some(Review { finished_at: now_secs(), ok, output });
+                }
+                done.push(id);
+            }
+        }
+        for id in &done {
+            self.reviews.remove(id);
+        }
+        if !done.is_empty() {
+            let _ = self.save();
+        }
+        done
     }
 
     // ---- Agent 进程 ----
@@ -273,18 +335,18 @@ impl Engine {
 
     /// 订阅 Agent 的原始输出，先重放已有输出。Agent 没有运行时报错。
     pub fn attach(&self, key: AgentKey, sink: OutputSink) -> Result<()> {
-        self.sessions.get(&key).context("Agent 没有运行")?.attach(sink);
+        self.sessions.get(&key).ok_or(UserError::AgentNotRunning)?.attach(sink);
         Ok(())
     }
 
     /// 把按键或文字原样写给 Agent。
     pub fn write(&mut self, key: AgentKey, bytes: &[u8]) -> Result<()> {
-        self.sessions.get_mut(&key).context("Agent 没有运行")?.write(bytes)
+        self.sessions.get_mut(&key).ok_or(UserError::AgentNotRunning)?.write(bytes)
     }
 
     /// 粘贴一段文字（Agent 开启括号粘贴时带上标记），`submit` 为真时再按一次回车。
     pub fn paste(&mut self, key: AgentKey, text: &str, submit: bool) -> Result<()> {
-        let session = self.sessions.get_mut(&key).context("Agent 没有运行")?;
+        let session = self.sessions.get_mut(&key).ok_or(UserError::AgentNotRunning)?;
         session.paste(text)?;
         if submit {
             session.write(b"\r")?;
@@ -338,11 +400,12 @@ impl Engine {
     /// 结束所有 Agent 进程。
     pub fn shutdown(&mut self) {
         self.sessions.clear();
+        self.reviews.clear();
     }
 
     fn session_spec(&self, key: AgentKey, fresh: bool) -> Result<SessionSpec> {
-        let task = self.state.task(key.task).context("任务不存在")?;
-        let agent = task.agent(key.agent).context("Agent 不存在")?;
+        let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
+        let agent = task.agent(key.agent).context("agent not found")?;
         let profile = self.profile(&agent.kind)?;
 
         let mut args = profile.args.clone();
@@ -355,7 +418,7 @@ impl Engine {
             match agent.role {
                 AgentRole::Writer if task.prompt.is_empty() => {}
                 AgentRole::Writer => args.push(task.prompt.clone()),
-                AgentRole::Reviewer => args.push(self.config.review_prompt_for(&task.base)),
+                AgentRole::Reviewer => args.push(self.config.review_prompt_for(&task.base, &self.reply_language)),
             }
         }
 
@@ -371,7 +434,7 @@ impl Engine {
     }
 
     fn profile(&self, kind: &AgentKind) -> Result<&duolo_core::AgentProfile> {
-        self.config.profile(kind).with_context(|| format!("配置里没有 Agent「{}」", kind.0))
+        self.config.profile(kind).ok_or_else(|| UserError::UnknownAgent { kind: kind.0.clone() }.into())
     }
 
     fn save(&self) -> Result<()> {
@@ -477,6 +540,32 @@ mod tests {
         thread::sleep(Duration::from_millis(300));
         assert!(engine.agent_status(key).is_live());
         assert!(engine.retry_failed_resumes().is_empty());
+    }
+
+    #[test]
+    fn background_review_saves_conclusion() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "订单导出 CSV").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        // 冒充审阅命令：输出结论，并确认收到了带基准分支的提示词。
+        std::fs::write(
+            home.join("config.toml"),
+            "review_command = [\"sh\", \"-c\", \"echo 没有发现问题; echo \\\"$0\\\" | grep -q main\"]\n",
+        )
+        .unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_review(id).unwrap();
+        assert!(engine.review_started_at(id).is_some());
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while engine.poll_reviews().is_empty() {
+            assert!(Instant::now() < deadline, "审阅超时");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let review = engine.state().task(id).unwrap().review.clone().unwrap();
+        assert!(review.ok, "{}", review.output);
+        assert_eq!(review.summary(), "没有发现问题");
+        assert!(engine.review_started_at(id).is_none());
     }
 
     #[test]

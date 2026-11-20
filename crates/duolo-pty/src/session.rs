@@ -140,7 +140,7 @@ impl std::fmt::Debug for Session {
 
 impl Session {
     pub fn spawn(spec: SessionSpec) -> Result<Self> {
-        let pair = native_pty_system().openpty(spec.size.to_pty()).context("无法创建伪终端")?;
+        let pair = native_pty_system().openpty(spec.size.to_pty()).context("cannot open a pseudo terminal")?;
 
         let mut cmd = CommandBuilder::new(&spec.program);
         cmd.args(&spec.args);
@@ -156,15 +156,15 @@ impl Session {
         let child = pair
             .slave
             .spawn_command(cmd)
-            .with_context(|| format!("无法启动 {}，请确认已安装并在 PATH 中", spec.program))?;
+            .map_err(|_| duolo_core::UserError::CommandNotFound { program: spec.program.clone() })?;
         // 子进程已持有从端，父进程这边关闭，进程退出时读端才能收到 EOF。
         drop(pair.slave);
 
         let terminal = Arc::new(Mutex::new(vt100::Parser::new(spec.size.rows, spec.size.cols, SCROLLBACK_LINES)));
         let activity = Arc::new(Activity { origin: Instant::now(), last_output_ms: AtomicU64::new(0) });
         let tap = Arc::new(Mutex::new(Tap::default()));
-        let reader = pair.master.try_clone_reader().context("无法读取伪终端")?;
-        let writer = pair.master.take_writer().context("无法写入伪终端")?;
+        let reader = pair.master.try_clone_reader().context("cannot read from the pseudo terminal")?;
+        let writer = pair.master.take_writer().context("cannot write to the pseudo terminal")?;
         spawn_reader(reader, Arc::clone(&terminal), Arc::clone(&tap), Arc::clone(&activity), spec.on_output);
 
         Ok(Self {
@@ -205,7 +205,7 @@ impl Session {
         if size == self.size {
             return Ok(());
         }
-        self.master.resize(size.to_pty()).context("无法调整终端尺寸")?;
+        self.master.resize(size.to_pty()).context("cannot resize the pseudo terminal")?;
         self.screen().set_size(size.rows, size.cols);
         self.size = size;
         Ok(())

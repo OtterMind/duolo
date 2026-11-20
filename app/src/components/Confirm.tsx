@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "../i18n";
+
 export interface ConfirmSpec {
   title: string;
   body: string;
@@ -10,6 +12,7 @@ export interface ConfirmSpec {
 
 /** 确认框：↵ 确认，Esc 取消。 */
 export function Confirm({ spec, onDone, onError }: { spec: ConfirmSpec; onDone(): void; onError(err: unknown): void }) {
+  const t = useT();
   const [running, setRunning] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
 
@@ -42,10 +45,10 @@ export function Confirm({ spec, onDone, onError }: { spec: ConfirmSpec; onDone()
         <p>{spec.body}</p>
         <div className="dialog-actions">
           <button className="btn" onClick={onDone}>
-            取消
+            {t("common.cancel")}
           </button>
           <button ref={button} className={`btn primary ${spec.danger ? "danger" : ""}`} disabled={running} onClick={run}>
-            {running ? "请稍候…" : spec.action}
+            {running ? t("common.pleaseWait") : spec.action}
           </button>
         </div>
       </div>

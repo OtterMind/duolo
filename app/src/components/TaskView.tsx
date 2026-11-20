@@ -1,55 +1,57 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Ellipsis, GitBranch, ScanSearch, X } from "lucide-react";
+
+import { useT } from "../i18n";
 
 import { api, type Agent, type Diff, type Task } from "../lib/api";
-import { ROLE_LABEL, isLive } from "../lib/format";
+import { elapsed, isLive, writerOf } from "../lib/format";
 import * as terminals from "../lib/terminals";
 import type { Voice } from "../lib/voice";
 import { StatusIcon } from "./StatusIcon";
-import { VoiceOverlay } from "./VoiceBar";
+import { AgentIcon } from "./AgentIcon";
+import { Markdown } from "./Markdown";
+import { Mic } from "./Mic";
 
 interface Props {
   task: Task;
-  agentId: number;
   voice: Voice;
-  onSelectAgent(agent: number): void;
-  onReview(): void;
+  reviewOpen: boolean;
+  onReviewOpenChange(open: boolean): void;
   onClose(): void;
   onError(err: unknown): void;
 }
 
-/** 任务页：顶部一行 tab 切换 Agent，下面就是 Agent 自己的命令行。 */
-export function TaskView({ task, agentId, voice, onSelectAgent, onReview, onClose, onError }: Props) {
-  const agent = task.agents.find((a) => a.id === agentId) ?? task.agents[0];
-  const hasReviewer = task.agents.some((a) => a.role === "reviewer");
+/** 任务页：顶部一行任务信息和审阅入口，下面就是写代码的 Agent 自己的命令行。 */
+export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose, onError }: Props) {
+  const t = useT();
+  const agent = writerOf(task) ?? task.agents[0];
+  const ref = { task: task.id, agent: agent.id };
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
-  const focusTerminal = useCallback(
-    () => terminals.terminalFor({ task: task.id, agent: agent.id }).term.focus(),
-    [task.id, agent.id],
-  );
+  const focusTerminal = () => terminals.terminalFor(ref).term.focus();
+
+  const startReview = () => {
+    onReviewOpenChange(true);
+    api.startReview(task.id).catch(onError);
+  };
+  const sendReview = () => {
+    if (!task.review) return;
+    const text = `${t("review.handoff")}\n\n${task.review.output}`;
+    api.sendText(ref, text, true).catch(onError);
+    onReviewOpenChange(false);
+    focusTerminal();
+  };
 
   return (
     <div className="task">
-      <header className="tabbar" data-tauri-drag-region>
-        {task.agents.map((a) => (
-          <button
-            key={a.id}
-            className={`tab ${a.id === agent.id ? "is-active" : ""}`}
-            onClick={() => onSelectAgent(a.id)}
-            title={`${a.name} · ${a.role === "writer" ? "写代码" : "只读审阅"}`}
-          >
-            <StatusIcon status={a.status} />
-            <span className="tab-name">{a.name}</span>
-            <span className="tab-role">{ROLE_LABEL[a.role]}</span>
-          </button>
-        ))}
-        {!hasReviewer && (
-          <button className="tab-add" onClick={onReview} title="让 Codex 审阅这个任务的改动（⌘⇧R）">
-            +
-          </button>
-        )}
-        <span className="grow" data-tauri-drag-region />
-        <span className="tab-meta" data-tauri-drag-region title={`基于 ${task.base}`}>
+      <header className="topbar" data-tauri-drag-region>
+        <AgentIcon kind={agent.kind} title={agent.name} />
+        <span className={`topbar-title ellipsis ${task.prompt ? "" : "untitled"}`} title={task.prompt} data-tauri-drag-region>
+          {task.prompt ? task.title : t("task.untitled")}
+        </span>
+        <StatusIcon status={agent.status} />
+        <span className="topbar-meta" data-tauri-drag-region title={t("task.basedOn", { base: task.base })}>
+          <GitBranch size={12} strokeWidth={1.75} />
           {task.branch}
           {diff && diff.files > 0 && (
             <>
@@ -58,20 +60,21 @@ export function TaskView({ task, agentId, voice, onSelectAgent, onReview, onClos
             </>
           )}
         </span>
+        <span className="grow" data-tauri-drag-region />
+        <ReviewButton task={task} open={reviewOpen} onStart={startReview} onToggle={() => onReviewOpenChange(!reviewOpen)} />
         <div className="more" onMouseDown={(e) => e.stopPropagation()}>
-          <button className="icon-btn" title="更多" onClick={() => setMenu((m) => !m)}>
-            ⋯
+          <button className="icon-btn" title={t("common.more")} onClick={() => setMenu((m) => !m)}>
+            <Ellipsis size={15} strokeWidth={1.75} />
           </button>
           {menu && (
             <MoreMenu
               onDismiss={() => setMenu(false)}
               items={[
-                { label: "在 Finder 中显示", kbd: "⌘⇧F", run: () => void api.reveal(task.worktree) },
-                { label: "在终端中打开", run: () => void api.reveal(task.worktree, "Terminal") },
-                { label: "拷贝工作目录路径", run: () => void navigator.clipboard.writeText(task.worktree) },
+                { label: t("task.reveal"), kbd: "⌘⇧F", run: () => void api.reveal(task.worktree) },
+                { label: t("task.openTerminal"), run: () => void api.reveal(task.worktree, "Terminal") },
+                { label: t("task.copyPath"), run: () => void navigator.clipboard.writeText(task.worktree) },
                 { sep: true },
-                { label: hasReviewer ? "切到审阅" : "让 Codex 审阅", kbd: "⌘⇧R", run: onReview },
-                { label: "关闭任务…", kbd: "⌘⇧W", run: onClose, danger: true },
+                { label: t("task.close"), kbd: "⌘⇧W", run: onClose, danger: true },
               ]}
             />
           )}
@@ -79,15 +82,128 @@ export function TaskView({ task, agentId, voice, onSelectAgent, onReview, onClos
       </header>
 
       <div className="task-body">
-        <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
-        <VoiceOverlay voice={voice} onDone={focusTerminal} />
+        <div className="task-main">
+          <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
+          <Mic agent={ref} voice={voice} />
+        </div>
+        {reviewOpen && (
+          <ReviewPanel
+            task={task}
+            onRerun={startReview}
+            onCancel={() => void api.cancelReview(task.id)}
+            onSend={sendReview}
+            onClose={() => {
+              onReviewOpenChange(false);
+              focusTerminal();
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
+/** 顶部的审阅入口：平时是一个小按钮，审阅中显示用时，有结论时显示摘要。 */
+function ReviewButton({ task, open, onStart, onToggle }: { task: Task; open: boolean; onStart(): void; onToggle(): void }) {
+  const t = useT();
+  const now = useNow(task.reviewingSince != null);
+  if (task.reviewingSince != null) {
+    return (
+      <button className={`review-btn is-running ${open ? "is-open" : ""}`} onClick={onToggle} title={t("review.runningTitle")}>
+        <span className="status status-running" />
+        {t("review.running", { time: elapsed(task.reviewingSince, now) })}
+      </button>
+    );
+  }
+  if (task.review) {
+    return (
+      <button
+        className={`review-btn has-result ${task.review.ok ? "" : "is-failed"} ${open ? "is-open" : ""}`}
+        onClick={onToggle}
+        title={t("review.resultTitle")}
+      >
+        <span className="review-dot" />
+        <span className="ellipsis">{task.review.ok ? task.review.summary : t("review.failed")}</span>
+      </button>
+    );
+  }
+  return (
+    <button className="review-btn" onClick={onStart} title={t("review.buttonTitle")}>
+      <ScanSearch size={14} strokeWidth={1.75} />
+      {t("review.button")}
+    </button>
+  );
+}
+
+function ReviewPanel({
+  task,
+  onRerun,
+  onCancel,
+  onSend,
+  onClose,
+}: {
+  task: Task;
+  onRerun(): void;
+  onCancel(): void;
+  onSend(): void;
+  onClose(): void;
+}) {
+  const t = useT();
+  const running = task.reviewingSince != null;
+  const now = useNow(running);
+  return (
+    <aside className="review-panel">
+      <div className="review-head">
+        <span className="grow">
+          {t("review.panelTitle")}
+          <span className="meta">
+            {running
+              ? ` · ${t("review.inProgress", { time: elapsed(task.reviewingSince!, now) })}`
+              : task.review
+                ? ` · ${t("common.ago", { time: elapsed(task.review.finishedAt, now) })}`
+                : ""}
+          </span>
+        </span>
+        <button className="icon-btn" title={t("common.collapse")} onClick={onClose}>
+          <X size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+      <div className="review-body">
+        {running && !task.review && (
+          <p className="review-note">{t("review.runningNote", { branch: task.branch, base: task.base })}</p>
+        )}
+        {task.review && (
+          <div className={`review-text ${task.review.ok ? "" : "is-failed"}`}>
+            <Markdown text={task.review.output} />
+          </div>
+        )}
+        {!running && !task.review && <p className="review-note">{t("review.none")}</p>}
+      </div>
+      <div className="review-foot">
+        {running ? (
+          <button className="btn" onClick={onCancel}>
+            {t("review.stop")}
+          </button>
+        ) : (
+          <>
+            {task.review?.ok && (
+              <button className="btn primary" onClick={onSend}>
+                {t("review.sendToClaude")}
+              </button>
+            )}
+            <button className="btn" onClick={onRerun}>
+              {task.review ? t("review.rerun") : t("review.start")}
+            </button>
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 /** Agent 的 CLI。没有运行时自动启动（第一次带需求，之后接着上次的会话）。 */
 function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onError(err: unknown): void }) {
+  const t = useT();
   const host = useRef<HTMLDivElement>(null);
   const ref = { task: task.id, agent: agent.id };
   const [starting, setStarting] = useState(false);
@@ -144,15 +260,15 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
     <div className="terminal-wrap">
       <div ref={host} className="terminal" />
       {(starting || agent.status === "not_started") && !live && (
-        <div className="terminal-note">正在启动 {agent.name}…</div>
+        <div className="terminal-note">{t("task.starting", { agent: agent.name })}</div>
       )}
       {ended && (
         <div className="terminal-ended">
           <span>
-            {agent.name} {agent.status === "failed" ? "异常退出" : "已结束"}
+            {t(agent.status === "failed" ? "task.agentFailed" : "task.agentExited", { agent: agent.name })}
           </span>
           <button className="btn" onClick={() => void start()} disabled={starting}>
-            继续会话
+            {t("task.resume")}
           </button>
         </div>
       )}
@@ -188,6 +304,18 @@ function MoreMenu({ items, onDismiss }: { items: MenuItem[]; onDismiss(): void }
       )}
     </div>
   );
+}
+
+/** `active` 时每秒刷新一次的当前时间（秒）。 */
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now() / 1000);
+    const id = window.setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => window.clearInterval(id);
+  }, [active]);
+  return now;
 }
 
 /** 每 3 秒刷新一次改动统计。 */

@@ -5,13 +5,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
+use duolo_core::UserError;
 
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git").arg("-C").arg(dir).args(args).output().context("无法运行 git，请确认已安装")?;
+    let output = Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|_| UserError::GitMissing)?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("git {} 失败：{}", args.join(" "), stderr.trim());
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(UserError::GitFailed { command: args.join(" "), detail }.into());
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -20,7 +21,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
 pub fn repo_root(path: &Path) -> Result<PathBuf> {
     git(path, &["rev-parse", "--show-toplevel"])
         .map(PathBuf::from)
-        .with_context(|| format!("{} 不在 git 仓库里", path.display()))
+        .map_err(|_| UserError::NotGitRepo { path: path.display().to_string() }.into())
 }
 
 /// 当前分支名；处于分离头指针时返回提交号。
@@ -37,7 +38,7 @@ pub fn add_worktree(root: &Path, path: &Path, branch: &str, base: &str) -> Resul
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let path_str = path.to_str().context("worktree 路径包含无法识别的字符")?;
+    let path_str = path.to_str().context("worktree path is not valid UTF-8")?;
     git(root, &["worktree", "add", "-b", branch, path_str, base])?;
     Ok(())
 }
@@ -50,7 +51,7 @@ pub fn rename_branch(worktree: &Path, new_name: &str) -> Result<()> {
 
 /// 删除 worktree。分支保留，方便之后查看或合并。
 pub fn remove_worktree(root: &Path, path: &Path, force: bool) -> Result<()> {
-    let path_str = path.to_str().context("worktree 路径包含无法识别的字符")?;
+    let path_str = path.to_str().context("worktree path is not valid UTF-8")?;
     let mut args = vec!["worktree", "remove", path_str];
     if force {
         args.push("--force");

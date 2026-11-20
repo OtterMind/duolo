@@ -56,7 +56,7 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     let paths = Paths::discover()?;
-    let cwd = std::env::current_dir().context("无法读取当前目录")?;
+    let cwd = std::env::current_dir().context("cannot read the current directory")?;
     match cli.command {
         None => {
             let dir = cli.path.unwrap_or(cwd);
@@ -134,7 +134,7 @@ fn open_app(dir: &std::path::Path) -> Result<bool> {
         Ok(root) => cmd.args(["-n", "-b", APP_BUNDLE_ID, "--args"]).arg(root),
         Err(_) => cmd.args(["-b", APP_BUNDLE_ID]),
     };
-    let status = cmd.stderr(std::process::Stdio::null()).status().context("无法运行 open")?;
+    let status = cmd.stderr(std::process::Stdio::null()).status().context("cannot run open")?;
     Ok(status.success())
 }
 

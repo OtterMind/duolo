@@ -1,39 +1,30 @@
-// 语音输入：⌃Space 开始录音，再按一次结束；识别和整理在后端完成。
-// 结果先显示在 Agent 输入框上方，确认后再发送。
+// 语音输入：⌘⇧Space 或点输入行右侧的麦克风开始录音，再按一次结束。
+// （不用 ⌃Space：那是 macOS 切换输入法的默认快捷键。）
+// 识别和整理在后端完成，结果直接填进 Agent 自己的输入框（不发送），看一眼按 ↵ 发出去。
 
 import { useCallback, useRef, useState } from "react";
 
 import { api, type AgentRef } from "./api";
+import type { Translate } from "../i18n";
 
-export type VoicePhase =
-  | { kind: "idle" }
-  | { kind: "recording"; since: number }
-  | { kind: "processing" }
-  | { kind: "review"; target: AgentRef; raw: string; organized: string | null; text: string };
+export type VoicePhase = { kind: "idle" } | { kind: "recording"; since: number } | { kind: "processing" };
 
 export interface Voice {
   phase: VoicePhase;
   ready: boolean;
   toggle(): void;
   cancel(): void;
-  edit(text: string): void;
-  /** 发送给 Agent；`submit` 为假时只填进 Agent 的输入框。 */
-  send(submit: boolean): void;
-  /** 退回原话；已经是原话时返回 false。 */
-  revert(): boolean;
 }
 
 interface Options {
   ready: boolean;
   target: AgentRef | null;
   context: { project?: string; task?: string };
-  /** 语音文字发给了 Agent。 */
-  onSent(target: AgentRef, text: string): void;
+  /** 文字已经填进了 Agent 的输入框。 */
+  onInserted(target: AgentRef, text: string): void;
   onError(err: unknown): void;
+  t: Translate;
 }
-
-const NOT_READY =
-  "语音还没配置：在 ~/.duolo/config.toml 里设置 voice.command（见 README）。也可以先用 macOS 听写，连按两下 Fn。";
 
 export function useVoice(opts: Options): Voice {
   const [phase, setPhase] = useState<VoicePhase>({ kind: "idle" });
@@ -41,13 +32,16 @@ export function useVoice(opts: Options): Voice {
   optsRef.current = opts;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  /** 录音开始时的目标，结束时可能已经切到别的任务。 */
+  const targetRef = useRef<AgentRef | null>(null);
 
   const toggle = useCallback(() => {
-    const { ready, target, context, onError } = optsRef.current;
+    const { ready, target, context, onError, onInserted, t } = optsRef.current;
     const current = phaseRef.current;
-    if (current.kind === "idle" || current.kind === "review") {
-      if (!ready) return onError(NOT_READY);
-      if (!target) return onError("先打开一个任务，再用语音输入。");
+    if (current.kind === "idle") {
+      if (!ready) return onError({ code: "voiceNotConfigured" });
+      if (!target) return onError(t("voice.needTask"));
+      targetRef.current = target;
       api
         .voiceStart()
         .then(() => setPhase({ kind: "recording", since: Date.now() }))
@@ -58,14 +52,16 @@ export function useVoice(opts: Options): Voice {
     setPhase({ kind: "processing" });
     api
       .voiceFinish(context.project, context.task)
-      .then(({ raw, organized }) => {
-        if (!target) return setPhase({ kind: "idle" });
-        setPhase({ kind: "review", target, raw, organized, text: organized ?? raw });
+      .then(async ({ raw, organized }) => {
+        const to = targetRef.current;
+        const text = (organized ?? raw).trim();
+        if (to && text) {
+          await api.sendText(to, text, false);
+          onInserted(to, text);
+        }
       })
-      .catch((err) => {
-        setPhase({ kind: "idle" });
-        onError(err);
-      });
+      .catch(onError)
+      .finally(() => setPhase({ kind: "idle" }));
   }, []);
 
   const cancel = useCallback(() => {
@@ -73,24 +69,5 @@ export function useVoice(opts: Options): Voice {
     setPhase({ kind: "idle" });
   }, []);
 
-  const edit = useCallback((text: string) => {
-    setPhase((p) => (p.kind === "review" ? { ...p, text } : p));
-  }, []);
-
-  const send = useCallback((submit: boolean) => {
-    const p = phaseRef.current;
-    if (p.kind !== "review" || !p.text.trim()) return;
-    api.sendText(p.target, p.text.trim(), submit).catch(optsRef.current.onError);
-    if (submit) optsRef.current.onSent(p.target, p.text.trim());
-    setPhase({ kind: "idle" });
-  }, []);
-
-  const revert = useCallback(() => {
-    const p = phaseRef.current;
-    if (p.kind !== "review" || p.text === p.raw) return false;
-    setPhase({ ...p, text: p.raw });
-    return true;
-  }, []);
-
-  return { phase, ready: opts.ready, toggle, cancel, edit, send, revert };
+  return { phase, ready: opts.ready, toggle, cancel };
 }

@@ -5,10 +5,11 @@
 
 mod engine;
 mod env;
+mod review;
 mod status;
 
 pub use duolo_git::DiffStat;
 pub use duolo_pty::Size;
 pub use engine::Engine;
-pub use env::{check_environment, Check};
+pub use env::{check_environment, Check, CheckKind};
 pub use status::{AgentStatus, Summary};

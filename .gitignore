@@ -3,3 +3,4 @@
 node_modules/
 /app/dist
 /crates/duolo-app/gen
+/crates/duolo-app/binaries

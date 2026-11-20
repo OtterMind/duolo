@@ -1,8 +1,10 @@
-//! `state.json` 的读写。写入先写临时文件再改名，中途崩溃也不会留下半个文件。
+//! `state.json` 等 JSON 文件的读写。写入先写临时文件再改名，中途崩溃也不会留下半个文件。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::model::State;
 
@@ -17,24 +19,32 @@ impl Store {
     }
 
     pub fn load(&self) -> Result<State> {
-        match std::fs::read(&self.path) {
-            Ok(bytes) => {
-                serde_json::from_slice(&bytes).with_context(|| format!("状态文件损坏：{}", self.path.display()))
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(State::default()),
-            Err(err) => Err(err).with_context(|| format!("无法读取状态文件 {}", self.path.display())),
-        }
+        load_json(&self.path)
     }
 
     pub fn save(&self, state: &State) -> Result<()> {
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
-        let bytes = serde_json::to_vec_pretty(state)?;
-        std::fs::write(&tmp, bytes).with_context(|| format!("无法写入 {}", tmp.display()))?;
-        std::fs::rename(&tmp, &self.path).with_context(|| format!("无法保存 {}", self.path.display()))
+        save_json(&self.path, state)
     }
+}
+
+/// 读取 JSON 文件；文件不存在时返回默认值。
+pub fn load_json<T: DeserializeOwned + Default>(path: &Path) -> Result<T> {
+    match std::fs::read(path) {
+        Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| format!("file is corrupted: {}", path.display())),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
+        Err(err) => Err(err).with_context(|| format!("cannot read {}", path.display())),
+    }
+}
+
+/// 原子地写入 JSON 文件。
+pub fn save_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec_pretty(value)?;
+    std::fs::write(&tmp, bytes).with_context(|| format!("cannot write {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("cannot save {}", path.display()))
 }
 
 #[cfg(test)]

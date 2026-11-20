@@ -7,15 +7,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod locale;
 mod shell_env;
 mod view;
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
-use duolo_core::Paths;
+use duolo_core::{Paths, UserError};
 use duolo_engine::Engine;
 use duolo_voice::Recorder;
 use serde::Serialize;
@@ -31,6 +33,8 @@ pub struct AppState {
     recorder: Mutex<Option<Recorder>>,
     /// 等界面来取的"打开项目"请求。
     open_request: Mutex<Option<String>>,
+    /// 界面当前使用的语言代码，内置语音识别按它选择识别语言。
+    locale: Mutex<String>,
 }
 
 impl AppState {
@@ -39,33 +43,47 @@ impl AppState {
     }
 }
 
-/// 命令的错误：转成一句给用户看的话。
-#[derive(Debug)]
-pub struct Error(String);
+/// 命令的错误。用户可处理的错误带上错误码和参数，由界面按当前语言显示；
+/// 其他错误的错误码是 `internal`，界面显示通用文案并附上英文详情。
+#[derive(Debug, Serialize)]
+pub struct Error {
+    code: &'static str,
+    params: BTreeMap<&'static str, String>,
+    message: String,
+}
 
 pub type Res<T> = Result<T, Error>;
 
-impl Serialize for Error {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
+impl Error {
+    fn internal(message: String) -> Self {
+        Self { code: "internal", params: BTreeMap::new(), message }
+    }
+}
+
+impl From<UserError> for Error {
+    fn from(err: UserError) -> Self {
+        Self { code: err.code(), params: err.params(), message: err.to_string() }
     }
 }
 
 impl From<anyhow::Error> for Error {
     fn from(err: anyhow::Error) -> Self {
-        Self(format!("{err:#}"))
+        match err.chain().find_map(|e| e.downcast_ref::<UserError>()) {
+            Some(user) => Self { message: format!("{err:#}"), ..user.clone().into() },
+            None => Self::internal(format!("{err:#}")),
+        }
     }
 }
 
 impl From<tauri::Error> for Error {
     fn from(err: tauri::Error) -> Self {
-        Self(err.to_string())
+        Self::internal(err.to_string())
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        Self(err.to_string())
+        Self::internal(err.to_string())
     }
 }
 
@@ -82,6 +100,7 @@ fn main() {
         engine: Mutex::new(engine),
         recorder: Mutex::new(None),
         open_request: Mutex::new(path_arg(std::env::args().skip(1), None)),
+        locale: Mutex::new("en".into()),
     };
 
     let app = tauri::Builder::default()
@@ -94,7 +113,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .menu(build_menu)
+        // 界面加载后会按用户的语言调用 apply_locale 重建菜单。
+        .menu(|app| build_menu(app, "en"))
         .on_menu_event(|app, event| {
             if let Some(name) = event.id().as_ref().strip_prefix("duolo:") {
                 let _ = app.emit("menu", name);
@@ -121,6 +141,8 @@ fn main() {
             commands::close_task,
             commands::start_agent,
             commands::start_reviewer,
+            commands::start_review,
+            commands::cancel_review,
             commands::attach,
             commands::write,
             commands::send_text,
@@ -129,9 +151,14 @@ fn main() {
             commands::reveal,
             commands::voice_start,
             commands::voice_cancel,
+            commands::voice_partial,
             commands::voice_finish,
             commands::log,
             commands::quit,
+            commands::get_language,
+            commands::system_languages,
+            commands::set_language,
+            commands::apply_locale,
         ])
         .build(tauri::generate_context!())
         .expect("无法启动 Duolo");
@@ -172,6 +199,7 @@ fn spawn_snapshot_loop(app: AppHandle) {
             let snapshot = {
                 let mut engine = state.engine();
                 engine.retry_failed_resumes();
+                engine.poll_reviews();
                 view::snapshot(&mut engine)
             };
             if last.as_ref() != Some(&snapshot) {
@@ -183,65 +211,74 @@ fn spawn_snapshot_loop(app: AppHandle) {
     });
 }
 
-/// 应用菜单。自定义项的 id 以 `duolo:` 开头，点击后转发给界面处理，快捷键也在这里注册。
-fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+/// 应用菜单，文案按 `locale` 显示。自定义项的 id 以 `duolo:` 开头，点击后转发给界面处理，快捷键也在这里注册。
+fn build_menu(app: &AppHandle, locale: &str) -> tauri::Result<Menu<tauri::Wry>> {
+    let text = locale::menu_text(locale);
     let item =
-        |id: &str, text: &str, accel: &str| MenuItem::with_id(app, format!("duolo:{id}"), text, true, Some(accel));
+        |id: &str, label: &str, accel: &str| MenuItem::with_id(app, format!("duolo:{id}"), label, true, Some(accel));
     let app_menu = Submenu::with_items(
         app,
         "Duolo",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("关于 Duolo"), None)?,
+            &PredefinedMenuItem::about(app, Some(text.about), None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, Some("隐藏 Duolo"))?,
-            &PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?,
+            &PredefinedMenuItem::hide(app, Some(text.hide))?,
+            &PredefinedMenuItem::hide_others(app, Some(text.hide_others))?,
             &PredefinedMenuItem::separator(app)?,
-            &item("quit", "退出 Duolo", "CmdOrCtrl+Q")?,
+            &item("quit", text.quit, "CmdOrCtrl+Q")?,
         ],
     )?;
     let task_menu = Submenu::with_items(
         app,
-        "任务",
+        text.task,
         true,
         &[
-            &item("new-task", "新任务", "CmdOrCtrl+N")?,
-            &item("add-project", "添加项目…", "CmdOrCtrl+O")?,
+            &item("new-task", text.new_task, "CmdOrCtrl+N")?,
+            &item("add-project", text.add_project, "CmdOrCtrl+O")?,
             &PredefinedMenuItem::separator(app)?,
-            &item("review", "让 Codex 审阅", "CmdOrCtrl+Shift+R")?,
-            &item("next-agent", "切换 Agent", "Ctrl+Tab")?,
-            &item("prev-task", "上一个任务", "CmdOrCtrl+Alt+Up")?,
-            &item("next-task", "下一个任务", "CmdOrCtrl+Alt+Down")?,
+            &item("review", text.review, "CmdOrCtrl+Shift+R")?,
+            &item("prev-task", text.prev_task, "CmdOrCtrl+Alt+Up")?,
+            &item("next-task", text.next_task, "CmdOrCtrl+Alt+Down")?,
             &PredefinedMenuItem::separator(app)?,
-            &item("reveal", "在 Finder 中显示", "CmdOrCtrl+Shift+F")?,
-            &item("close-task", "关闭任务…", "CmdOrCtrl+Shift+W")?,
+            &item("reveal", text.reveal, "CmdOrCtrl+Shift+F")?,
+            &item("close-task", text.close_task, "CmdOrCtrl+Shift+W")?,
         ],
     )?;
     let edit_menu = Submenu::with_items(
         app,
-        "编辑",
+        text.edit,
         true,
         &[
-            &PredefinedMenuItem::undo(app, Some("撤销"))?,
-            &PredefinedMenuItem::redo(app, Some("重做"))?,
+            &PredefinedMenuItem::undo(app, Some(text.undo))?,
+            &PredefinedMenuItem::redo(app, Some(text.redo))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::cut(app, Some("剪切"))?,
-            &PredefinedMenuItem::copy(app, Some("拷贝"))?,
-            &PredefinedMenuItem::paste(app, Some("粘贴"))?,
-            &PredefinedMenuItem::select_all(app, Some("全选"))?,
+            &PredefinedMenuItem::cut(app, Some(text.cut))?,
+            &PredefinedMenuItem::copy(app, Some(text.copy))?,
+            &PredefinedMenuItem::paste(app, Some(text.paste))?,
+            &PredefinedMenuItem::select_all(app, Some(text.select_all))?,
             &PredefinedMenuItem::separator(app)?,
-            &item("voice", "语音输入", "Ctrl+Space")?,
+            &item("voice", text.voice, "CmdOrCtrl+Shift+Space")?,
         ],
     )?;
     let window_menu = Submenu::with_items(
         app,
-        "窗口",
+        text.window,
         true,
         &[
-            &PredefinedMenuItem::minimize(app, Some("最小化"))?,
-            &PredefinedMenuItem::fullscreen(app, Some("全屏"))?,
-            &PredefinedMenuItem::close_window(app, Some("关闭窗口"))?,
+            &PredefinedMenuItem::minimize(app, Some(text.minimize))?,
+            &PredefinedMenuItem::fullscreen(app, Some(text.fullscreen))?,
+            &PredefinedMenuItem::close_window(app, Some(text.close_window))?,
         ],
     )?;
     Menu::with_items(app, &[&app_menu, &task_menu, &edit_menu, &window_menu])
+}
+
+/// 切换界面语言：重建菜单，审阅结论也改用这种语言。
+pub fn apply_locale(app: &AppHandle, locale: &str) -> tauri::Result<()> {
+    app.set_menu(build_menu(app, locale)?)?;
+    let state = app.state::<AppState>();
+    state.engine().set_reply_language(locale::language_name(locale));
+    *state.locale.lock().unwrap_or_else(|p| p.into_inner()) = locale.to_string();
+    Ok(())
 }

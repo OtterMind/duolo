@@ -17,20 +17,22 @@ pub struct OrganizeContext {
 pub fn organize_prompt(raw: &str, ctx: &OrganizeContext) -> String {
     let mut context = String::new();
     if let Some(project) = &ctx.project {
-        context.push_str(&format!("项目：{project}\n"));
+        context.push_str(&format!("Project: {project}\n"));
     }
     if let Some(task) = &ctx.task {
-        context.push_str(&format!("当前任务：{task}\n"));
+        context.push_str(&format!("Current task: {task}\n"));
     }
     format!(
-        "你是语音转写整理助手。下面是用户口述给编程 Agent 的一段话，来自语音识别，可能有口头语、重复、改口或识别错误。\n\
-请把它整理成一条可以直接发给编程 Agent 的指令：\n\
-- 去掉口头语和重复；\n\
-- 出现改口时只保留最后的说法；\n\
-- 修正明显的识别错误，文件名、函数名、表名等专有名词保持原样；\n\
-- 不要添加用户没有说过的要求，不要回答、不要解释；\n\
-- 只输出整理后的指令本身，不加引号和前缀。\n\n\
-{context}口述原文：\n{raw}"
+        "You clean up voice transcripts. Below is what a user said to a coding agent, from speech recognition; \
+it may contain filler words, repetitions, self-corrections or recognition errors.\n\
+Rewrite it as one instruction that can be sent to the coding agent directly:\n\
+- remove filler words and repetitions;\n\
+- when the user corrects themselves, keep only the final version;\n\
+- fix obvious recognition errors, but keep file names, function names, table names and other identifiers as spoken;\n\
+- do not add requirements the user did not state; do not answer or explain;\n\
+- write in the same language the user spoke;\n\
+- output only the instruction itself, without quotes or prefixes.\n\n\
+{context}Transcript:\n{raw}"
     )
 }
 
@@ -50,7 +52,7 @@ mod tests {
     fn prompt_contains_context_and_raw() {
         let ctx = OrganizeContext { project: Some("shop".into()), task: None };
         let p = organize_prompt("嗯 导出 CSV", &ctx);
-        assert!(p.contains("项目：shop"));
+        assert!(p.contains("Project: shop"));
         assert!(p.ends_with("嗯 导出 CSV"));
     }
 

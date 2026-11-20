@@ -18,7 +18,7 @@
   --del: #e0716c;
   --radius: 8px;
   --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-  --mono: "SF Mono", Menlo, Monaco, monospace;
+  --mono: Hack, "SF Mono", Menlo, Monaco, monospace;
   color-scheme: dark;
 }
 
@@ -86,17 +86,34 @@ kbd {
 .app {
   display: flex;
   height: 100%;
+  overflow: hidden;
 }
 
 /* ---- 侧边栏 ---- */
 
 .sidebar {
-  width: 264px;
+  position: relative;
   flex: none;
   display: flex;
   flex-direction: column;
   background: var(--side);
   border-right: 1px solid var(--line);
+}
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+}
+.sidebar-resizer:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+body.is-resizing,
+body.is-resizing * {
+  cursor: col-resize !important;
 }
 .sidebar-top {
   height: 38px;
@@ -125,9 +142,8 @@ kbd {
 .side-row.is-current {
   background: var(--active);
 }
-.side-row .plus {
-  width: 12px;
-  text-align: center;
+.side-icon {
+  flex: none;
   color: var(--muted);
 }
 .new-task {
@@ -150,10 +166,14 @@ kbd {
 .side-project-head {
   display: flex;
   align-items: center;
+  gap: 6px;
   height: 24px;
   padding: 0 12px 0 16px;
   color: var(--dim);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .side-project-head .icon-btn {
   opacity: 0;
@@ -170,39 +190,99 @@ kbd {
   display: none;
 }
 .task-row:hover .close {
-  display: block;
+  display: inline-flex;
 }
-.task-row:hover .when {
+.task-row:hover .row-status {
   display: none;
 }
+.row-status {
+  flex: none;
+  width: 24px;
+  display: inline-flex;
+  justify-content: center;
+}
+.agent-icon {
+  flex: none;
+  color: var(--muted);
+}
+.agent-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--active);
+  font-size: 9px;
+  font-weight: 600;
+}
+.review-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--dim);
+  position: relative;
+}
+.review-chip:hover {
+  background: var(--active);
+  color: var(--text);
+}
+.review-chip.is-running {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.review-chip.is-failed {
+  color: var(--danger);
+}
+.status-glyph {
+  flex: none;
+  color: var(--dim);
+}
+.status-glyph.is-failed {
+  color: var(--danger);
+}
+.foot-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--dim);
+  font: 12px var(--mono);
+}
+.foot-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .agent-row {
-  height: 24px;
+  height: 22px;
   padding-left: 28px;
   font-size: 12px;
   color: var(--muted);
 }
-.agent-row.is-active {
-  color: var(--text);
-}
-.agent-row.is-active .agent-name {
-  font-weight: 500;
+.review-meta {
+  max-width: 130px;
 }
 .sidebar-foot {
   flex: none;
-  padding: 10px 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 16px;
   border-top: 1px solid var(--line);
   color: var(--dim);
   font-size: 12px;
 }
 
 .icon-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   color: var(--dim);
-  font-size: 15px;
-  line-height: 22px;
-  text-align: center;
 }
 .icon-btn:hover {
   background: var(--active);
@@ -249,6 +329,7 @@ kbd {
 .main {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -281,6 +362,11 @@ kbd {
   margin: 0;
   color: var(--dim);
   line-height: 1.8;
+}
+.env span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .env {
   margin: 8px 0 0;
@@ -338,7 +424,8 @@ kbd {
   background: #7a3a37;
 }
 .menu-item .check {
-  width: 12px;
+  width: 14px;
+  display: inline-flex;
   color: var(--muted);
 }
 .menu-item .meta {
@@ -350,7 +437,7 @@ kbd {
   background: var(--line-strong);
 }
 
-/* 任务页：顶部 tab 栏（参考 Orca：比内容区深一档，当前 tab 和下面的终端连成一体） */
+/* 任务页：顶部一行（和侧边栏顶部同高），下面是 Agent 的命令行 */
 
 .task {
   flex: 1;
@@ -358,71 +445,24 @@ kbd {
   flex-direction: column;
   min-height: 0;
 }
+.topbar,
 .tabbar {
   flex: none;
   height: 38px;
   display: flex;
-  align-items: flex-end;
-  gap: 1px;
-  padding: 0 8px 0 0;
-  background: #111;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 18px;
   border-bottom: 1px solid var(--line);
 }
-.tab {
-  display: flex;
+.topbar-title {
+  font-weight: 500;
+  max-width: 40%;
+}
+.topbar-meta {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 30px;
-  min-width: 150px;
-  max-width: 240px;
-  padding: 0 14px;
-  margin-bottom: -1px;
-  color: var(--dim);
-  font-size: 12.5px;
-  white-space: nowrap;
-  border-right: 1px solid var(--line);
-}
-.tab:first-child {
-  border-left: 0;
-}
-.tab:hover {
-  color: var(--muted);
-  background: #181818;
-}
-.tab.is-active {
-  background: var(--bg);
-  color: var(--text);
-  height: 31px;
-}
-.tab-name {
-  flex: 1;
-  text-align: left;
-}
-.tab-role {
-  color: var(--faint);
-  font-size: 11px;
-}
-.tab.is-active .tab-role {
-  color: var(--dim);
-}
-.tab-add {
-  align-self: center;
-  width: 26px;
-  height: 26px;
-  margin-left: 6px;
-  margin-top: 6px;
-  border-radius: 6px;
-  color: var(--dim);
-  font-size: 17px;
-  line-height: 24px;
-}
-.tab-add:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.tab-meta {
-  align-self: center;
-  margin: 6px 8px 0 12px;
+  gap: 5px;
   font: 11.5px var(--mono);
   color: var(--faint);
   white-space: nowrap;
@@ -430,13 +470,177 @@ kbd {
   text-overflow: ellipsis;
   min-width: 0;
 }
-.tab-meta .ins {
+.topbar-meta .ins {
   color: var(--ins);
 }
-.tab-meta .del {
+.topbar-meta .del {
   color: var(--del);
 }
-.tabbar .more {
+.untitled {
+  color: var(--muted);
+}
+
+/* 审阅入口：平时只是一个小字按钮 */
+.review-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  max-width: 280px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.review-btn:hover,
+.review-btn.is-open {
+  background: var(--hover);
+  color: var(--text);
+}
+.review-btn.has-result {
+  color: var(--muted);
+}
+.review-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.review-btn.is-failed .review-dot {
+  background: var(--danger);
+}
+
+.task-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.task-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.review-panel {
+  width: 380px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--side);
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px 0 16px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+}
+.review-head .meta {
+  font-weight: 400;
+}
+.review-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  user-select: text;
+}
+.review-note {
+  margin: 0;
+  color: var(--dim);
+  line-height: 1.7;
+}
+.review-text {
+  font: 12.5px/1.7 var(--sans);
+  color: var(--text);
+  word-break: break-word;
+}
+.review-text p,
+.review-text ul,
+.review-text ol {
+  margin: 0 0 10px;
+}
+.review-text ul,
+.review-text ol {
+  padding-left: 18px;
+}
+.review-text h4 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-text code {
+  font: 11.5px var(--mono);
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--active);
+}
+.review-text.is-failed {
+  color: var(--danger);
+}
+.review-foot {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* 语音：贴在 Agent 输入行最右边 */
+.mic {
+  position: absolute;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 24px;
+  border-radius: 6px;
+  color: var(--faint);
+}
+button.mic:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.mic.is-off {
+  opacity: 0.6;
+}
+.mic.is-live {
+  padding: 0 10px;
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-size: 12px;
+}
+.mic-time {
+  font: 12px var(--mono);
+  color: var(--text);
+}
+.mic-hint {
+  color: var(--dim);
+  white-space: nowrap;
+}
+/* 录音中实时显示听到的内容，太长时保留结尾 */
+.mic-heard {
+  max-width: 420px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  color: var(--text);
+}
+.mic-hint kbd {
+  margin-left: 6px;
+}
+
+.more {
   align-self: center;
   margin-top: 6px;
 }
@@ -452,16 +656,12 @@ kbd {
   min-width: 220px;
 }
 
-.task-body {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
 .terminal-wrap {
+  background: var(--bg);
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
   padding: 10px 4px 6px 16px;
 }
@@ -470,11 +670,27 @@ kbd {
   width: 100%;
   height: 100%;
 }
+.xterm-host {
+  position: relative;
+}
 .xterm {
+  position: relative;
+  z-index: 1;
   height: 100%;
 }
 .xterm .xterm-viewport {
-  background: var(--bg) !important;
+  background: transparent !important;
+}
+/* Warp 风格的输入块：垫在终端文字下面，左右略超出文字区域 */
+.input-block {
+  display: none;
+  position: absolute;
+  left: -8px;
+  right: 0;
+  z-index: 0;
+  border-radius: 8px;
+  background: #232323;
+  pointer-events: none;
 }
 .xterm .xterm-viewport::-webkit-scrollbar {
   width: 8px;
@@ -508,37 +724,6 @@ kbd {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-/* 语音 */
-
-.voice-overlay {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  z-index: 10;
-  max-width: 820px;
-  margin: 0 auto;
-  background: var(--raised);
-  border: 1px solid #4a4a4a;
-  border-radius: 12px;
-  padding: 12px 14px 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-}
-.voice-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  color: var(--dim);
-  font-size: 12px;
-}
-.voice-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
 .rec-dot {
   width: 8px;
   height: 8px;
@@ -555,6 +740,9 @@ kbd {
 /* 按钮、对话框、提示 */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 28px;
   padding: 0 14px;
   border-radius: 6px;
@@ -632,4 +820,16 @@ kbd {
   line-height: 1.6;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   user-select: text;
+}
+
+/* 语言菜单：从侧边栏底部向上弹出 */
+.lang {
+  position: relative;
+}
+.lang-menu {
+  bottom: 30px;
+  right: 0;
+  min-width: 200px;
+  max-height: 70vh;
+  overflow-y: auto;
 }

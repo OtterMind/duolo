@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-import { api, errorText, type AgentRef, type Check, type Snapshot } from "./lib/api";
+import { errorMessage, useT } from "./i18n";
+import { api, type AgentRef, type Check, type Snapshot } from "./lib/api";
 import { allTasks, findTask, isLive, writerOf } from "./lib/format";
 import * as firstPrompt from "./lib/firstPrompt";
 import { disposeTask, setInputListener } from "./lib/terminals";
@@ -13,17 +14,18 @@ import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
 
 /** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
-export type View = { kind: "empty" } | { kind: "task"; task: number; agent: number };
+export type View = { kind: "empty" } | { kind: "task"; task: number };
 
 export function App() {
+  const t = useT();
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [env, setEnv] = useState<Check[] | null>(null);
   const [view, setView] = useState<View>({ kind: "empty" });
   const [creating, setCreating] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  /** 每个任务上次看的是哪个 Agent。 */
-  const lastAgent = useRef(new Map<number, number>());
+  /** 打开了审阅面板的任务。 */
+  const [reviewOpen, setReviewOpen] = useState<number | null>(null);
   const snapRef = useRef(snap);
   snapRef.current = snap;
 
@@ -31,7 +33,7 @@ export function App() {
     setToast(text);
     window.setTimeout(() => setToast((t) => (t === text ? null : t)), 4000);
   }, []);
-  const fail = useCallback((err: unknown) => flash(errorText(err)), [flash]);
+  const fail = useCallback((err: unknown) => flash(errorMessage(t, err)), [flash, t]);
 
   const refresh = useCallback(async () => {
     const fresh = await api.snapshot();
@@ -43,17 +45,8 @@ export function App() {
 
   // ---- 打开和新建任务 ----
 
-  const openTask = useCallback((task: number, agent?: number) => {
-    const found = findTask(snapRef.current, task);
-    if (!found) return;
-    const pick =
-      agent ??
-      lastAgent.current.get(task) ??
-      found.task.agents.find((a) => a.status === "needs_input")?.id ??
-      writerOf(found.task)?.id ??
-      0;
-    lastAgent.current.set(task, pick);
-    setView({ kind: "task", task, agent: pick });
+  const openTask = useCallback((task: number) => {
+    if (findTask(snapRef.current, task)) setView({ kind: "task", task });
   }, []);
 
   /** 新任务：直接打开 Agent 的命令行。项目里已有还没输入过的新任务时复用它。 */
@@ -66,13 +59,12 @@ export function App() {
         s?.projects[0]?.id;
       if (!target) return;
       const blank = s?.projects.find((p) => p.id === target)?.tasks.find((t) => t.prompt === "");
-      if (blank) return openTask(blank.id, writerOf(blank)?.id);
+      if (blank) return openTask(blank.id);
       setCreating(true);
       try {
         const id = await api.createTask(target, "");
         await refresh();
-        lastAgent.current.set(id, 0);
-        setView({ kind: "task", task: id, agent: 0 });
+        setView({ kind: "task", task: id });
       } catch (err) {
         fail(err);
       } finally {
@@ -84,7 +76,7 @@ export function App() {
 
   const addProject = useCallback(
     async (path?: string) => {
-      const chosen = path ?? (await openDialog({ directory: true, title: "选择一个 git 仓库" }));
+      const chosen = path ?? (await openDialog({ directory: true, title: t("dialog.chooseRepo") }));
       if (typeof chosen !== "string") return;
       try {
         const id = await api.addProject(chosen);
@@ -94,7 +86,7 @@ export function App() {
         fail(err);
       }
     },
-    [refresh, newTask, fail],
+    [refresh, newTask, fail, t],
   );
 
   // ---- 启动 ----
@@ -149,18 +141,19 @@ export function App() {
 
   // ---- 其他操作 ----
 
-  const startReview = useCallback(
-    async (task: number) => {
-      try {
-        const agent = await api.startReviewer(task);
-        await refresh();
-        lastAgent.current.set(task, agent);
-        setView({ kind: "task", task, agent });
-      } catch (err) {
-        fail(err);
+  /** ⌘⇧R：有结论或正在审阅时开关面板，否则开始审阅。 */
+  const toggleReview = useCallback(
+    (task: number) => {
+      const found = findTask(snapRef.current, task);
+      if (!found) return;
+      if (found.task.review || found.task.reviewingSince != null) {
+        setReviewOpen((open) => (open === task ? null : task));
+        return;
       }
+      setReviewOpen(task);
+      api.startReview(task).catch(fail);
     },
-    [refresh, fail],
+    [fail],
   );
 
   const requestClose = useCallback(
@@ -171,20 +164,19 @@ export function App() {
         await api.closeTask(task);
         disposeTask(task);
         firstPrompt.forget(task);
-        lastAgent.current.delete(task);
         await refresh();
       };
       // 还没输入过的新任务直接关掉，不用确认。
       if (found.task.prompt === "") return void close().catch(fail);
       setConfirm({
-        title: `关闭「${found.task.title}」？`,
-        body: `会结束这个任务的 Agent 并删除工作目录。分支 ${found.task.branch} 会保留，改动不会丢。`,
-        action: "关闭任务",
+        title: t("confirm.closeTitle", { title: found.task.title }),
+        body: t("confirm.closeBody", { branch: found.task.branch }),
+        action: t("confirm.closeAction"),
         danger: true,
         run: close,
       });
     },
-    [refresh, fail],
+    [refresh, fail, t],
   );
 
   const requestQuit = useCallback(() => {
@@ -193,13 +185,13 @@ export function App() {
       .filter((a) => isLive(a.status)).length;
     if (live === 0) return void api.quit();
     setConfirm({
-      title: "退出 Duolo？",
-      body: `还有 ${live} 个 Agent 在运行，退出会结束它们。下次打开时可以继续之前的会话。\n只想收起窗口的话，用 ⌘W。`,
-      action: "退出",
+      title: t("confirm.quitTitle"),
+      body: t("confirm.quitBody", { count: live }),
+      action: t("confirm.quitAction"),
       danger: true,
       run: () => api.quit(),
     });
-  }, []);
+  }, [t]);
 
   const cycleTask = useCallback(
     (delta: number) => {
@@ -211,21 +203,16 @@ export function App() {
     [view, openTask],
   );
 
-  const cycleAgent = useCallback(() => {
-    if (view.kind !== "task" || !current) return;
-    const agents = current.task.agents;
-    const i = agents.findIndex((a) => a.id === view.agent);
-    openTask(view.task, agents[(i + 1) % agents.length].id);
-  }, [view, current, openTask]);
-
   // ---- 语音 ----
 
   const voice = useVoice({
-    ready: env?.find((c) => c.name === "语音")?.ok ?? false,
-    target: view.kind === "task" ? { task: view.task, agent: view.agent } : null,
+    ready: env?.find((c) => c.kind === "voice")?.ok ?? false,
+    target: current ? { task: current.task.id, agent: writerOf(current.task)?.id ?? 0 } : null,
     context: { project: current?.project.name, task: current?.task.prompt ? current.task.title : undefined },
-    onSent: nameIfUntitled,
+    // 语音文字填进了输入框但还没发送：记进首次输入，用户按 ↵ 时一起作为需求。
+    onInserted: (ref, text) => void firstPrompt.feed(ref.task, text),
     onError: fail,
+    t,
   });
 
   // ---- 菜单和快捷键 ----
@@ -235,8 +222,7 @@ export function App() {
     quit: requestQuit,
     "new-task": () => void newTask(),
     "add-project": () => void addProject(),
-    review: () => view.kind === "task" && void startReview(view.task),
-    "next-agent": cycleAgent,
+    review: () => view.kind === "task" && toggleReview(view.task),
     "prev-task": () => cycleTask(-1),
     "next-task": () => cycleTask(1),
     reveal: () => current && void api.reveal(current.task.worktree),
@@ -276,6 +262,10 @@ export function App() {
         view={view}
         onNewTask={(project) => void newTask(project)}
         onOpenTask={openTask}
+        onOpenReview={(task) => {
+          openTask(task);
+          setReviewOpen(task);
+        }}
         onCloseTask={requestClose}
         onAddProject={() => void addProject()}
       />
@@ -283,10 +273,9 @@ export function App() {
         {view.kind === "task" && current ? (
           <TaskView
             task={current.task}
-            agentId={view.agent}
             voice={voice}
-            onSelectAgent={(agent) => openTask(view.task, agent)}
-            onReview={() => void startReview(view.task)}
+            reviewOpen={reviewOpen === current.task.id}
+            onReviewOpenChange={(open) => setReviewOpen(open ? current.task.id : null)}
             onClose={() => requestClose(view.task)}
             onError={fail}
           />

@@ -24,6 +24,17 @@ export interface Task {
   worktree: string;
   createdAt: number;
   agents: Agent[];
+  /** 正在后台审阅时的开始时间（Unix 秒）。 */
+  reviewingSince: number | null;
+  review: Review | null;
+}
+
+export interface Review {
+  finishedAt: number;
+  ok: boolean;
+  /** 结论第一行。 */
+  summary: string;
+  output: string;
 }
 
 export interface Project {
@@ -40,9 +51,12 @@ export interface Snapshot {
 }
 
 export interface Check {
+  kind: "git" | "agent" | "voice";
+  /** 显示名，例如 git、Claude。 */
   name: string;
   ok: boolean;
-  detail: string;
+  command: string;
+  version: string;
 }
 
 export interface Diff {
@@ -73,7 +87,8 @@ export const api = {
   nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt }),
   closeTask: (task: number) => invoke<void>("close_task", { task }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
-  startReviewer: (task: number) => invoke<number>("start_reviewer", { task }),
+  startReview: (task: number) => invoke<void>("start_review", { task }),
+  cancelReview: (task: number) => invoke<void>("cancel_review", { task }),
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),
   sendText: (r: AgentRef, text: string, submit: boolean) => invoke<void>("send_text", { ...r, text, submit }),
   resize: (rows: number, cols: number) => invoke<void>("resize", { rows, cols }),
@@ -81,6 +96,7 @@ export const api = {
   reveal: (path: string, app?: string) => invoke<void>("reveal", { path, app }),
   voiceStart: () => invoke<void>("voice_start"),
   voiceCancel: () => invoke<void>("voice_cancel"),
+  voicePartial: () => invoke<string>("voice_partial"),
   voiceFinish: (project?: string, task?: string) => invoke<VoiceResult>("voice_finish", { project, task }),
   quit: () => invoke<void>("quit"),
 
@@ -91,6 +107,3 @@ export const api = {
     return invoke<void>("attach", { ...r, onData: channel });
   },
 };
-
-/** 后端错误是一句中文说明；其他异常转成字符串。 */
-export const errorText = (err: unknown) => (typeof err === "string" ? err : String(err));

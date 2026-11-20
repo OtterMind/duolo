@@ -1,7 +1,7 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
 use duolo_core::{AgentRole, State, Task};
-use duolo_engine::{AgentStatus, Check, DiffStat, Engine};
+use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine};
 use serde::Serialize;
 
 /// 侧边栏和首页需要的全部状态。后台定时生成，内容变化时推送给界面。
@@ -33,6 +33,18 @@ pub struct TaskView {
     pub worktree: String,
     pub created_at: u64,
     pub agents: Vec<AgentView>,
+    /// 正在后台审阅时的开始时间（Unix 秒）。
+    pub reviewing_since: Option<u64>,
+    pub review: Option<ReviewView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewView {
+    pub finished_at: u64,
+    pub ok: bool,
+    pub summary: String,
+    pub output: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -78,17 +90,26 @@ impl From<AgentStatus> for Status {
     }
 }
 
+/// 环境检查结果。文案由界面按 `kind` 翻译。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckView {
+    /// `git`、`agent` 或 `voice`。
+    pub kind: &'static str,
     pub name: String,
     pub ok: bool,
-    pub detail: String,
+    pub command: String,
+    pub version: String,
 }
 
 impl From<Check> for CheckView {
     fn from(check: Check) -> Self {
-        Self { name: check.name, ok: check.ok, detail: check.detail }
+        let kind = match check.kind {
+            CheckKind::Git => "git",
+            CheckKind::Agent => "agent",
+            CheckKind::Voice => "voice",
+        };
+        Self { kind, name: check.name, ok: check.ok, command: check.command, version: check.version }
     }
 }
 
@@ -147,5 +168,12 @@ fn task_view(engine: &mut Engine, task: &Task) -> TaskView {
         worktree: task.worktree.display().to_string(),
         created_at: task.created_at,
         agents,
+        reviewing_since: engine.review_started_at(task.id),
+        review: task.review.as_ref().map(|r| ReviewView {
+            finished_at: r.finished_at,
+            ok: r.ok,
+            summary: r.summary().to_string(),
+            output: r.output.clone(),
+        }),
     }
 }

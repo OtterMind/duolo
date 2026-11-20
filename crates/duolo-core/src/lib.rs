@@ -4,12 +4,16 @@
 //! 调度引擎、TUI，以及以后的守护进程和手机端协议都建立在这里的类型之上。
 
 pub mod config;
+pub mod error;
 pub mod model;
 pub mod paths;
+pub mod settings;
 pub mod store;
 pub mod text;
 
 pub use config::{AgentProfile, Config, VoiceConfig};
-pub use model::{AgentKey, AgentKind, AgentRole, AgentSpec, Project, ProjectId, State, Task, TaskId};
+pub use error::UserError;
+pub use model::{AgentKey, AgentKind, AgentRole, AgentSpec, Project, ProjectId, Review, State, Task, TaskId};
 pub use paths::Paths;
+pub use settings::Settings;
 pub use store::Store;

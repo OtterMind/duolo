@@ -66,6 +66,17 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 - **语音引擎**：替换 `voice.command`；整理模型替换 `voice.organizer`。
 - **多端协议**：`duolo-core` 的模型类型只增不改，作为以后守护进程与客户端协议的基础。
 
+## 多语言
+
+界面文案在 `app/src/i18n`，菜单文案在 `duolo-app/src/locale.rs`，后端错误以 `UserError` 错误码交给界面翻译。详见 [i18n.md](i18n.md)。
+
+## 后台审阅和内置语音
+
+- 审阅：`duolo-engine/src/review.rs` 在任务的 worktree 里运行 `review_command`（默认 `codex exec --sandbox read-only`），
+  结论保存在 `Task.review`，界面一键交给写代码的 Agent。
+- 语音：`duolo-app/dictate/main.swift` 用 macOS Speech 框架识别，`build.rs` 编译后作为 externalBin 打进应用；
+  输出 `~ 临时结果` / `= 最终结果` 行，`duolo-voice::Recorder` 读取。
+
 ## 约定
 
 - 错误用 `anyhow`，面向用户的提示用中文，说清楚原因和怎么修。

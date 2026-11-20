@@ -163,7 +163,7 @@ fn add_project_from_home() {
     assert!(screen.contains("添加一个项目"));
     type_text(&mut fx.app, "/definitely/not/a/repo");
     press(&mut fx.app, KeyCode::Enter);
-    assert!(draw(&mut fx.app).contains("不在 git 仓库里"));
+    assert!(draw(&mut fx.app).contains("not inside a git repository"));
     press(&mut fx.app, KeyCode::Esc);
     assert!(!fx.app.home.adding_project);
 }

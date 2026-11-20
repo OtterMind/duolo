@@ -26,7 +26,7 @@ impl Paths {
         if let Some(dir) = std::env::var_os(HOME_ENV) {
             return Ok(Self::at(PathBuf::from(dir)));
         }
-        let home = dirs::home_dir().context("无法确定用户主目录")?;
+        let home = dirs::home_dir().context("cannot determine the home directory")?;
         Ok(Self::at(home.join(".duolo")))
     }
 
@@ -42,6 +42,11 @@ impl Paths {
         self.root.join("config.toml")
     }
 
+    /// 界面里修改的偏好设置（语言等）。用户手写的配置在 `config.toml`。
+    pub fn settings_file(&self) -> PathBuf {
+        self.root.join("settings.json")
+    }
+
     pub fn state_file(&self) -> PathBuf {
         self.root.join("state.json")
     }
@@ -51,6 +56,7 @@ impl Paths {
     }
 
     pub fn ensure(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.root).with_context(|| format!("无法创建数据目录 {}", self.root.display()))
+        std::fs::create_dir_all(&self.root)
+            .with_context(|| format!("cannot create data directory {}", self.root.display()))
     }
 }

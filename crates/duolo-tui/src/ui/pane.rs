@@ -80,7 +80,7 @@ fn env_line(app: &App) -> Line<'static> {
         if !spans.is_empty() {
             spans.push(Span::raw("    "));
         }
-        let voice = check.name == "语音";
+        let voice = check.kind == duolo_engine::CheckKind::Voice;
         let (icon, style) = match (check.ok, voice) {
             (true, _) => ("✓", theme::dim()),
             (false, true) => ("○", theme::faint()),

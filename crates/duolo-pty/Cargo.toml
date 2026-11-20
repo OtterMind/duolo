@@ -10,5 +10,6 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+duolo-core.workspace = true
 portable-pty.workspace = true
 vt100.workspace = true

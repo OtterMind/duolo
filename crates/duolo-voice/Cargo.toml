@@ -1,0 +1,14 @@
+[package]
+name = "duolo-voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+duolo-core.workspace = true
+libc.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "duolo-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+duolo-core.workspace = true
+duolo-git.workspace = true
+duolo-pty.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

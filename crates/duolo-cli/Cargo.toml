@@ -1,0 +1,22 @@
+[package]
+name = "duolo-cli"
+description = "Duolo：本地优先的 AI 开发搭档"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "duolo"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+duolo-core.workspace = true
+duolo-engine.workspace = true
+duolo-git.workspace = true
+duolo-tui.workspace = true

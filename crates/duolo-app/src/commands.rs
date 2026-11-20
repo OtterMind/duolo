@@ -45,6 +45,12 @@ pub async fn create_task(state: State<'_, AppState>, project: String, prompt: St
     Ok(state.engine().create_task(&ProjectId(project), &prompt)?.0)
 }
 
+/// 用户在 CLI 里第一次输入的内容作为任务的需求，补上标题和分支名。
+#[tauri::command]
+pub async fn name_task(state: State<'_, AppState>, task: u64, prompt: String) -> Res<()> {
+    Ok(state.engine().name_task(TaskId(task), &prompt)?)
+}
+
 #[tauri::command]
 pub async fn close_task(state: State<'_, AppState>, task: u64) -> Res<()> {
     Ok(state.engine().close_task(TaskId(task))?)

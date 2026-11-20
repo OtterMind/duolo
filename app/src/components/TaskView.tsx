@@ -10,7 +10,6 @@ import { VoiceOverlay } from "./VoiceBar";
 interface Props {
   task: Task;
   agentId: number;
-  hasReviewer: boolean;
   voice: Voice;
   onSelectAgent(agent: number): void;
   onReview(): void;
@@ -18,44 +17,47 @@ interface Props {
   onError(err: unknown): void;
 }
 
-/** 任务页：顶部是任务和 Agent 切换，下面是 Agent 自己的 CLI。 */
-export function TaskView({ task, agentId, hasReviewer, voice, onSelectAgent, onReview, onClose, onError }: Props) {
+/** 任务页：顶部一行 tab 切换 Agent，下面就是 Agent 自己的命令行。 */
+export function TaskView({ task, agentId, voice, onSelectAgent, onReview, onClose, onError }: Props) {
   const agent = task.agents.find((a) => a.id === agentId) ?? task.agents[0];
+  const hasReviewer = task.agents.some((a) => a.role === "reviewer");
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
-  const focusTerminal = useCallback(() => terminals.terminalFor({ task: task.id, agent: agent.id }).term.focus(), [task.id, agent.id]);
+  const focusTerminal = useCallback(
+    () => terminals.terminalFor({ task: task.id, agent: agent.id }).term.focus(),
+    [task.id, agent.id],
+  );
 
   return (
     <div className="task">
-      <header className="task-head" data-tauri-drag-region>
-        <div className="task-title ellipsis" title={task.prompt} data-tauri-drag-region>
-          {task.title}
-        </div>
-        <nav className="tabs">
-          {task.agents.map((a) => (
-            <button key={a.id} className={`tab ${a.id === agent.id ? "is-active" : ""}`} onClick={() => onSelectAgent(a.id)}>
-              <StatusIcon status={a.status} />
-              {a.name}
-              <span className="meta">{ROLE_LABEL[a.role]}</span>
-            </button>
-          ))}
-          {!hasReviewer && (
-            <button className="tab add" onClick={onReview} title="让 Codex 只读审阅这个任务的改动（⌘⇧R）">
-              + 审阅
-            </button>
-          )}
-        </nav>
+      <header className="tabbar" data-tauri-drag-region>
+        {task.agents.map((a) => (
+          <button
+            key={a.id}
+            className={`tab ${a.id === agent.id ? "is-active" : ""}`}
+            onClick={() => onSelectAgent(a.id)}
+            title={`${a.name} · ${a.role === "writer" ? "写代码" : "只读审阅"}`}
+          >
+            <StatusIcon status={a.status} />
+            <span className="tab-name">{a.name}</span>
+            <span className="tab-role">{ROLE_LABEL[a.role]}</span>
+          </button>
+        ))}
+        {!hasReviewer && (
+          <button className="tab-add" onClick={onReview} title="让 Codex 审阅这个任务的改动（⌘⇧R）">
+            +
+          </button>
+        )}
         <span className="grow" data-tauri-drag-region />
-        <div className="task-meta" data-tauri-drag-region>
-          <span className="branch" title={`基于 ${task.base}`}>
-            {task.branch}
-          </span>
+        <span className="tab-meta" data-tauri-drag-region title={`基于 ${task.base}`}>
+          {task.branch}
           {diff && diff.files > 0 && (
-            <span className="diff">
+            <>
+              {"  "}
               <span className="ins">+{diff.insertions}</span> <span className="del">−{diff.deletions}</span>
-            </span>
+            </>
           )}
-        </div>
+        </span>
         <div className="more" onMouseDown={(e) => e.stopPropagation()}>
           <button className="icon-btn" title="更多" onClick={() => setMenu((m) => !m)}>
             ⋯
@@ -68,7 +70,7 @@ export function TaskView({ task, agentId, hasReviewer, voice, onSelectAgent, onR
                 { label: "在终端中打开", run: () => void api.reveal(task.worktree, "Terminal") },
                 { label: "拷贝工作目录路径", run: () => void navigator.clipboard.writeText(task.worktree) },
                 { sep: true },
-                { label: hasReviewer ? "重新打开审阅" : "让 Codex 审阅", kbd: "⌘⇧R", run: onReview },
+                { label: hasReviewer ? "切到审阅" : "让 Codex 审阅", kbd: "⌘⇧R", run: onReview },
                 { label: "关闭任务…", kbd: "⌘⇧W", run: onClose, danger: true },
               ]}
             />
@@ -77,7 +79,7 @@ export function TaskView({ task, agentId, hasReviewer, voice, onSelectAgent, onR
       </header>
 
       <div className="task-body">
-        <AgentTerminal key={agent.id} task={task} agent={agent} onError={onError} />
+        <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
         <VoiceOverlay voice={voice} onDone={focusTerminal} />
       </div>
     </div>

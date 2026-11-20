@@ -21,7 +21,7 @@ export function Sidebar({ snap, view, onNewTask, onOpenTask, onCloseTask, onAddP
   return (
     <aside className="sidebar">
       <div className="sidebar-top" data-tauri-drag-region />
-      <button className={`side-row new-task ${view.kind === "home" ? "is-current" : ""}`} onClick={() => onNewTask()}>
+      <button className="side-row new-task" onClick={() => onNewTask()}>
         <span className="plus">+</span>
         <span className="grow">新任务</span>
         <kbd>⌘N</kbd>
@@ -96,7 +96,7 @@ function TaskRows({
         title={task.prompt}
       >
         <StatusIcon status={taskStatus(task)} />
-        <span className="grow ellipsis">{task.title}</span>
+        <span className={`grow ellipsis ${task.prompt ? "" : "untitled"}`}>{task.title}</span>
         <span className="meta when">{elapsed(task.createdAt, now)}</span>
         <button
           className="icon-btn close"

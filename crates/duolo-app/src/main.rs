@@ -117,6 +117,7 @@ fn main() {
             commands::take_open_request,
             commands::add_project,
             commands::create_task,
+            commands::name_task,
             commands::close_task,
             commands::start_agent,
             commands::start_reviewer,

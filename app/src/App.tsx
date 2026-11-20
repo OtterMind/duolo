@@ -3,27 +3,29 @@ import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { api, errorText, type AgentRef, type Check, type Snapshot } from "./lib/api";
-import { allTasks, findTask, isLive, reviewerOf, writerOf } from "./lib/format";
-import { disposeTask } from "./lib/terminals";
+import { allTasks, findTask, isLive, writerOf } from "./lib/format";
+import * as firstPrompt from "./lib/firstPrompt";
+import { disposeTask, setInputListener } from "./lib/terminals";
+import { useVoice } from "./lib/voice";
 import { Sidebar } from "./components/Sidebar";
-import { Home } from "./components/Home";
+import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
-import { useVoice } from "./lib/voice";
 
-export type View = { kind: "home" } | { kind: "task"; task: number; agent: number };
+/** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
+export type View = { kind: "empty" } | { kind: "task"; task: number; agent: number };
 
 export function App() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [env, setEnv] = useState<Check[] | null>(null);
-  const [view, setView] = useState<View>({ kind: "home" });
-  const [homeProject, setHomeProject] = useState<string | null>(null);
-  const [homeText, setHomeText] = useState("");
+  const [view, setView] = useState<View>({ kind: "empty" });
+  const [creating, setCreating] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   /** 每个任务上次看的是哪个 Agent。 */
   const lastAgent = useRef(new Map<number, number>());
+  const snapRef = useRef(snap);
+  snapRef.current = snap;
 
   const flash = useCallback((text: string) => {
     setToast(text);
@@ -31,97 +33,121 @@ export function App() {
   }, []);
   const fail = useCallback((err: unknown) => flash(errorText(err)), [flash]);
 
-  // ---- 数据 ----
+  const refresh = useCallback(async () => {
+    const fresh = await api.snapshot();
+    setSnap(fresh);
+    return fresh;
+  }, []);
 
-  const refresh = useCallback(async () => setSnap(await api.snapshot()), []);
-
-  useEffect(() => {
-    void refresh();
-    void api.environment().then(setEnv).catch(() => setEnv([]));
-    const unlisten = listen<Snapshot>("snapshot", (e) => setSnap(e.payload));
-    return () => void unlisten.then((f) => f());
-  }, [refresh]);
-
-  // 首页默认选中第一个项目。
-  useEffect(() => {
-    if (!snap) return;
-    if (!homeProject || !snap.projects.some((p) => p.id === homeProject)) {
-      setHomeProject(snap.projects[0]?.id ?? null);
-    }
-  }, [snap, homeProject]);
-
-  // 当前任务被关闭后回到首页。
   const current = view.kind === "task" ? findTask(snap, view.task) : null;
-  useEffect(() => {
-    if (snap && view.kind === "task" && !current) setView({ kind: "home" });
-  }, [snap, view, current]);
 
-  // ---- 操作 ----
+  // ---- 打开和新建任务 ----
 
-  const openTask = useCallback(
-    (task: number, agent?: number) => {
-      const found = findTask(snap, task);
-      if (!found) return;
-      const pick =
-        agent ??
-        lastAgent.current.get(task) ??
-        found.task.agents.find((a) => a.status === "needs_input")?.id ??
-        writerOf(found.task)?.id ??
-        0;
-      lastAgent.current.set(task, pick);
-      setView({ kind: "task", task, agent: pick });
-    },
-    [snap],
-  );
+  const openTask = useCallback((task: number, agent?: number) => {
+    const found = findTask(snapRef.current, task);
+    if (!found) return;
+    const pick =
+      agent ??
+      lastAgent.current.get(task) ??
+      found.task.agents.find((a) => a.status === "needs_input")?.id ??
+      writerOf(found.task)?.id ??
+      0;
+    lastAgent.current.set(task, pick);
+    setView({ kind: "task", task, agent: pick });
+  }, []);
 
-  const goHome = useCallback(
-    (project?: string) => {
-      if (project) setHomeProject(project);
-      else if (current) setHomeProject(current.project.id);
-      setView({ kind: "home" });
-    },
-    [current],
-  );
-
-  const addProject = useCallback(
-    async (path?: string) => {
-      const chosen = path ?? (await openDialog({ directory: true, title: "选择一个 git 仓库" }));
-      if (typeof chosen !== "string") return null;
+  /** 新任务：直接打开 Agent 的命令行。项目里已有还没输入过的新任务时复用它。 */
+  const newTask = useCallback(
+    async (project?: string) => {
+      const s = snapRef.current;
+      const target =
+        project ??
+        (view.kind === "task" ? findTask(s, view.task)?.project.id : undefined) ??
+        s?.projects[0]?.id;
+      if (!target) return;
+      const blank = s?.projects.find((p) => p.id === target)?.tasks.find((t) => t.prompt === "");
+      if (blank) return openTask(blank.id, writerOf(blank)?.id);
+      setCreating(true);
       try {
-        const id = await api.addProject(chosen);
+        const id = await api.createTask(target, "");
         await refresh();
-        setHomeProject(id);
-        setView({ kind: "home" });
-        return id;
-      } catch (err) {
-        fail(err);
-        return null;
-      }
-    },
-    [refresh, fail],
-  );
-
-  const createTask = useCallback(
-    async (prompt: string) => {
-      let project = homeProject;
-      if (!project) project = await addProject();
-      if (!project) return;
-      setBusy(true);
-      try {
-        const id = await api.createTask(project, prompt);
-        setHomeText("");
-        const fresh = await api.snapshot();
-        setSnap(fresh);
         lastAgent.current.set(id, 0);
         setView({ kind: "task", task: id, agent: 0 });
       } catch (err) {
         fail(err);
       } finally {
-        setBusy(false);
+        setCreating(false);
       }
     },
-    [homeProject, addProject, fail],
+    [view, openTask, refresh, fail],
   );
+
+  const addProject = useCallback(
+    async (path?: string) => {
+      const chosen = path ?? (await openDialog({ directory: true, title: "选择一个 git 仓库" }));
+      if (typeof chosen !== "string") return;
+      try {
+        const id = await api.addProject(chosen);
+        await refresh();
+        await newTask(id);
+      } catch (err) {
+        fail(err);
+      }
+    },
+    [refresh, newTask, fail],
+  );
+
+  // ---- 启动 ----
+
+  useEffect(() => {
+    const unlisten = listen<Snapshot>("snapshot", (e) => setSnap(e.payload));
+    void api.environment().then(setEnv, () => setEnv([]));
+    return () => void unlisten.then((f) => f());
+  }, []);
+
+  // 打开应用直接进入命令行：有任务就打开最近的那个，没有就新建一个。
+  const booted = useRef(false);
+  useEffect(() => {
+    if (booted.current) return;
+    booted.current = true;
+    void (async () => {
+      const s = await refresh();
+      const requested = await api.takeOpenRequest();
+      if (requested) return addProject(requested);
+      const latest = allTasks(s).sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (latest) openTask(latest.id);
+      else if (s.projects.length > 0) await newTask(s.projects[0].id);
+    })();
+  }, [refresh, addProject, openTask, newTask]);
+
+  // 当前任务被关闭后，打开同项目里最近的任务。
+  useEffect(() => {
+    if (!snap || view.kind !== "task" || current) return;
+    const next = allTasks(snap).sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (next) openTask(next.id);
+    else setView({ kind: "empty" });
+  }, [snap, view, current, openTask]);
+
+  // 新任务的第一次输入作为它的需求，补上标题和分支名。
+  const nameIfUntitled = useCallback(
+    (ref: AgentRef, text: string) => {
+      const found = findTask(snapRef.current, ref.task);
+      if (!found || found.task.prompt !== "") return;
+      void api.nameTask(ref.task, text).then(refresh, fail);
+    },
+    [refresh, fail],
+  );
+  useEffect(() => {
+    setInputListener((ref, data) => {
+      const found = findTask(snapRef.current, ref.task);
+      if (!found || found.task.prompt !== "" || writerOf(found.task)?.id !== ref.agent) return;
+      const line = firstPrompt.feed(ref.task, data);
+      if (line) nameIfUntitled(ref, line);
+    });
+    return () => setInputListener(null);
+  }, [nameIfUntitled]);
+
+  // ---- 其他操作 ----
 
   const startReview = useCallback(
     async (task: number) => {
@@ -139,26 +165,32 @@ export function App() {
 
   const requestClose = useCallback(
     (task: number) => {
-      const found = findTask(snap, task);
+      const found = findTask(snapRef.current, task);
       if (!found) return;
+      const close = async () => {
+        await api.closeTask(task);
+        disposeTask(task);
+        firstPrompt.forget(task);
+        lastAgent.current.delete(task);
+        await refresh();
+      };
+      // 还没输入过的新任务直接关掉，不用确认。
+      if (found.task.prompt === "") return void close().catch(fail);
       setConfirm({
         title: `关闭「${found.task.title}」？`,
         body: `会结束这个任务的 Agent 并删除工作目录。分支 ${found.task.branch} 会保留，改动不会丢。`,
         action: "关闭任务",
         danger: true,
-        run: async () => {
-          await api.closeTask(task);
-          disposeTask(task);
-          lastAgent.current.delete(task);
-          await refresh();
-        },
+        run: close,
       });
     },
-    [snap, refresh],
+    [refresh, fail],
   );
 
   const requestQuit = useCallback(() => {
-    const live = allTasks(snap).flatMap((t) => t.agents).filter((a) => isLive(a.status)).length;
+    const live = allTasks(snapRef.current)
+      .flatMap((t) => t.agents)
+      .filter((a) => isLive(a.status)).length;
     if (live === 0) return void api.quit();
     setConfirm({
       title: "退出 Duolo？",
@@ -167,17 +199,16 @@ export function App() {
       danger: true,
       run: () => api.quit(),
     });
-  }, [snap]);
+  }, []);
 
   const cycleTask = useCallback(
     (delta: number) => {
-      const tasks = allTasks(snap);
+      const tasks = allTasks(snapRef.current);
       if (tasks.length === 0) return;
       const index = view.kind === "task" ? tasks.findIndex((t) => t.id === view.task) : -1;
-      const next = tasks[(index + delta + tasks.length) % tasks.length];
-      openTask(next.id);
+      openTask(tasks[(index + delta + tasks.length) % tasks.length].id);
     },
-    [snap, view, openTask],
+    [view, openTask],
   );
 
   const cycleAgent = useCallback(() => {
@@ -189,13 +220,11 @@ export function App() {
 
   // ---- 语音 ----
 
-  const voiceReady = env?.find((c) => c.name === "语音")?.ok ?? false;
-  const voiceTarget: AgentRef | null = view.kind === "task" ? { task: view.task, agent: view.agent } : null;
   const voice = useVoice({
-    ready: voiceReady,
-    target: voiceTarget,
-    context: { project: current?.project.name ?? snap?.projects.find((p) => p.id === homeProject)?.name, task: current?.task.title },
-    onHomeText: (text) => setHomeText((t) => (t.trim() ? `${t.trimEnd()} ${text}` : text)),
+    ready: env?.find((c) => c.name === "语音")?.ok ?? false,
+    target: view.kind === "task" ? { task: view.task, agent: view.agent } : null,
+    context: { project: current?.project.name, task: current?.task.prompt ? current.task.title : undefined },
+    onSent: nameIfUntitled,
     onError: fail,
   });
 
@@ -204,7 +233,7 @@ export function App() {
   const handlers = useRef<Record<string, () => void>>({});
   handlers.current = {
     quit: requestQuit,
-    "new-task": () => goHome(),
+    "new-task": () => void newTask(),
     "add-project": () => void addProject(),
     review: () => view.kind === "task" && void startReview(view.task),
     "next-agent": cycleAgent,
@@ -214,11 +243,12 @@ export function App() {
     "close-task": () => view.kind === "task" && requestClose(view.task),
     voice: voice.toggle,
   };
+  allTasks(snap)
+    .slice(0, 9)
+    .forEach((t, i) => (handlers.current[`task-${i + 1}`] = () => openTask(t.id)));
 
   useEffect(() => {
     const unlistenMenu = listen<string>("menu", (e) => handlers.current[e.payload]?.());
-    const unlistenOpen = listen<string>("open-project", (e) => void addProject(e.payload));
-    void api.takeOpenRequest().then((path) => path && addProject(path));
     // ⌘1…⌘9 跳到第 n 个任务。菜单里不列这些，直接在这里处理。
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
@@ -229,21 +259,22 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => {
       void unlistenMenu.then((f) => f());
-      void unlistenOpen.then((f) => f());
       window.removeEventListener("keydown", onKey);
     };
-    // 只在首次挂载时注册，回调通过 handlers 读取最新状态。
   }, []);
-  allTasks(snap)
-    .slice(0, 9)
-    .forEach((t, i) => (handlers.current[`task-${i + 1}`] = () => openTask(t.id)));
+
+  // `duolo <目录>` 打开的项目：事件里带的是路径，交给最新的 addProject 处理。
+  useEffect(() => {
+    const unlisten = listen<string>("open-project", (e) => void addProject(e.payload));
+    return () => void unlisten.then((f) => f());
+  }, [addProject]);
 
   return (
     <div className="app">
       <Sidebar
         snap={snap}
         view={view}
-        onNewTask={goHome}
+        onNewTask={(project) => void newTask(project)}
         onOpenTask={openTask}
         onCloseTask={requestClose}
         onAddProject={() => void addProject()}
@@ -251,28 +282,21 @@ export function App() {
       <main className="main">
         {view.kind === "task" && current ? (
           <TaskView
-            key={current.task.id}
             task={current.task}
             agentId={view.agent}
             voice={voice}
             onSelectAgent={(agent) => openTask(view.task, agent)}
             onReview={() => void startReview(view.task)}
             onClose={() => requestClose(view.task)}
-            hasReviewer={!!reviewerOf(current.task)}
             onError={fail}
           />
         ) : (
-          <Home
+          <Empty
             snap={snap}
             env={env}
-            project={homeProject}
-            onProjectChange={setHomeProject}
+            creating={creating}
+            onNewTask={() => void newTask()}
             onAddProject={() => void addProject()}
-            text={homeText}
-            onTextChange={setHomeText}
-            onSubmit={createTask}
-            busy={busy}
-            voice={voice}
           />
         )}
       </main>

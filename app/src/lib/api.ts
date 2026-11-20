@@ -70,6 +70,7 @@ export const api = {
   takeOpenRequest: () => invoke<string | null>("take_open_request"),
   addProject: (path: string) => invoke<string>("add_project", { path }),
   createTask: (project: string, prompt: string) => invoke<number>("create_task", { project, prompt }),
+  nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt }),
   closeTask: (task: number) => invoke<void>("close_task", { task }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
   startReviewer: (task: number) => invoke<number>("start_reviewer", { task }),

@@ -1,5 +1,5 @@
 // 语音输入：⌃Space 开始录音，再按一次结束；识别和整理在后端完成。
-// 首页直接填进输入框；任务里先显示在 Agent 输入框上方，确认后再发送。
+// 结果先显示在 Agent 输入框上方，确认后再发送。
 
 import { useCallback, useRef, useState } from "react";
 
@@ -27,7 +27,8 @@ interface Options {
   ready: boolean;
   target: AgentRef | null;
   context: { project?: string; task?: string };
-  onHomeText(text: string): void;
+  /** 语音文字发给了 Agent。 */
+  onSent(target: AgentRef, text: string): void;
   onError(err: unknown): void;
 }
 
@@ -42,10 +43,11 @@ export function useVoice(opts: Options): Voice {
   phaseRef.current = phase;
 
   const toggle = useCallback(() => {
-    const { ready, target, context, onHomeText, onError } = optsRef.current;
+    const { ready, target, context, onError } = optsRef.current;
     const current = phaseRef.current;
     if (current.kind === "idle" || current.kind === "review") {
       if (!ready) return onError(NOT_READY);
+      if (!target) return onError("先打开一个任务，再用语音输入。");
       api
         .voiceStart()
         .then(() => setPhase({ kind: "recording", since: Date.now() }))
@@ -57,12 +59,8 @@ export function useVoice(opts: Options): Voice {
     api
       .voiceFinish(context.project, context.task)
       .then(({ raw, organized }) => {
-        const text = organized ?? raw;
-        if (target) setPhase({ kind: "review", target, raw, organized, text });
-        else {
-          onHomeText(text);
-          setPhase({ kind: "idle" });
-        }
+        if (!target) return setPhase({ kind: "idle" });
+        setPhase({ kind: "review", target, raw, organized, text: organized ?? raw });
       })
       .catch((err) => {
         setPhase({ kind: "idle" });
@@ -83,6 +81,7 @@ export function useVoice(opts: Options): Voice {
     const p = phaseRef.current;
     if (p.kind !== "review" || !p.text.trim()) return;
     api.sendText(p.target, p.text.trim(), submit).catch(optsRef.current.onError);
+    if (submit) optsRef.current.onSent(p.target, p.text.trim());
     setPhase({ kind: "idle" });
   }, []);
 

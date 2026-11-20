@@ -45,6 +45,12 @@ interface Entry {
 
 const pool = new Map<string, Entry>();
 
+/** 用户在终端里的输入（发给 Agent 之前），App 用它给新任务起名。 */
+let inputListener: ((ref: AgentRef, data: string) => void) | null = null;
+export function setInputListener(listener: typeof inputListener) {
+  inputListener = listener;
+}
+
 /** 应用自己处理的按键，不交给 Agent。 */
 function isAppShortcut(e: KeyboardEvent) {
   if (e.metaKey) return true; // ⌘ 组合键都是应用菜单的
@@ -80,7 +86,10 @@ function create(ref: AgentRef): Entry {
     }
     return true;
   });
-  term.onData((data) => void api.write(ref, data).catch(() => {}));
+  term.onData((data) => {
+    inputListener?.(ref, data);
+    void api.write(ref, data).catch(() => {});
+  });
 
   return { term, fit, el, opened: false, attachedSession: null };
 }

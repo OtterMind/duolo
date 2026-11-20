@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
     AgentKey, AgentKind, AgentRole, AgentSpec, Config, Paths, Project, ProjectId, State, Store, Task, TaskId,
@@ -123,11 +123,11 @@ impl Engine {
     // ---- 任务 ----
 
     /// 新建任务：创建分支和 worktree，登记写代码的 Agent。Agent 在 [`Engine::start_agent`] 时才启动。
+    ///
+    /// `prompt` 可以为空：Agent 直接打开等用户在它的输入框里输入，第一次输入后用
+    /// [`Engine::name_task`] 补上标题和分支名。
     pub fn create_task(&mut self, project: &ProjectId, prompt: &str) -> Result<TaskId> {
         let prompt = prompt.trim();
-        if prompt.is_empty() {
-            bail!("需求不能为空");
-        }
         let project = self.state.project(project).cloned().context("项目不存在")?;
         let id = self.state.allocate_task_id();
         let title = derive_title(prompt);
@@ -151,6 +151,23 @@ impl Engine {
         });
         self.save()?;
         Ok(id)
+    }
+
+    /// 给还没有需求的任务补上需求：更新标题，并把分支重命名为对应的名字（失败时保留原分支名）。
+    /// 已经有需求的任务不变。
+    pub fn name_task(&mut self, id: TaskId, prompt: &str) -> Result<()> {
+        let prompt = prompt.trim();
+        let task = self.state.task_mut(id).context("任务不存在")?;
+        if prompt.is_empty() || !task.prompt.is_empty() {
+            return Ok(());
+        }
+        task.prompt = prompt.to_string();
+        task.title = derive_title(prompt);
+        let branch = format!("duolo/{}-{}", id, slug(&task.title));
+        if branch != task.branch && duolo_git::rename_branch(&task.worktree, &branch).is_ok() {
+            task.branch = branch;
+        }
+        self.save()
     }
 
     /// 结束任务的所有 Agent，删除 worktree（分支保留），并从列表中移除。
@@ -335,10 +352,11 @@ impl Engine {
         if agent.launched && !fresh {
             args.extend(profile.resume_args.iter().cloned());
         } else {
-            args.push(match agent.role {
-                AgentRole::Writer => task.prompt.clone(),
-                AgentRole::Reviewer => self.config.review_prompt_for(&task.base),
-            });
+            match agent.role {
+                AgentRole::Writer if task.prompt.is_empty() => {}
+                AgentRole::Writer => args.push(task.prompt.clone()),
+                AgentRole::Reviewer => args.push(self.config.review_prompt_for(&task.base)),
+            }
         }
 
         Ok(SessionSpec {
@@ -472,8 +490,20 @@ mod tests {
     }
 
     #[test]
-    fn empty_prompt_rejected() {
+    fn untitled_task_gets_named_by_first_prompt() {
         let (_dir, mut engine, project) = engine_with_repo();
-        assert!(engine.create_task(&project, "   ").is_err());
+        let id = engine.create_task(&project, "   ").unwrap();
+        let task = engine.state().task(id).unwrap().clone();
+        assert_eq!(task.title, "新任务");
+        assert_eq!(task.branch, "duolo/1-task");
+
+        engine.name_task(id, "Add Stripe subscriptions").unwrap();
+        let task = engine.state().task(id).unwrap().clone();
+        assert_eq!(task.title, "Add Stripe subscriptions");
+        assert_eq!(task.branch, "duolo/1-add-stripe-subscriptions");
+        assert_eq!(duolo_git::current_branch(&task.worktree).unwrap(), task.branch);
+
+        engine.name_task(id, "另一个需求").unwrap();
+        assert_eq!(engine.state().task(id).unwrap().title, "Add Stripe subscriptions", "只在第一次命名");
     }
 }

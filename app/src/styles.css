@@ -99,7 +99,7 @@ kbd {
   border-right: 1px solid var(--line);
 }
 .sidebar-top {
-  height: 44px;
+  height: 38px;
   flex: none;
 }
 .side-scroll {
@@ -252,44 +252,38 @@ kbd {
   display: flex;
   flex-direction: column;
 }
-.titlebar {
-  height: 44px;
-  flex: none;
-}
 
-/* 首页 */
 
-.home {
+/* 空状态 */
+
+.empty {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
-.home-hero {
+.empty-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 32px 8vh;
+  gap: 16px;
+  padding: 0 32px 10vh;
   text-align: center;
 }
-.home-hero h1 {
-  margin: 0 0 8px;
-  font-size: 22px;
+.empty-body h1 {
+  margin: 0;
+  font-size: 20px;
   font-weight: 500;
-  letter-spacing: 0.2px;
 }
-.home-sub {
+.empty-note {
   margin: 0;
   color: var(--dim);
   line-height: 1.8;
 }
-.home-add {
-  margin-top: 16px;
-}
 .env {
-  margin: 24px 0 0;
+  margin: 8px 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -305,82 +299,6 @@ kbd {
 }
 .env .block {
   flex-basis: 100%;
-}
-
-.composer-wrap {
-  flex: none;
-  padding: 0 24px 20px;
-  display: flex;
-  justify-content: center;
-}
-.composer {
-  width: 100%;
-  max-width: 760px;
-  background: var(--raised);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 12px 12px 8px 14px;
-  cursor: text;
-}
-.composer:focus-within {
-  border-color: #4a4a4a;
-}
-.composer.is-busy {
-  opacity: 0.7;
-}
-.composer textarea,
-.voice-overlay textarea {
-  display: block;
-  width: 100%;
-  resize: none;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: 14px/1.6 var(--sans);
-  user-select: text;
-}
-.composer textarea::placeholder {
-  color: var(--faint);
-}
-.composer-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  min-height: 26px;
-}
-
-.picker {
-  position: relative;
-}
-.picker-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
-  margin-left: -6px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.picker-btn:hover {
-  background: var(--active);
-  color: var(--text);
-}
-.picker-icon {
-  font-size: 10px;
-  color: var(--dim);
-}
-.caret {
-  font-size: 9px;
-  color: var(--dim);
-}
-.picker-menu {
-  bottom: 32px;
-  left: -6px;
-  min-width: 300px;
 }
 
 /* 菜单 */
@@ -432,7 +350,7 @@ kbd {
   background: var(--line-strong);
 }
 
-/* 任务页 */
+/* 任务页：顶部 tab 栏（参考 Orca：比内容区深一档，当前 tab 和下面的终端连成一体） */
 
 .task {
   flex: 1;
@@ -440,70 +358,96 @@ kbd {
   flex-direction: column;
   min-height: 0;
 }
-.task-head {
+.tabbar {
   flex: none;
-  height: 44px;
+  height: 38px;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 12px 0 20px;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 0 8px 0 0;
+  background: #111;
   border-bottom: 1px solid var(--line);
-}
-.task-title {
-  max-width: 32%;
-  font-weight: 500;
-}
-.tabs {
-  display: flex;
-  gap: 2px;
 }
 .tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 6px;
+  gap: 8px;
+  height: 30px;
+  min-width: 150px;
+  max-width: 240px;
+  padding: 0 14px;
+  margin-bottom: -1px;
   color: var(--dim);
+  font-size: 12.5px;
   white-space: nowrap;
+  border-right: 1px solid var(--line);
+}
+.tab:first-child {
+  border-left: 0;
 }
 .tab:hover {
-  background: var(--hover);
   color: var(--muted);
+  background: #181818;
 }
 .tab.is-active {
-  background: var(--active);
+  background: var(--bg);
+  color: var(--text);
+  height: 31px;
+}
+.tab-name {
+  flex: 1;
+  text-align: left;
+}
+.tab-role {
+  color: var(--faint);
+  font-size: 11px;
+}
+.tab.is-active .tab-role {
+  color: var(--dim);
+}
+.tab-add {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  margin-top: 6px;
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 17px;
+  line-height: 24px;
+}
+.tab-add:hover {
+  background: var(--hover);
   color: var(--text);
 }
-.tab.add {
+.tab-meta {
+  align-self: center;
+  margin: 6px 8px 0 12px;
+  font: 11.5px var(--mono);
   color: var(--faint);
-}
-.tab.add:hover {
-  color: var(--muted);
-}
-.task-meta {
-  display: flex;
-  gap: 12px;
-  font: 12px var(--mono);
-  color: var(--dim);
   white-space: nowrap;
-  min-width: 0;
-}
-.task-meta .branch {
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
-.diff .ins {
+.tab-meta .ins {
   color: var(--ins);
 }
-.diff .del {
+.tab-meta .del {
   color: var(--del);
+}
+.tabbar .more {
+  align-self: center;
+  margin-top: 6px;
+}
+.untitled {
+  color: var(--muted);
 }
 .more {
   position: relative;
 }
 .more-menu {
-  top: 30px;
+  top: 28px;
   right: 0;
   min-width: 220px;
 }

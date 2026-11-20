@@ -42,6 +42,12 @@ pub fn add_worktree(root: &Path, path: &Path, branch: &str, base: &str) -> Resul
     Ok(())
 }
 
+/// 重命名 worktree 当前所在的分支。
+pub fn rename_branch(worktree: &Path, new_name: &str) -> Result<()> {
+    git(worktree, &["branch", "-m", new_name])?;
+    Ok(())
+}
+
 /// 删除 worktree。分支保留，方便之后查看或合并。
 pub fn remove_worktree(root: &Path, path: &Path, force: bool) -> Result<()> {
     let path_str = path.to_str().context("worktree 路径包含无法识别的字符")?;

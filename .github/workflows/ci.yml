@@ -2,6 +2,10 @@ name: CI
 
 on:
   push:
+  pull_request:
+
+permissions:
+  contents: read
 
 # 同一个分支又推了新的，旧的就不跑了。
 concurrency:
@@ -10,6 +14,8 @@ concurrency:
 
 jobs:
   check:
+    # 本仓库的分支推送时已经跑过，PR 只跑来自 fork 的。
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -82,6 +88,8 @@ jobs:
           if-no-files-found: error
 
   server:
+    # 本仓库的分支推送时已经跑过，PR 只跑来自 fork 的。
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     services:
       postgres:

@@ -154,3 +154,7 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
 - 状态识别是启发式的（看输出节奏和确认提示），还没有接入 hooks 和会话日志。
 - Windows 和 Linux 版还没有在真机上完整测过，以 CI 能编译、打包为准；手机端、审阅页、自动化在后续版本。
 - Linux 上按住说话的全局快捷键只在 X11 下有效，Wayland 下请点麦克风按钮。
+
+## 许可证
+
+[MIT](LICENSE)。Claude、Claude Code 是 Anthropic 的商标，Codex 是 OpenAI 的商标；Duolo 是独立的项目，和这两家公司没有隶属关系。

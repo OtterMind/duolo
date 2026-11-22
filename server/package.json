@@ -1,5 +1,6 @@
 {
   "name": "duolo-server",
+  "license": "MIT",
   "private": true,
   "version": "0.1.0",
   "description": "Duolo server: accounts, device pairing and end-to-end encrypted relay between a Mac and phones",

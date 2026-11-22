@@ -520,6 +520,44 @@ mod tests {
         assert!(matches!(s.state(), AgentState::Exited(Exit { success: true, .. })));
     }
 
+    /// 在终端里启动真实的批处理文件（npm 装的 claude.cmd 就是），参数里的特殊字符不能变。
+    #[cfg(windows)]
+    #[test]
+    fn runs_batch_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("my tools");
+        std::fs::create_dir(&bin).unwrap();
+        let script = bin.join("claude.cmd");
+        std::fs::write(&script, "@echo off\r\necho 1=%1\r\necho 2=%2\r\necho 3=%3\r\n").unwrap();
+        let mut spec = spec(script.to_str().unwrap(), &["--continue", "50% %PATH% done", "a & b > c"]);
+        spec.size = Size::new(20, 120);
+        let mut s = Session::spawn(spec).unwrap();
+        wait_until(|| s.poll_exit().is_some());
+        wait_until(|| s.with_screen(|scr| scr.contents().contains("3=")));
+        let screen = s.with_screen(|scr| scr.contents());
+        for line in ["1=\"--continue\"", "2=\"50% %PATH% done\"", "3=\"a & b > c\""] {
+            assert!(screen.contains(line), "{line} not in:\n{screen}");
+        }
+    }
+
+    /// 停止时，批处理文件启动的进程也要结束，工作目录才能删。
+    #[cfg(windows)]
+    #[test]
+    fn stop_releases_the_working_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let work = dir.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        let script = dir.path().join("claude.cmd");
+        std::fs::write(&script, "@echo off\r\necho started\r\nping -n 60 127.0.0.1\r\n").unwrap();
+        let mut spec = spec(script.to_str().unwrap(), &[]);
+        spec.cwd = work.clone();
+        let mut s = Session::spawn(spec).unwrap();
+        wait_until(|| s.with_screen(|scr| scr.contents().contains("127.0.0.1")));
+        assert!(std::fs::rename(&work, dir.path().join("moved")).is_err(), "正在用，不能改名");
+        s.stop();
+        wait_until(|| std::fs::rename(&work, dir.path().join("moved")).is_ok());
+    }
+
     #[test]
     fn attach_replays_then_streams() {
         let mut s = Session::spawn(spec("cat", &[])).unwrap();

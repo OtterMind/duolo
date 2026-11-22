@@ -408,6 +408,28 @@ mod tests {
         assert!(!screen(&engine, key).contains("got:"), "随启动带过去了，不能再发一遍：{}", screen(&engine, key));
     }
 
+    /// Windows 上 npm 装的 Claude 是批处理文件，带不了换行：需求等它准备好之后粘贴过去。
+    #[cfg(windows)]
+    #[test]
+    fn batch_file_agent_gets_a_multi_line_prompt() {
+        let (dir, mut engine, project) = engine("cat");
+        let agent = dir.path().join("agent.sh");
+        std::fs::write(&agent, "sleep 1; echo \"args:$#\"; while read -r line; do echo \"got:$line\"; done\n").unwrap();
+        let script = dir.path().join("claude.cmd");
+        std::fs::write(&script, "@sh \"%~dp0agent.sh\" %*\r\n").unwrap();
+        let config = format!("[agents.claude]\ncommand = {:?}\n", script.display().to_string());
+        std::fs::write(dir.path().join("home/config.toml"), config).unwrap();
+        drop(engine);
+        engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        let task = engine.create_task(&project, "Export orders\nas CSV & \"Excel\" 100%").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:0");
+        wait_screen(&mut engine, key, "got:Export orders");
+        wait_screen(&mut engine, key, "got:as CSV & \"Excel\" 100%");
+        engine.close_task(task).unwrap();
+    }
+
     #[test]
     fn message_does_not_answer_a_startup_dialog() {
         // 假 Agent：第一次启动先让用户选主题，选完才出现输入框。

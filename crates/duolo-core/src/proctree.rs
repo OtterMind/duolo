@@ -400,3 +400,35 @@ mod tests {
         other.wait().unwrap();
     }
 }
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use std::process::Stdio;
+
+    use super::*;
+    use crate::process::{command, spawn_tree};
+
+    #[test]
+    fn kills_wrapped_children_and_nothing_else() {
+        // 和 npm 装的 codex.cmd 一样：外面一层 cmd，真正干活的是它的子进程。
+        let start = || {
+            let mut cmd = command("cmd");
+            cmd.args(["/c", "ping -n 60 127.0.0.1"]).stdout(Stdio::null());
+            spawn_tree(&mut cmd).unwrap()
+        };
+        let (mut child, tree) = start();
+        let (mut other_child, other) = start();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while tree.members().0.len() < 2 || other.members().0.len() < 2 {
+            assert!(std::time::Instant::now() < deadline, "{:?} {:?}", tree.members(), other.members());
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        tree.kill(None, Duration::from_secs(5));
+        child.wait().unwrap();
+        assert!(tree.members().0.is_empty(), "{:?}", tree.members());
+        assert!(other.members().0.len() >= 2, "别的进程不能动：{:?}", other.members());
+        other.kill(None, Duration::from_secs(5));
+        other_child.wait().unwrap();
+        assert!(other.members().0.is_empty());
+    }
+}

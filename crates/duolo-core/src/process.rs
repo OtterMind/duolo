@@ -157,6 +157,25 @@ mod tests {
         assert!(Prompted::new(&[], Some("x")).is_none());
     }
 
+    /// 真实的批处理文件：带换行和特殊字符的提示词要原样到它手里。
+    #[cfg(windows)]
+    #[test]
+    fn batch_file_receives_a_multi_line_prompt() {
+        let dir = tempfile::tempdir().unwrap();
+        // 路径里有空格，像 C:\\Program Files 那样。
+        let bin = dir.path().join("my tools");
+        std::fs::create_dir(&bin).unwrap();
+        let script = bin.join("codex.cmd");
+        std::fs::write(&script, "@echo off\r\necho args=%*\r\nfindstr \"^\"\r\n").unwrap();
+        let prompt = "first line\nsecond & \"quoted\" 100% %PATH% ^ > <\nlast";
+        let argv = [script.display().to_string(), "exec".into(), "--color".into(), "never".into()];
+        let mut prompted = Prompted::new(&argv, Some(prompt)).unwrap();
+        prompted.cmd.stdout(Stdio::piped());
+        let (child, _tree) = prompted.spawn().unwrap();
+        let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap().replace('\r', "");
+        assert!(out.contains("args=exec --color never") && out.contains(prompt), "{out}");
+    }
+
     #[test]
     fn finds_programs_on_path() {
         let git = resolve("git");

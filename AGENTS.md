@@ -22,4 +22,4 @@
 - 桌面界面在 `app/`，只通过 `src/lib/api.ts` 调用后端；后端命令在 `crates/duolo-app/src/commands.rs`，只做参数转换。
   发给界面的数据结构在 `view.rs`，与 `api.ts` 的类型保持一致。
 - 提交前运行：`cd app && pnpm build`（类型检查），以及 `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test --workspace`。
-- `README.md`（英文，默认）和 `README.zh-CN.md`（中文）内容一致，改一个要同时改另一个。
+- `README.md`（英文，默认）和 `README.zh-CN.md`（中文）内容一致，改一个要同时改另一个；`server/` 下的两份也一样。

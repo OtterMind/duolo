@@ -1,53 +1,59 @@
-# Duolo 服务端
+# Duolo server
 
-所有用户共用的一套服务：账号登录、设备配对，以及电脑端（Mac / Windows / Linux）和手机之间的消息转发。
-代码和执行都留在用户自己的电脑上，服务端只转发加密后的内容，看不到代码和对话。
+English · [简体中文](README.zh-CN.md)
 
-- Node 22 + TypeScript，Fastify（HTTP）+ `ws`（WebSocket）
+One service shared by all users: accounts, device pairing, and relaying messages between desktops (macOS, Windows, Linux) and phones. Code and agents stay on the user's own computer. The server passes message bodies through without parsing them; clients are meant to encrypt them end to end, so the server never sees code or conversations.
+
+- Node 22 + TypeScript, Fastify (HTTP) + `ws` (WebSocket)
 - PostgreSQL
-- 登录用开源的 [better-auth](https://www.better-auth.com)：邮箱验证码登录，原生客户端用 `Authorization: Bearer <令牌>`
+- Sign-in uses the open-source [better-auth](https://www.better-auth.com): one-time codes by email, and native clients send `Authorization: Bearer <token>`
 
-## 本地运行
+## Status
+
+In development, not ready for production:
+
+- The desktop app and the mobile apps do not connect to it yet, so the end-to-end encryption on the client side does not exist yet either.
+- No email service is wired up. Sign-in codes are only printed to the log, in every environment. To send real email, implement the `Mailer` interface from `src/mailer.ts` and use it in `src/main.ts`.
+- Push tokens are stored, but no push notifications are sent.
+
+## Run locally
 
 ```sh
-docker compose up -d      # PostgreSQL，端口 54329
+docker compose up -d      # PostgreSQL on port 54329
 pnpm install
-pnpm dev                  # http://localhost:8787，启动时自动建表
-pnpm test                 # 端到端测试（每次建一个临时数据库，跑完删掉）
+pnpm dev                  # http://localhost:8787, creates tables on startup
+pnpm test                 # end-to-end tests, each run uses a temporary database
 ```
 
-开发时验证码邮件直接打印在日志里。
+## Environment variables
 
-## 环境变量
-
-| 变量 | 说明 | 默认 |
+| Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL 连接串 | `postgres://duolo:duolo@localhost:54329/duolo` |
-| `BETTER_AUTH_SECRET` | 会话签名密钥，**生产环境必须设置** | 开发用的固定值 |
-| `PUBLIC_URL` | 对外地址 | `http://localhost:8787` |
-| `PORT` / `HOST` | 监听地址 | `8787` / `0.0.0.0` |
-| `MAILBOX_TTL_DAYS` | 离线消息最多存几天 | `7` |
-| `MAX_MESSAGE_BYTES` | 单条消息上限 | `262144` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://duolo:duolo@localhost:54329/duolo` |
+| `BETTER_AUTH_SECRET` | Key that signs sessions. **Required in production** (`NODE_ENV=production`) | A fixed development value |
+| `PUBLIC_URL` | Public address | `http://localhost:8787` |
+| `PORT` / `HOST` | Address to listen on | `8787` / `0.0.0.0` |
+| `MAILBOX_TTL_DAYS` | How many days undelivered messages are kept | `7` |
+| `MAX_MESSAGE_BYTES` | Maximum size of one message | `262144` |
 
-## 接口
+## API
 
-| 接口 | 说明 |
+| Endpoint | Description |
 |---|---|
-| `POST /v1/auth/email-otp/send-verification-otp` | 发验证码：`{ email, type: "sign-in" }`，邮件按 `Accept-Language` 选语言 |
-| `POST /v1/auth/sign-in/email-otp` | 用验证码登录：`{ email, otp }` → `{ token, user }`，第一次登录自动注册 |
-| `POST /v1/devices` | 登记当前设备：`{ name, platform: "mac" \| "windows" \| "linux" \| "ios" \| "android", publicKey }` |
-| `GET /v1/devices` | 我的设备、公钥、是否在线 |
-| `DELETE /v1/devices/:id` | 解除一台设备：它的登录会话失效，连接断开 |
-| `PUT /v1/devices/me/push` | 上报推送令牌：`{ kind: "apns" \| "fcm", token }` |
-| `POST /v1/pairings` | 电脑端生成一次性配对码（10 分钟有效），放进二维码；手机调用返回 `desktopOnly` |
-| `POST /v1/pairings/claim` | 手机用配对码登录同一个账号：`{ code, device }` → `{ token, device, desktop }`（含电脑端的公钥） |
-| `GET /v1/connect` | WebSocket 转发，协议见 `src/relay.ts` |
+| `POST /v1/auth/email-otp/send-verification-otp` | Send a sign-in code: `{ email, type: "sign-in" }`. The email language follows `Accept-Language` |
+| `POST /v1/auth/sign-in/email-otp` | Sign in with the code: `{ email, otp }` → `{ token, user }`. The first sign-in creates the account |
+| `POST /v1/devices` | Register the current device: `{ name, platform: "mac" \| "windows" \| "linux" \| "ios" \| "android", publicKey }` |
+| `GET /v1/devices` | My devices, their public keys, and whether they are online |
+| `DELETE /v1/devices/:id` | Remove a device: its session is revoked and its connection closed |
+| `PUT /v1/devices/me/push` | Report a push token: `{ kind: "apns" \| "fcm", token }` |
+| `POST /v1/pairings` | Desktop creates a one-time pairing code (valid for 10 minutes) to show as a QR code. Phones get `desktopOnly` |
+| `POST /v1/pairings/claim` | A phone signs in to the same account with the pairing code: `{ code, device }` → `{ token, device, desktop }` (includes the desktop's public key) |
+| `GET /v1/connect` | WebSocket relay. The protocol is described in `src/relay.ts` |
 
-错误统一返回错误码，例如 `{ "error": "invalidPairingCode" }`，客户端按自己的语言显示。
+Errors are returned as codes, for example `{ "error": "invalidPairingCode" }`, and clients show them in their own language.
 
-## 转发怎么保证送达
+## How delivery is guaranteed
 
-每条消息先存进离线信箱（`mailbox` 表），对方在线就立刻推，收到对方的 `ack` 才删除；
-对方上线时补发没确认的；同一个消息编号重复发送只存一次。超过 7 天的消息自动清理。
+Every message is first stored in an offline mailbox (the `mailbox` table). If the recipient is online it is pushed right away, and it is deleted only after the recipient sends an `ack`. When a recipient comes online, unacknowledged messages are sent again. Sending the same message ID twice stores it once. Messages older than 7 days (`MAILBOX_TTL_DAYS`) are removed automatically.
 
-现在是单台服务器。以后多台时，用 PostgreSQL 的 `LISTEN/NOTIFY` 把消息转到对方连着的那台。
+It runs as a single server today. With several servers, PostgreSQL `LISTEN/NOTIFY` would pass messages to the one the recipient is connected to.

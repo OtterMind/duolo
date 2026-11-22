@@ -138,7 +138,7 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 所有用户共用的一套 Node 服务（TypeScript + Fastify + PostgreSQL），只做三件事：账号（better-auth 邮箱验证码登录）、
 设备配对（电脑端显示二维码，手机扫码即登录同一账号）、电脑端和手机之间的消息转发（WebSocket + 离线信箱）。
-它不理解消息内容：电脑端把事件流、手机把命令都加密后再交给它。详见 `server/README.md`。
+它不理解消息内容：电脑端把事件流、手机把命令都加密后再交给它。详见 `server/README.zh-CN.md`。
 
 ## 约定
 

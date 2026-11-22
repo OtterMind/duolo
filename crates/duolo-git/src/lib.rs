@@ -158,7 +158,7 @@ pub fn find_repos(roots: &[PathBuf], limit: usize) -> Vec<PathBuf> {
             }
         }
     }
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|repo| std::cmp::Reverse(repo.0));
     found.into_iter().take(limit).map(|(_, path)| path).collect()
 }
 

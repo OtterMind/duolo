@@ -7,8 +7,9 @@
 // 5. 没有用不到的键：每个键都要在代码里出现（status.*、error.*、menu.*、macos.* 是拼出来的，不检查）。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repo = new URL("../../", import.meta.url).pathname;
+const repo = fileURLToPath(new URL("../../", import.meta.url));
 const dir = join(repo, "locales");
 const load = (file) => new Map(Object.entries(JSON.parse(readFileSync(join(dir, file), "utf8"))));
 const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");

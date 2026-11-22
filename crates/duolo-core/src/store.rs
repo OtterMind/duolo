@@ -225,11 +225,11 @@ pub fn save_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 
 /// 改名并覆盖。Windows 上目标刚好被杀毒软件或别的进程打开时会短暂失败，稍等再试。
 fn replace(from: &Path, to: &Path) -> io::Result<()> {
-    let mut tries = if cfg!(windows) { 10 } else { 1 };
+    let mut tries = 10;
     loop {
         tries -= 1;
         match std::fs::rename(from, to) {
-            Err(err) if tries > 0 && err.kind() == io::ErrorKind::PermissionDenied => {
+            Err(err) if tries > 0 && crate::process::is_busy(&err) => {
                 thread::sleep(Duration::from_millis(20));
             }
             result => return result,

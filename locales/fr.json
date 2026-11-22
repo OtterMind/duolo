@@ -114,6 +114,7 @@
   "error.noRepository": "Ce projet n’a pas encore de dépôt git. Créez-en un d’abord.",
   "error.nestedRepo": "{path} est un autre dépôt git à l’intérieur de la tâche : son contenu ne peut pas être enregistré automatiquement. Sortez-le de la tâche (si c’est un sous-module, commitez et poussez ses modifications), puis fermez de nouveau la tâche.",
   "error.stillChanging": "Des fichiers de {path} sont encore en cours de modification, sans doute par un processus lancé par l’agent. Arrêtez-le, puis fermez de nouveau la tâche.",
+  "error.folderInUse": "Un autre programme utilise {path}. Fermez-le (un terminal, un éditeur ou un programme lancé par l’agent), puis fermez de nouveau la tâche.",
   "error.saveChangesFailed": "Impossible d’enregistrer les modifications non commitées, la tâche reste donc ouverte : {detail}",
   "error.stateRestored": "Le fichier de données de Duolo était endommagé et a été restauré depuis la sauvegarde. Le fichier endommagé est conservé dans {path}.",
   "error.stateReset": "Le fichier de données de Duolo était endommagé et aucune sauvegarde n’est utilisable : la liste des projets est donc vide. Votre code, vos branches et vos répertoires de travail sont intacts. Le fichier endommagé est conservé dans {path}.",

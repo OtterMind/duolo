@@ -114,6 +114,7 @@
   "error.noRepository": "這個專案裡還沒有 git 儲存庫，請先建立一個。",
   "error.nestedRepo": "{path} 是任務裡的另一個 git 儲存庫，裡面的內容無法自動儲存。請把它移出任務目錄（如果是子模組，提交並推送它的變更），再關閉任務。",
   "error.stillChanging": "{path} 裡的檔案還在變動，可能是 Agent 啟動的程式還在執行。請先停止它，再關閉任務。",
+  "error.folderInUse": "{path} 正被其他程式佔用。請關閉它（終端機、編輯器，或 Agent 啟動的程式），再關閉任務。",
   "error.saveChangesFailed": "無法儲存尚未提交的變更，任務沒有關閉：{detail}",
   "error.stateRestored": "Duolo 的資料檔案損毀，已用備份還原。損毀的檔案保留在 {path}。",
   "error.stateReset": "Duolo 的資料檔案損毀，也沒有可用的備份，所以專案列表是空的。你的程式碼、分支和工作目錄都沒有變動。損毀的檔案保留在 {path}。",

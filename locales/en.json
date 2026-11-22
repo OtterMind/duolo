@@ -114,6 +114,7 @@
   "error.noRepository": "This project has no git repository yet. Create one first.",
   "error.nestedRepo": "{path} is a separate git repository inside this task, so its contents can't be saved automatically. Move it out of the task (if it's a submodule, commit and push its changes), then close the task again.",
   "error.stillChanging": "Files in {path} are still being changed, probably by a process the agent started. Stop it, then close the task again.",
+  "error.folderInUse": "Another program is using {path}. Close it (a terminal, an editor, or a program the agent started), then close the task again.",
   "error.saveChangesFailed": "Couldn't save the uncommitted changes, so the task was kept: {detail}",
   "error.stateRestored": "Duolo's data file was damaged and has been restored from its backup. The damaged file was kept at {path}.",
   "error.stateReset": "Duolo's data file was damaged and there is no usable backup, so the project list is empty. Your code, branches and working directories are untouched. The damaged file was kept at {path}.",

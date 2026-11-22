@@ -195,7 +195,14 @@ impl Session {
         let reader = pair.master.try_clone_reader().context("cannot read from the pseudo terminal")?;
         let writer = pair.master.take_writer().context("cannot write to the pseudo terminal")?;
         let writer = spawn_writer(writer);
-        spawn_reader(reader, Arc::clone(&terminal), Arc::clone(&tap), Arc::clone(&activity), spec.on_output);
+        spawn_reader(
+            reader,
+            writer.clone(),
+            Arc::clone(&terminal),
+            Arc::clone(&tap),
+            Arc::clone(&activity),
+            spec.on_output,
+        );
 
         Ok(Self {
             terminal,
@@ -412,6 +419,7 @@ impl std::ops::DerefMut for ScreenGuard<'_> {
 
 fn spawn_reader(
     mut reader: Box<dyn Read + Send>,
+    writer: Sender<Vec<u8>>,
     terminal: Arc<Mutex<vt100::Parser>>,
     tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
@@ -421,13 +429,24 @@ fn spawn_reader(
         .name("duolo-pty-reader".into())
         .spawn(move || {
             let mut buf = [0u8; 16 * 1024];
+            // Windows 的伪终端（ConPTY）一启动先问光标在哪，得到回答之前什么都不输出。没有界面订阅的任务没人回答，
+            // 所以由我们回答，也不再交给界面，免得它又回答一次、变成发给 Agent 的输入。
+            let mut asks_cursor = cfg!(windows);
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
+                        let mut bytes = std::borrow::Cow::Borrowed(&buf[..n]);
+                        if asks_cursor {
+                            if let Some(rest) = without_cursor_query(&bytes) {
+                                asks_cursor = false;
+                                let _ = writer.send(b"\x1b[1;1R".to_vec());
+                                bytes = std::borrow::Cow::Owned(rest);
+                            }
+                        }
                         let mut parser = terminal.lock().unwrap_or_else(|p| p.into_inner());
-                        parser.process(&buf[..n]);
-                        tap.lock().unwrap_or_else(|p| p.into_inner()).push(&buf[..n]);
+                        parser.process(&bytes);
+                        tap.lock().unwrap_or_else(|p| p.into_inner()).push(&bytes);
                         drop(parser);
                         activity.touch();
                         if let Some(hook) = &on_output {
@@ -441,6 +460,13 @@ fn spawn_reader(
             }
         })
         .expect("cannot spawn reader thread");
+}
+
+/// 去掉第一个"光标在哪"的询问（`ESC [ 6 n`）；没有时返回 None。
+fn without_cursor_query(bytes: &[u8]) -> Option<Vec<u8>> {
+    const QUERY: &[u8] = b"\x1b[6n";
+    let at = bytes.windows(QUERY.len()).position(|w| w == QUERY)?;
+    Some([&bytes[..at], &bytes[at + QUERY.len()..]].concat())
 }
 
 /// 屏幕底部 `lines` 行非空文本。
@@ -477,6 +503,13 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
         }
         panic!("timed out");
+    }
+
+    #[test]
+    fn removes_the_cursor_query() {
+        assert_eq!(without_cursor_query(b"\x1b[6n").unwrap(), b"");
+        assert_eq!(without_cursor_query(b"\x1b[?25l\x1b[6nhi").unwrap(), b"\x1b[?25lhi");
+        assert!(without_cursor_query(b"hello \x1b[6m").is_none());
     }
 
     #[test]

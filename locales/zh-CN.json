@@ -114,6 +114,7 @@
   "error.noRepository": "这个项目里还没有 git 仓库，请先建一个。",
   "error.nestedRepo": "{path} 是任务里的另一个 git 仓库，里面的内容没法自动保存。请把它移出任务目录（如果是子模块，提交并推送它的改动），再关闭任务。",
   "error.stillChanging": "{path} 里的文件还在变化，可能是 Agent 启动的程序还在运行。请先停掉它，再关闭任务。",
+  "error.folderInUse": "{path} 正被别的程序占用。请关掉它（终端、编辑器，或 Agent 启动的程序），再关闭任务。",
   "error.saveChangesFailed": "没能保存还没提交的改动，任务没有关闭：{detail}",
   "error.stateRestored": "Duolo 的数据文件损坏了，已经用备份恢复。损坏的文件保留在 {path}。",
   "error.stateReset": "Duolo 的数据文件损坏了，也没有可用的备份，所以项目列表是空的。你的代码、分支和工作目录都没有动。损坏的文件保留在 {path}。",

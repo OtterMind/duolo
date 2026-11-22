@@ -118,6 +118,12 @@ pub fn batch_command_line(script: &OsStr, args: &[String]) -> Option<String> {
     Some(line)
 }
 
+/// 文件或目录正被别的进程占用（Windows 上才会这样）：稍等再试可能就好了。
+pub fn is_busy(err: &io::Error) -> bool {
+    // 5 拒绝访问、32 共享冲突、33 锁定冲突；后两个 Rust 没有归到 PermissionDenied。
+    cfg!(windows) && matches!(err.raw_os_error(), Some(5 | 32 | 33))
+}
+
 /// 用户的家目录（macOS、Linux 是 `$HOME`，Windows 是 `%USERPROFILE%`）。
 pub fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_default()
@@ -139,15 +145,15 @@ mod tests {
     #[test]
     fn prompt_goes_to_stdin_for_batch_files() {
         let run = |batch: bool| {
-            // 打印参数个数和标准输入。
+            // 打印参数个数和标准输入。提示词里有空格，免得 Windows 上 Git 自带的 sh 按换行拆开参数。
             let args = ["-c", "echo $#; cat", "sh"].map(String::from);
-            let mut prompted = Prompted::build("sh", &args, Some("two\nlines"), batch);
+            let mut prompted = Prompted::build("sh", &args, Some("two words\nand lines"), batch);
             prompted.cmd.stdout(Stdio::piped());
             let (child, _tree) = prompted.spawn().unwrap();
             String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
         };
         assert_eq!(run(false), "1\n");
-        assert_eq!(run(true), "0\ntwo\nlines");
+        assert_eq!(run(true), "0\ntwo words\nand lines");
         assert!(Prompted::new(&[], Some("x")).is_none());
     }
 

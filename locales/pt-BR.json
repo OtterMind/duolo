@@ -114,6 +114,7 @@
   "error.noRepository": "Este projeto ainda não tem repositório git. Crie um primeiro.",
   "error.nestedRepo": "{path} é outro repositório git dentro da tarefa e o conteúdo não pode ser salvo automaticamente. Tire-o da tarefa (se for um submódulo, faça commit e push das alterações) e feche a tarefa de novo.",
   "error.stillChanging": "Os arquivos em {path} ainda estão sendo alterados, provavelmente por um processo iniciado pelo agente. Pare-o e feche a tarefa de novo.",
+  "error.folderInUse": "Outro programa está usando {path}. Feche-o (um terminal, um editor ou um programa iniciado pelo agente) e feche a tarefa de novo.",
   "error.saveChangesFailed": "Não foi possível salvar as alterações sem commit, então a tarefa continua aberta: {detail}",
   "error.stateRestored": "O arquivo de dados do Duolo estava danificado e foi restaurado do backup. O arquivo danificado foi mantido em {path}.",
   "error.stateReset": "O arquivo de dados do Duolo estava danificado e não há backup utilizável, por isso a lista de projetos está vazia. Seu código, branches e diretórios de trabalho estão intactos. O arquivo danificado foi mantido em {path}.",

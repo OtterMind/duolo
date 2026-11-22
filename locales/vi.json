@@ -114,6 +114,7 @@
   "error.noRepository": "Dự án này chưa có kho git. Hãy tạo một kho trước.",
   "error.nestedRepo": "{path} là một kho git riêng nằm trong tác vụ nên không thể tự động lưu. Hãy chuyển nó ra ngoài tác vụ (nếu là submodule thì commit và push thay đổi của nó), rồi đóng tác vụ lại.",
   "error.stillChanging": "Các tệp trong {path} vẫn đang thay đổi, có thể do một tiến trình agent đã khởi chạy. Hãy dừng nó rồi đóng tác vụ lại.",
+  "error.folderInUse": "Một chương trình khác đang dùng {path}. Hãy đóng nó (terminal, trình soạn thảo hoặc chương trình do agent khởi chạy) rồi đóng tác vụ lại.",
   "error.saveChangesFailed": "Không lưu được thay đổi chưa commit nên tác vụ vẫn mở: {detail}",
   "error.stateRestored": "Tệp dữ liệu của Duolo bị hỏng và đã được khôi phục từ bản sao lưu. Tệp hỏng được giữ tại {path}.",
   "error.stateReset": "Tệp dữ liệu của Duolo bị hỏng và không có bản sao lưu dùng được, nên danh sách dự án đang trống. Mã nguồn, nhánh và thư mục làm việc của bạn vẫn nguyên vẹn. Tệp hỏng được giữ tại {path}.",

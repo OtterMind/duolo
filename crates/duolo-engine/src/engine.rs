@@ -129,7 +129,12 @@ fn remove_worktree(task: &Task, repo: &Path, fallback: &str, message: &str) -> R
     let worktree = &task.worktree;
     // 放在同一层目录里：子模块记着到主仓库的相对路径，层数变了就打不开了。
     let moved = worktree.with_file_name(format!("{CLOSING_PREFIX}{}-{}", now_secs(), task.id));
-    rename_when_free(worktree, &moved).with_context(|| format!("cannot remove {}", worktree.display()))?;
+    rename_when_free(worktree, &moved).map_err(|err| {
+        if duolo_core::process::is_busy(&err) {
+            return UserError::FolderInUse { path: worktree.display().to_string() }.into();
+        }
+        anyhow::Error::new(err).context(format!("cannot remove {}", worktree.display()))
+    })?;
     let removed = duolo_git::save_moved_worktree(&moved, fallback, message)
         .map_err(save_error)
         .and_then(|late| duolo_git::remove_worktree(repo, worktree, true).map(|()| late));
@@ -149,10 +154,10 @@ fn remove_worktree(task: &Task, repo: &Path, fallback: &str, message: &str) -> R
 
 /// 改名。Windows 上刚结束的进程可能还占着目录里的文件，等一会儿再试。
 fn rename_when_free(from: &Path, to: &Path) -> std::io::Result<()> {
-    let deadline = Instant::now() + if cfg!(windows) { Duration::from_secs(5) } else { Duration::ZERO };
+    let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match std::fs::rename(from, to) {
-            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied && Instant::now() < deadline => {
+            Err(err) if duolo_core::process::is_busy(&err) && Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(100));
             }
             result => return result,
@@ -1115,6 +1120,13 @@ mod tests {
         // 一边关掉的任务，另一边不能再写回来，进程也要结束。
         let key = app.state().task(from_app).unwrap().key(0);
         app.start_agent(key).unwrap();
+        if cfg!(windows) {
+            // Windows 上目录被另一个进程的 Agent 占着，关不掉：说明原因，任务留着。
+            let err = cli.close_task(from_app).unwrap_err();
+            assert!(matches!(err.downcast_ref(), Some(UserError::FolderInUse { .. })), "{err:#}");
+            assert!(cli.state().task(from_app).is_some());
+            stop_all(app.sessions.drain().map(|(_, session)| session).collect(), None);
+        }
         cli.close_task(from_app).unwrap();
         app.sync();
         assert!(app.state().task(from_app).is_none() && app.session(key).is_none());

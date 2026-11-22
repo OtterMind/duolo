@@ -144,10 +144,12 @@ fn interrupt(child: &mut Child) -> Result<()> {
 
 /// Windows：往识别命令的标准输入写一行 `stop`，再关掉标准输入。
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn interrupt(child: &mut Child) -> Result<()> {
     use std::io::Write;
     let mut stdin = child.stdin.take().context("voice command has no stdin")?;
-    stdin.write_all(b"stop\n").context("cannot stop recording")?;
+    // 写不进去说明它已经自己退出了（例如没有麦克风）：退出码会说明原因。
+    let _ = stdin.write_all(b"stop\n");
     drop(stdin);
     Ok(())
 }
@@ -156,25 +158,27 @@ fn interrupt(child: &mut Child) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn cfg(script: &str) -> VoiceConfig {
-        VoiceConfig { command: vec!["sh".into(), "-c".into(), script.into()], ..VoiceConfig::default() }
+    /// 模拟录音命令：先执行 `before`，收到停止信号（Windows 上是标准输入的 `stop`）后执行 `then`。
+    fn cfg(before: &str, then: &str) -> VoiceConfig {
+        let script = if cfg!(unix) {
+            format!("{before} trap '{then}' INT; while true; do sleep 0.05; done")
+        } else {
+            format!("{before} read -r line; {then}")
+        };
+        VoiceConfig { command: vec!["sh".into(), "-c".into(), script], ..VoiceConfig::default() }
     }
 
     #[test]
     fn transcript_after_interrupt() {
-        // 模拟录音命令：一直等待，收到 SIGINT 后输出文字。
-        let rec =
-            Recorder::start(&cfg("trap 'echo hello world; exit 0' INT; while true; do sleep 0.05; done")).unwrap();
+        let rec = Recorder::start(&cfg("", "echo hello world; exit 0")).unwrap();
         std::thread::sleep(Duration::from_millis(200));
         assert_eq!(rec.finish().unwrap(), "hello world");
     }
 
     #[test]
     fn partial_then_final() {
-        let script =
-            "echo '^ 0.40'; echo '~ hello'; trap 'echo \"= hello world\"; exit 0' INT; while true; do sleep 0.05; done";
-        let rec = Recorder::start(&cfg(script)).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(3);
+        let rec = Recorder::start(&cfg("echo '^ 0.40'; echo '~ hello';", "echo \"= hello world\"; exit 0")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
         while rec.partial().is_empty() {
             assert!(Instant::now() < deadline, "no partial result");
             std::thread::sleep(Duration::from_millis(20));
@@ -186,10 +190,13 @@ mod tests {
 
     #[test]
     fn permission_denied() {
-        let rec = Recorder::start(&cfg("trap 'exit 2' INT; while true; do sleep 0.05; done")).unwrap();
-        std::thread::sleep(Duration::from_millis(100));
-        let err = rec.finish().unwrap_err();
-        assert_eq!(err.downcast_ref::<UserError>(), Some(&UserError::VoicePermission));
+        // 停止时才发现没有权限；以及一启动就因为没有麦克风退出了（Windows 的识别脚本是这样）。
+        for before in ["", if cfg!(windows) { "exit 2;" } else { "" }] {
+            let rec = Recorder::start(&cfg(before, "exit 2")).unwrap();
+            std::thread::sleep(Duration::from_millis(500));
+            let err = rec.finish().unwrap_err();
+            assert_eq!(err.downcast_ref::<UserError>(), Some(&UserError::VoicePermission));
+        }
     }
 
     #[test]

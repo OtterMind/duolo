@@ -114,6 +114,7 @@
   "error.noRepository": "Bu projede henüz git deposu yok. Önce bir tane oluşturun.",
   "error.nestedRepo": "{path}, görevin içinde ayrı bir git deposu; içeriği otomatik kaydedilemez. Görevin dışına taşıyın (alt modülse değişikliklerini commit edip push edin), sonra görevi yeniden kapatın.",
   "error.stillChanging": "{path} içindeki dosyalar hâlâ değişiyor; büyük olasılıkla agent'ın başlattığı bir işlem çalışıyor. Onu durdurun, sonra görevi yeniden kapatın.",
+  "error.folderInUse": "{path} başka bir program tarafından kullanılıyor. Onu kapatın (terminal, düzenleyici veya agent'ın başlattığı bir program), sonra görevi yeniden kapatın.",
   "error.saveChangesFailed": "Commit edilmemiş değişiklikler kaydedilemedi, görev açık kaldı: {detail}",
   "error.stateRestored": "Duolo'nun veri dosyası hasarlıydı ve yedekten geri yüklendi. Hasarlı dosya {path} konumunda saklandı.",
   "error.stateReset": "Duolo'nun veri dosyası hasarlı ve kullanılabilir bir yedek yok; bu yüzden proje listesi boş. Kodunuz, dallarınız ve çalışma dizinleriniz olduğu gibi duruyor. Hasarlı dosya {path} konumunda saklandı.",

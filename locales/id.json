@@ -114,6 +114,7 @@
   "error.noRepository": "Proyek ini belum punya repositori git. Buat dulu.",
   "error.nestedRepo": "{path} adalah repositori git terpisah di dalam tugas ini, jadi isinya tidak bisa disimpan otomatis. Pindahkan ke luar tugas (jika submodule, commit dan push perubahannya), lalu tutup tugas lagi.",
   "error.stillChanging": "Berkas di {path} masih berubah, kemungkinan oleh proses yang dijalankan agent. Hentikan proses itu, lalu tutup tugas lagi.",
+  "error.folderInUse": "Program lain sedang memakai {path}. Tutup program itu (terminal, editor, atau program yang dijalankan agent), lalu tutup tugas lagi.",
   "error.saveChangesFailed": "Perubahan yang belum di-commit tidak bisa disimpan, jadi tugas tetap terbuka: {detail}",
   "error.stateRestored": "Berkas data Duolo rusak dan sudah dipulihkan dari cadangan. Berkas yang rusak disimpan di {path}.",
   "error.stateReset": "Berkas data Duolo rusak dan tidak ada cadangan yang bisa dipakai, jadi daftar proyek kosong. Kode, branch, dan direktori kerja Anda tidak berubah. Berkas yang rusak disimpan di {path}.",

@@ -114,6 +114,7 @@
   "error.noRepository": "Este proyecto aún no tiene repositorio git. Crea uno primero.",
   "error.nestedRepo": "{path} es otro repositorio git dentro de la tarea y su contenido no se puede guardar automáticamente. Sácalo de la tarea (si es un submódulo, haz commit y push de sus cambios) y vuelve a cerrar la tarea.",
   "error.stillChanging": "Los archivos de {path} siguen cambiando, probablemente por un proceso que inició el agente. Detenlo y vuelve a cerrar la tarea.",
+  "error.folderInUse": "Otro programa está usando {path}. Ciérralo (una terminal, un editor o un programa que inició el agente) y vuelve a cerrar la tarea.",
   "error.saveChangesFailed": "No se pudieron guardar los cambios sin confirmar, así que la tarea sigue abierta: {detail}",
   "error.stateRestored": "El archivo de datos de Duolo estaba dañado y se restauró desde la copia de seguridad. El archivo dañado se guardó en {path}.",
   "error.stateReset": "El archivo de datos de Duolo estaba dañado y no hay una copia de seguridad utilizable, por eso la lista de proyectos está vacía. Tu código, tus ramas y tus directorios de trabajo siguen intactos. El archivo dañado se guardó en {path}.",

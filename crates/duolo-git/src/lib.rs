@@ -767,7 +767,7 @@ mod tests {
         let roots = [dir.path().to_path_buf(), alias.path().join("same")];
         let mut found: Vec<_> = find_repos(&roots, 10)
             .into_iter()
-            .map(|p| p.strip_prefix(dir.path()).unwrap().display().to_string())
+            .map(|p| p.strip_prefix(dir.path()).unwrap().display().to_string().replace('\\', "/"))
             .collect();
         found.sort();
         assert_eq!(found, ["org/api", "shop"]);

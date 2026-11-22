@@ -55,6 +55,8 @@ pub enum UserError {
     NestedRepo { path: String },
     #[error("files in {path} are still being changed, so the task was kept")]
     StillChanging { path: String },
+    #[error("{path} is being used by another program, so the task was kept")]
+    FolderInUse { path: String },
     #[error("could not save uncommitted changes, so the task was kept: {detail}")]
     SaveChangesFailed { detail: String },
     #[error("state.json was damaged and has been restored from its backup; the damaged file is at {path}")]
@@ -93,6 +95,7 @@ impl UserError {
             Self::BranchExists { .. } => "branchExists",
             Self::NestedRepo { .. } => "nestedRepo",
             Self::StillChanging { .. } => "stillChanging",
+            Self::FolderInUse { .. } => "folderInUse",
             Self::SaveChangesFailed { .. } => "saveChangesFailed",
             Self::StateRestored { .. } => "stateRestored",
             Self::StateReset { .. } => "stateReset",
@@ -129,6 +132,7 @@ impl UserError {
             Self::PathExists { path }
             | Self::NestedRepo { path }
             | Self::StillChanging { path }
+            | Self::FolderInUse { path }
             | Self::StateRestored { path }
             | Self::StateReset { path } => {
                 params.insert("path", path.clone());
@@ -193,6 +197,7 @@ mod tests {
             UserError::BranchExists { name: "n".into() },
             UserError::NestedRepo { path: "/x".into() },
             UserError::StillChanging { path: "/x".into() },
+            UserError::FolderInUse { path: "/x".into() },
             UserError::SaveChangesFailed { detail: "d".into() },
             UserError::StateRestored { path: "/x".into() },
             UserError::StateReset { path: "/x".into() },

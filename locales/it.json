@@ -114,6 +114,7 @@
   "error.noRepository": "Questo progetto non ha ancora un repository git. Creane prima uno.",
   "error.nestedRepo": "{path} è un altro repository git dentro l’attività e il suo contenuto non può essere salvato automaticamente. Spostalo fuori dall’attività (se è un sottomodulo, fai commit e push delle modifiche), poi chiudi di nuovo l’attività.",
   "error.stillChanging": "I file in {path} stanno ancora cambiando, probabilmente per un processo avviato dall’agente. Fermalo, poi chiudi di nuovo l’attività.",
+  "error.folderInUse": "Un altro programma sta usando {path}. Chiudilo (un terminale, un editor o un programma avviato dall’agente), poi chiudi di nuovo l’attività.",
   "error.saveChangesFailed": "Impossibile salvare le modifiche non committate, quindi l’attività resta aperta: {detail}",
   "error.stateRestored": "Il file dati di Duolo era danneggiato ed è stato ripristinato dal backup. Il file danneggiato è conservato in {path}.",
   "error.stateReset": "Il file dati di Duolo era danneggiato e non c’è un backup utilizzabile, quindi l’elenco dei progetti è vuoto. Codice, branch e directory di lavoro sono intatti. Il file danneggiato è conservato in {path}.",

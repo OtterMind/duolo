@@ -114,6 +114,7 @@
   "error.noRepository": "Dieses Projekt hat noch kein Git-Repository. Lege zuerst eines an.",
   "error.nestedRepo": "{path} ist ein eigenes git-Repository innerhalb der Aufgabe, sein Inhalt lässt sich nicht automatisch sichern. Verschiebe es aus der Aufgabe (bei einem Submodul: Änderungen committen und pushen) und schließe die Aufgabe dann erneut.",
   "error.stillChanging": "Dateien in {path} werden noch geändert, vermutlich von einem Prozess, den der Agent gestartet hat. Beende ihn und schließe die Aufgabe dann erneut.",
+  "error.folderInUse": "{path} wird von einem anderen Programm verwendet. Schließe es (Terminal, Editor oder ein vom Agent gestartetes Programm) und schließe die Aufgabe dann erneut.",
   "error.saveChangesFailed": "Die nicht committeten Änderungen konnten nicht gesichert werden, die Aufgabe bleibt offen: {detail}",
   "error.stateRestored": "Die Datendatei von Duolo war beschädigt und wurde aus der Sicherung wiederhergestellt. Die beschädigte Datei liegt unter {path}.",
   "error.stateReset": "Die Datendatei von Duolo war beschädigt und es gibt keine brauchbare Sicherung, daher ist die Projektliste leer. Code, Branches und Arbeitsverzeichnisse sind unverändert. Die beschädigte Datei liegt unter {path}.",

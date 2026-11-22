@@ -1,26 +1,28 @@
 // 多语言：界面上的所有文字都通过 t() 取，不在组件里写死。
-// 规范见 docs/i18n.md。新增语言：在 locales/ 加一个文件，在 LOCALES 里登记，
-// 并在 crates/duolo-app/src/locale.rs 补上菜单文案。
+// 语言包在仓库根目录的 locales/*.json，桌面界面、原生菜单、命令行和终端界面共用。规范见 docs/i18n.md。
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import { en, type MessageKey, type Messages } from "./locales/en";
-import { zhCN } from "./locales/zh-CN";
-import { zhTW } from "./locales/zh-TW";
-import { ja } from "./locales/ja";
-import { ko } from "./locales/ko";
-import { es } from "./locales/es";
-import { fr } from "./locales/fr";
-import { de } from "./locales/de";
-import { ptBR } from "./locales/pt-BR";
-import { ru } from "./locales/ru";
-import { it } from "./locales/it";
-import { tr } from "./locales/tr";
-import { vi } from "./locales/vi";
-import { id } from "./locales/id";
+import en from "../../../locales/en.json";
+import zhCN from "../../../locales/zh-CN.json";
+import zhTW from "../../../locales/zh-TW.json";
+import ja from "../../../locales/ja.json";
+import ko from "../../../locales/ko.json";
+import es from "../../../locales/es.json";
+import fr from "../../../locales/fr.json";
+import de from "../../../locales/de.json";
+import ptBR from "../../../locales/pt-BR.json";
+import ru from "../../../locales/ru.json";
+import it from "../../../locales/it.json";
+import tr from "../../../locales/tr.json";
+import vi from "../../../locales/vi.json";
+import id from "../../../locales/id.json";
+import { localizeKeys } from "../lib/platform";
 
-export type { MessageKey } from "./locales/en";
+/** 英文是基准语言：所有键都先加在 locales/en.json，其他语言必须提供同样的键。 */
+export type MessageKey = keyof typeof en;
+export type Messages = Record<MessageKey, string>;
 
 /** 支持的语言。`name` 用该语言自己的写法，在语言菜单里显示。 */
 export const LOCALES = [
@@ -68,7 +70,8 @@ export type Translate = (key: MessageKey, vars?: Record<string, string | number>
 function translator(locale: Locale): Translate {
   const messages = LOCALES.find((l) => l.code === locale)?.messages ?? en;
   return (key, vars) => {
-    const text = messages[key] ?? en[key] ?? key;
+    // 文案里的快捷键按 macOS 写（⌘⇧R），在 Windows / Linux 上换成 Ctrl+Shift+R。
+    const text = localizeKeys(messages[key] ?? en[key] ?? key);
     return vars ? text.replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m)) : text;
   };
 }

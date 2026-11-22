@@ -15,10 +15,14 @@
   --need: #e0a84a;
   --danger: #e0716c;
   --ins: #8fc286;
+  --ok: #5bb98b;
+  --focus: #6e9bf5;
+  --claude: #d97757;
   --del: #e0716c;
   --radius: 8px;
-  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-  --mono: Hack, "SF Mono", Menlo, Monaco, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Ubuntu, "Noto Sans",
+    "Noto Sans CJK SC", sans-serif;
+  --mono: Hack, "SF Mono", Menlo, Monaco, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
   color-scheme: dark;
 }
 
@@ -116,90 +120,217 @@ body.is-resizing * {
   cursor: col-resize !important;
 }
 .sidebar-top {
-  height: 38px;
+  height: 40px;
   flex: none;
+}
+/* Windows / Linux 用系统标题栏，侧边栏顶部不用给红绿灯留位置。 */
+.pc .sidebar-top {
+  height: 8px;
+}
+.side-search {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+.search-box {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 10px;
+  border-radius: 7px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--dim);
+}
+.search-box:focus-within {
+  border-color: var(--focus);
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font: 12.5px var(--sans);
+}
+.search-box input::placeholder {
+  color: var(--dim);
+}
+.square-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.square-btn:hover {
+  background: var(--hover);
 }
 .side-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0 12px;
+  padding: 0 6px 12px;
 }
-.side-row {
+.attention {
+  width: calc(100% - 8px);
+  margin: 0 4px 8px;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: calc(100% - 16px);
-  margin: 0 8px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(229, 163, 58, 0.08);
+  border: 1px solid rgba(229, 163, 58, 0.22);
+  color: #f0cf98;
+  font-size: 12.5px;
   text-align: left;
-  white-space: nowrap;
 }
-.side-row:hover {
-  background: var(--hover);
+.attention:hover {
+  background: rgba(229, 163, 58, 0.13);
 }
-.side-row.is-current {
-  background: var(--active);
+.attention kbd {
+  color: #c79a52;
+  border-color: rgba(229, 163, 58, 0.3);
 }
-.side-icon {
-  flex: none;
-  color: var(--muted);
-}
-.new-task {
-  flex: none;
-  margin-bottom: 8px;
-}
-.new-task kbd {
-  opacity: 0;
-}
-.new-task:hover kbd {
-  opacity: 1;
-}
-.add-project {
-  color: var(--dim);
-  margin-top: 8px;
+.attention-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--need);
+  box-shadow: 0 0 0 3px rgba(229, 163, 58, 0.2);
 }
 .side-project {
-  margin-top: 10px;
+  margin-bottom: 10px;
 }
 .side-project-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 12px 0 16px;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 6px;
   color: var(--dim);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 500;
 }
-.side-project-head .icon-btn {
-  opacity: 0;
+.project-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 5px;
+  text-align: left;
 }
-.side-project-head:hover .icon-btn {
-  opacity: 1;
+.project-toggle:hover {
+  color: var(--muted);
+}
+/* 项目后面的 +：一直在，平时淡一点 */
+.project-add {
+  width: 22px;
+  height: 22px;
+  color: var(--faint);
+}
+.side-project-head:hover .project-add {
+  color: var(--muted);
 }
 .side-empty {
-  padding: 2px 16px 6px 36px;
+  padding: 2px 12px 6px;
   color: var(--faint);
   font-size: 12px;
 }
-.task-row .close {
-  display: none;
+.task-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 6px 0 10px;
+  border-radius: 7px;
+  outline: none;
 }
-.task-row:hover .close {
+.task-row:hover {
+  background: var(--hover);
+}
+.task-row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus);
+}
+.task-row.is-current {
+  background: var(--active);
+  padding-bottom: 6px;
+}
+.task-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+}
+.task-row.is-current .task-title,
+.task-row.is-waiting .task-title {
+  color: #f2f2f2;
+  font-weight: 500;
+}
+.task-title {
+  color: #cfcfcf;
+}
+.is-faded {
+  opacity: 0.5;
+  display: inline-flex;
+}
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 22px;
+  color: var(--dim);
+  font: 11px var(--mono);
+  min-width: 0;
+}
+.task-meta .ins {
+  color: var(--ins);
+}
+.task-meta .del {
+  color: var(--del);
+}
+.row-status {
+  flex: none;
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+.row-actions {
+  display: none;
+  gap: 0;
+}
+.row-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+.task-row:hover .row-actions {
   display: inline-flex;
 }
 .task-row:hover .row-status {
   display: none;
 }
-.row-status {
-  flex: none;
-  width: 24px;
-  display: inline-flex;
-  justify-content: center;
+.rename-input {
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid var(--focus);
+  background: var(--bg);
+  color: var(--text);
+  font: 13px var(--sans);
+  outline: none;
 }
 .agent-icon {
   flex: none;
@@ -218,26 +349,39 @@ body.is-resizing * {
   flex: none;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  color: var(--dim);
-  position: relative;
+  gap: 3px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #2a2a2a;
+  color: #a9b3c1;
+  font: 11px var(--sans);
+  font-variant-numeric: tabular-nums;
 }
 .review-chip:hover {
-  background: var(--active);
-  color: var(--text);
+  filter: brightness(1.25);
 }
 .review-chip.is-running {
   animation: pulse 1.4s ease-in-out infinite;
 }
+.review-chip.is-pass {
+  background: rgba(91, 185, 139, 0.12);
+  color: #7fcfa6;
+}
+.review-chip.is-issues {
+  background: rgba(229, 163, 58, 0.12);
+  color: #f0c27a;
+}
 .review-chip.is-failed {
+  background: rgba(224, 113, 108, 0.12);
   color: var(--danger);
 }
 .status-glyph {
   flex: none;
   color: var(--dim);
+}
+.status-glyph.is-done {
+  color: var(--ok);
 }
 .status-glyph.is-failed {
   color: var(--danger);
@@ -254,24 +398,19 @@ body.is-resizing * {
   align-items: center;
   gap: 6px;
 }
-.agent-row {
-  height: 22px;
-  padding-left: 28px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.review-meta {
-  max-width: 130px;
-}
 .sidebar-foot {
   flex: none;
+  height: 40px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 16px;
+  gap: 4px;
+  padding: 0 8px 0 14px;
   border-top: 1px solid var(--line);
   color: var(--dim);
   font-size: 12px;
+}
+.settings-anchor {
+  position: relative;
 }
 
 .icon-btn {
@@ -279,14 +418,125 @@ body.is-resizing * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   color: var(--dim);
 }
 .icon-btn:hover {
   background: var(--active);
   color: var(--text);
+}
+.icon-btn.strong {
+  color: var(--text);
+}
+.icon-btn.solid {
+  background: #e8e8e8;
+  color: #141414;
+}
+.icon-btn.solid:hover {
+  background: #fff;
+  color: #141414;
+}
+.icon-btn.is-recording {
+  color: var(--danger);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.dim {
+  color: var(--dim);
+}
+.accent {
+  color: #8fb2f7;
+}
+.warn {
+  color: var(--need);
+  flex: none;
+}
+
+/* 设置：从左下角齿轮向上弹出 */
+.settings {
+  bottom: 34px;
+  left: -200px;
+  width: 320px;
+  padding: 6px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-head {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  font-size: 12.5px;
+}
+.settings-row select {
+  max-width: 170px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  color: var(--text);
+  font: 12px var(--sans);
+}
+.settings-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(229, 163, 58, 0.08);
+  color: #f0cf98;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.settings-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.link-btn {
+  flex: none;
+  color: #8fb2f7;
+  font-size: 12px;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.switch {
+  appearance: none;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: #3a3a3a;
+  position: relative;
+  transition: background 0.15s;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.switch:checked {
+  background: var(--claude);
+}
+.switch:checked::after {
+  transform: translateX(12px);
 }
 
 /* ---- 状态图标 ---- */
@@ -299,11 +549,15 @@ body.is-resizing * {
   display: inline-block;
 }
 .status-running {
-  border: 1.5px solid var(--muted);
-  border-right-color: transparent;
+  width: 11px;
+  height: 11px;
+  border: 1.75px solid #3a3a3a;
+  border-top-color: var(--claude);
   animation: spin 0.9s linear infinite;
 }
 .status-needs_input {
+  width: 7px;
+  height: 7px;
   background: var(--need);
 }
 .status-idle {
@@ -591,53 +845,116 @@ body.is-resizing * {
   border-top: 1px solid var(--line);
 }
 
-/* 语音：贴在 Agent 输入行最右边 */
-.mic {
+/* 语音：都在 Agent 的输入块上（输入块左边比文字区多出 8px，见 .input-block） */
+.voice-mic {
   position: absolute;
-  right: 18px;
+  right: 12px;
   z-index: 5;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--dim);
+}
+.voice-mic:hover {
+  color: var(--text);
+  background: #2e2e2e;
+}
+.voice-mic.is-off {
+  opacity: 0.5;
+}
+.voice-bar {
+  position: absolute;
+  left: 8px;
+  right: 4px;
+  z-index: 6;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 24px;
-  border-radius: 6px;
-  color: var(--faint);
-}
-button.mic:hover {
-  color: var(--text);
-  background: var(--hover);
-}
-.mic.is-off {
-  opacity: 0.6;
-}
-.mic.is-live {
-  padding: 0 10px;
-  background: var(--raised);
-  border: 1px solid var(--line-strong);
+  gap: 10px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 8px;
+  background: #232323;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 12.5px;
 }
-.mic-time {
+.voice-bar.is-live {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px rgba(224, 113, 108, 0.45);
+}
+.voice-bar.is-warn {
+  box-shadow: inset 0 0 0 1px rgba(229, 163, 58, 0.35);
+  color: var(--text);
+}
+.voice-warn-icon {
+  color: var(--need);
+  flex: none;
+}
+.voice-text {
+  font: 13px/1.55 var(--mono);
+  color: var(--text);
+  max-height: 7.75em;
+  overflow-y: auto;
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.voice-placeholder {
+  color: var(--dim);
+}
+.voice-silent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f0b8b4;
+  font-family: var(--sans);
+}
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.voice-time {
   font: 12px var(--mono);
   color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
-.mic-hint {
+.voice-lock {
+  display: inline-flex;
   color: var(--dim);
-  white-space: nowrap;
 }
-/* 录音中实时显示听到的内容，太长时保留结尾 */
-.mic-heard {
-  max-width: 420px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
-  color: var(--text);
+.waveform {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
 }
-.mic-hint kbd {
-  margin-left: 6px;
+.waveform span {
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--danger);
+  transition: height 0.1s;
+}
+.waveform.is-silent span {
+  background: #555;
+}
+.voice-inserted {
+  position: absolute;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.voice-inserted .icon-btn {
+  width: 24px;
+  height: 24px;
 }
 
 .more {
@@ -797,7 +1114,14 @@ button.mic:hover {
   margin: 0;
   color: var(--muted);
   white-space: pre-line;
+  overflow-wrap: anywhere;
   line-height: 1.7;
+}
+.dialog p + p {
+  margin-top: 10px;
+}
+.dialog p.selectable {
+  user-select: text;
 }
 .dialog-actions {
   display: flex;
@@ -818,18 +1142,441 @@ button.mic:hover {
   border-radius: 10px;
   color: var(--text);
   line-height: 1.6;
+  overflow-wrap: anywhere;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   user-select: text;
 }
 
-/* 语言菜单：从侧边栏底部向上弹出 */
-.lang {
-  position: relative;
+/* 右键菜单：跟着鼠标，挂在 body 上 */
+.context-menu {
+  position: fixed;
+  min-width: 220px;
+  z-index: 70;
 }
-.lang-menu {
-  bottom: 30px;
-  right: 0;
-  min-width: 200px;
-  max-height: 70vh;
+.menu-item:focus-visible {
+  outline: none;
+  background: #34507a;
+}
+
+/* 新建任务面板（⌘N） */
+.panel-scrim {
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex-direction: column;
+  padding-top: 18vh;
+  gap: 10px;
+}
+.panel-scrim > * {
+  align-self: center;
+}
+.new-task {
+  width: min(600px, calc(100vw - 32px));
+  background: #1f1f1f;
+  border: 1px solid #343434;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+.new-task-input {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  padding: 16px 16px 8px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: none;
+  color: #f2f2f2;
+  font: 15px/1.55 var(--sans);
+  user-select: text;
+}
+.new-task-input::placeholder {
+  color: #6f6f6f;
+}
+.new-task-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.new-task-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 10px 14px;
+}
+.dropdown-anchor {
+  position: relative;
+  min-width: 0;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  max-width: 200px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #2a2a2a;
+  border: 1px solid #353535;
+  color: #dcdcdc;
+  font-size: 12.5px;
+}
+.chip.mono {
+  font: 12px var(--mono);
+}
+.chip:hover,
+.chip.is-open {
+  background: #313131;
+}
+.chip.is-open {
+  box-shadow: 0 0 0 2px rgba(110, 155, 245, 0.45);
+}
+.chip.is-static {
+  background: none;
+  border-color: transparent;
+  gap: 4px;
+}
+.chip svg {
+  flex: none;
+}
+.send-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  margin-left: 2px;
+  border-radius: 8px;
+  background: #e8e8e8;
+  color: #141414;
+}
+.send-btn:hover {
+  background: #fff;
+}
+.send-btn:disabled {
+  opacity: 0.5;
+}
+.dropdown {
+  top: 32px;
+  left: 0;
+  width: 340px;
+  padding: 6px;
+  background: #252525;
+  border-color: #3a3a3a;
+}
+.menu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: -2px -2px 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid #333;
+  color: var(--dim);
+}
+.menu-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font: 13px var(--sans);
+}
+.menu-list {
+  max-height: 280px;
   overflow-y: auto;
+}
+.menu-list .menu-item {
+  height: 32px;
+}
+.menu-item.mono {
+  font: 12px var(--mono);
+}
+.menu-item .path {
+  max-width: 150px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.menu-empty {
+  padding: 8px 10px;
+  color: var(--dim);
+}
+.menu-foot {
+  display: flex;
+  gap: 2px;
+  margin: 4px -2px -2px;
+  padding: 4px 4px 0;
+  border-top: 1px solid #333;
+}
+.panel-notice {
+  width: min(600px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 10px;
+  background: #1f1f1f;
+  border: 1px solid #343434;
+  color: var(--muted);
+}
+.btn.small {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* 第一次打开 */
+.welcome {
+  flex: 1;
+  overflow-y: auto;
+  width: min(560px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 12vh 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.welcome h1 {
+  margin: 0 0 -12px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.welcome .panel-notice {
+  width: 100%;
+}
+.dropzone {
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--line-strong);
+  color: var(--dim);
+  transition: background 0.12s, border-color 0.12s;
+}
+.dropzone.is-over {
+  border-color: var(--focus);
+  background: rgba(110, 155, 245, 0.07);
+  color: #c9d8fb;
+}
+.repo-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--side);
+}
+.repo-list-head {
+  padding: 6px 10px 4px;
+  color: var(--dim);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.repo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 7px;
+  text-align: left;
+  min-width: 0;
+}
+.repo:hover {
+  background: var(--hover);
+}
+.repo-name {
+  flex: none;
+  font-weight: 500;
+}
+.repo .meta {
+  font: 11.5px var(--mono);
+  min-width: 0;
+}
+.welcome .env {
+  justify-content: flex-start;
+  margin: 0;
+}
+
+/* 新建任务面板：谁写 → 谁审 */
+.agent-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.agent-pair .chip {
+  padding: 0 6px;
+}
+.menu-title,
+.menu-hint {
+  padding: 6px 10px 4px;
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.menu-item.is-disabled {
+  color: var(--dim);
+  cursor: default;
+}
+.menu-item.is-disabled:hover {
+  background: none;
+}
+.menu-item.is-disabled .agent-icon {
+  opacity: 0.45;
+}
+.no-agent {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.no-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.install-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 6px 10px;
+  border-radius: 7px;
+  background: var(--bg);
+}
+.install-row code {
+  font: 12px var(--mono);
+  color: var(--text);
+  user-select: text;
+}
+.review-btn:disabled {
+  opacity: 0.45;
+}
+.review-btn:disabled:hover {
+  background: none;
+  color: var(--dim);
+}
+
+/* 添加项目：三个入口，下面是新建文件夹 / 克隆的表单，或者找到的仓库 */
+.add-project-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.add-project {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.add-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.add-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+.add-option:hover {
+  background: var(--hover);
+}
+.add-option.is-active {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+.add-option svg {
+  color: var(--muted);
+}
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.add-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.text-input {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: 13px var(--sans);
+  outline: none;
+  user-select: text;
+}
+.text-input.mono {
+  font: 12.5px var(--mono);
+}
+.text-input:focus {
+  border-color: var(--focus);
+}
+
+/* 新建任务：在哪里改（项目 / 仓库 / 基准分支 → 新分支） */
+.new-task-where {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+.chip.is-warn {
+  color: #f0cf98;
+  border-color: rgba(229, 163, 58, 0.4);
+}
+.branch-chip.is-auto {
+  color: var(--dim);
+  font-family: var(--sans);
+}
+.branch-chip svg:first-child {
+  color: #c9a7f5;
+}
+.branch-input {
+  height: 26px;
+  min-width: 200px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--focus);
+  background: var(--bg);
+  color: var(--text);
+  font: 12px var(--mono);
+  outline: none;
+}
+.menu-foot.column {
+  flex-direction: column;
+  gap: 0;
+}
+.menu-foot .menu-search {
+  margin: 0;
+  border-bottom: 0;
+}
+.repo-tag {
+  flex: none;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #2a2a2a;
+  color: var(--dim);
+  font: 10.5px/16px var(--mono);
+}
+.branch-chip {
+  max-width: 340px;
 }

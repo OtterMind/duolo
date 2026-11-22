@@ -1,6 +1,7 @@
 //! 侧边栏：新任务入口、项目 → 任务 → Agent，以及添加项目。既显示状态，也是操作栏。
 
 use duolo_core::text::{format_elapsed, now_secs, truncate_chars};
+use duolo_core::{t, tf};
 use duolo_engine::AgentStatus;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Modifier, Style};
@@ -49,7 +50,7 @@ fn build_rows(app: &mut App, width: usize) -> Vec<(Line<'static>, Option<Item>)>
     let mut rows = vec![
         (header, None),
         (Line::default(), None),
-        item_row(app, Item::NewTask, vec![Span::raw("+ 新任务")], Span::raw(""), width),
+        item_row(app, Item::NewTask, vec![Span::raw(t("tui.newTask"))], Span::raw(""), width),
         (Line::default(), None),
     ];
 
@@ -67,7 +68,7 @@ fn build_rows(app: &mut App, width: usize) -> Vec<(Line<'static>, Option<Item>)>
             None,
         ));
         if tasks.is_empty() {
-            rows.push((Line::styled("  还没有任务", theme::faint()), None));
+            rows.push((Line::styled(format!("  {}", t("sidebar.noTasks")), theme::faint()), None));
         }
         for task in tasks {
             let statuses: Vec<AgentStatus> =
@@ -97,8 +98,8 @@ fn build_rows(app: &mut App, width: usize) -> Vec<(Line<'static>, Option<Item>)>
                         Span::raw("     "),
                         Span::styled(icon, icon_style),
                         Span::raw(" "),
-                        Span::styled(agent.kind.display_name(), theme::muted()),
-                        Span::styled(format!(" {} · ", agent.role.label()), theme::dim()),
+                        Span::styled(agent.role.label(&agent.kind.display_name()), theme::muted()),
+                        Span::styled(" · ", theme::dim()),
                         Span::styled(status.label(), state_style),
                     ],
                     Span::styled(elapsed.unwrap_or_default(), theme::faint()),
@@ -109,10 +110,16 @@ fn build_rows(app: &mut App, width: usize) -> Vec<(Line<'static>, Option<Item>)>
         rows.push((Line::default(), None));
     }
     if state.projects.is_empty() {
-        rows.push((Line::styled("还没有项目", theme::dim()), None));
+        rows.push((Line::styled(t("sidebar.noProjects"), theme::dim()), None));
         rows.push((Line::default(), None));
     }
-    rows.push(item_row(app, Item::AddProject, vec![Span::styled("+ 添加项目", theme::dim())], Span::raw(""), width));
+    rows.push(item_row(
+        app,
+        Item::AddProject,
+        vec![Span::styled(t("tui.addProject"), theme::dim())],
+        Span::raw(""),
+        width,
+    ));
     rows
 }
 
@@ -140,22 +147,28 @@ fn item_row(
 fn footer_lines(app: &mut App) -> Vec<Line<'static>> {
     if app.focus == Focus::Sidebar {
         return vec![
-            hint_line(&[("↑↓", "选择"), ("↵", "打开"), ("Esc", "返回")]),
-            hint_line(&[("n", "新任务"), ("r", "审阅"), ("x", "关闭"), ("?", "帮助"), ("q", "退出")]),
+            hint_line(&[("↑↓", &t("tui.hint.select")), ("↵", &t("tui.hint.open")), ("Esc", &t("tui.hint.back"))]),
+            hint_line(&[
+                ("n", &t("tui.hint.new")),
+                ("r", &t("tui.hint.review")),
+                ("x", &t("tui.hint.close")),
+                ("?", &t("tui.hint.help")),
+                ("q", &t("tui.hint.quit")),
+            ]),
         ];
     }
     let summary = app.engine.summary();
     let mut spans = Vec::new();
     if summary.running + summary.needs_input == 0 {
-        spans.push(Span::styled("没有运行中的 Agent", theme::faint()));
+        spans.push(Span::styled(t("sidebar.noneRunning"), theme::faint()));
     } else {
-        spans.push(Span::styled(format!("{} 个运行中", summary.running), theme::dim()));
+        spans.push(Span::styled(tf("sidebar.running", &[("count", &summary.running)]), theme::dim()));
         if summary.needs_input > 0 {
             spans.push(Span::styled(" · ", theme::dim()));
-            spans.push(Span::styled(format!("{} 个等你", summary.needs_input), theme::need()));
+            spans.push(Span::styled(tf("sidebar.needsYou", &[("count", &summary.needs_input)]), theme::need()));
         }
     }
-    vec![Line::from(spans), hint_line(&[("⌃]", "操作侧边栏")])]
+    vec![Line::from(spans), hint_line(&[("⌃]", &t("tui.hint.sidebar"))])]
 }
 
 pub fn hint_line(items: &[(&str, &str)]) -> Line<'static> {

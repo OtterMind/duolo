@@ -1,75 +1,132 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Folder, FolderPlus, Globe, Plus, SquarePen, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Ellipsis,
+  FolderPlus,
+  Plus,
+  Search,
+  Settings,
+  X,
+} from "lucide-react";
 
-import { LOCALES, useI18n, useT } from "../i18n";
-import type { Snapshot, Task } from "../lib/api";
-import { statusKey, writerOf } from "../lib/format";
+import { useT } from "../i18n";
+import { api, type Diff, type Snapshot, type Task } from "../lib/api";
+import { elapsed, statusKey, writerOf } from "../lib/format";
 import type { View } from "../App";
 import { AgentIcon } from "./AgentIcon";
 import { StatusIcon } from "./StatusIcon";
+import { ContextMenu, type MenuEntry } from "./ContextMenu";
+import { SettingsPopover } from "./SettingsPopover";
+import { isMac, kbd } from "../lib/platform";
 
 interface Props {
   snap: Snapshot | null;
   view: View;
+  /** 每次变化时把焦点放到搜索框（⌘K）。 */
+  focusSearch: number;
   onNewTask(project?: string): void;
   onOpenTask(task: number): void;
   onOpenReview(task: number): void;
+  onStartReview(task: number): void;
   onCloseTask(task: number): void;
   onAddProject(): void;
+  onJumpToWaiting(): void;
+  onError(err: unknown): void;
 }
 
-const MIN_WIDTH = 200;
+const MIN_WIDTH = 220;
 const MAX_WIDTH = 440;
 const WIDTH_KEY = "duolo.sidebarWidth";
+const COLLAPSED_KEY = "duolo.collapsedProjects";
+const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
-export function Sidebar({ snap, view, onNewTask, onOpenTask, onOpenReview, onCloseTask, onAddProject }: Props) {
+export function Sidebar(props: Props) {
+  const { snap, view, onNewTask, onAddProject, onJumpToWaiting } = props;
   const t = useT();
   const [width, startResize] = useResizableWidth();
+  const [query, setQuery] = useState("");
+  const [collapsed, toggleCollapsed] = useCollapsed();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
   const projects = snap?.projects ?? [];
+  const waiting = projects.flatMap((p) => p.tasks).filter((task) => writerOf(task)?.status === "needs_input").length;
+
+  useEffect(() => {
+    if (props.focusSearch) search.current?.focus();
+  }, [props.focusSearch]);
+
+  const needle = query.trim().toLowerCase();
+  const matches = (task: Task) =>
+    !needle || task.title.toLowerCase().includes(needle) || task.branch.toLowerCase().includes(needle);
 
   return (
     <aside className="sidebar" style={{ width }}>
       <div className="sidebar-top" data-tauri-drag-region />
-      <button className="side-row new-task" onClick={() => onNewTask()}>
-        <SquarePen className="side-icon" size={14} strokeWidth={1.75} />
-        <span className="grow">{t("sidebar.newTask")}</span>
-        <kbd>⌘N</kbd>
-      </button>
+      <div className="side-search">
+        <label className="search-box">
+          <Search {...ICON} />
+          <input
+            ref={search}
+            value={query}
+            placeholder={t("sidebar.search")}
+            aria-label={t("sidebar.search")}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setQuery("");
+                e.currentTarget.blur();
+              }
+            }}
+          />
+          {!query && <kbd>{kbd("⌘K")}</kbd>}
+        </label>
+        <button className="square-btn" title={t("sidebar.addProjectShortcut")} onClick={onAddProject}>
+          <FolderPlus {...ICON} />
+        </button>
+      </div>
 
       <div className="side-scroll">
-        {projects.map((project) => (
-          <section key={project.id} className="side-project">
-            <div className="side-project-head">
-              <Folder size={12} strokeWidth={1.75} />
-              <span className="grow ellipsis" title={project.root}>
-                {project.name}
-              </span>
-              <button
-                className="icon-btn"
-                title={t("sidebar.newTaskIn", { project: project.name })}
-                onClick={() => onNewTask(project.id)}
-              >
-                <Plus size={13} strokeWidth={1.75} />
-              </button>
-            </div>
-            {project.tasks.length === 0 && <div className="side-empty">{t("sidebar.noTasks")}</div>}
-            {project.tasks.map((task) => (
-              <TaskRows
-                key={task.id}
-                task={task}
-                current={view.kind === "task" && view.task === task.id}
-                onOpen={() => onOpenTask(task.id)}
-                onOpenReview={() => onOpenReview(task.id)}
-                onClose={() => onCloseTask(task.id)}
-              />
-            ))}
-          </section>
-        ))}
+        {waiting > 0 && !needle && (
+          <button className="attention" onClick={onJumpToWaiting} title={kbd("⌥↓")}>
+            <span className="attention-dot" />
+            <span className="grow">{t("sidebar.waiting", { count: waiting })}</span>
+            <kbd>{kbd("⌥↓")}</kbd>
+          </button>
+        )}
+        {projects.map((project) => {
+          const tasks = project.tasks.filter(matches);
+          if (needle && tasks.length === 0) return null;
+          const folded = !needle && collapsed.has(project.id);
+          return (
+            <section key={project.id} className="side-project">
+              <div className="side-project-head">
+                <button className="project-toggle" onClick={() => toggleCollapsed(project.id)} title={project.root}>
+                  {folded ? <ChevronRight size={12} strokeWidth={2} /> : <ChevronDown size={12} strokeWidth={2} />}
+                  <span className="ellipsis">{project.name}</span>
+                </button>
+                {folded && project.tasks.length > 0 && <span className="meta">{project.tasks.length}</span>}
+                <button
+                  className="icon-btn project-add"
+                  title={t("sidebar.newTaskIn", { project: project.name })}
+                  onClick={() => onNewTask(project.id)}
+                >
+                  <Plus {...ICON} />
+                </button>
+              </div>
+              {!folded &&
+                tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    current={view.kind === "task" && view.task === task.id}
+                    {...props}
+                  />
+                ))}
+            </section>
+          );
+        })}
         {snap && projects.length === 0 && <div className="side-empty">{t("sidebar.noProjects")}</div>}
-        <button className="side-row add-project" onClick={onAddProject}>
-          <FolderPlus className="side-icon" size={14} strokeWidth={1.75} />
-          <span className="grow">{t("sidebar.addProject")}</span>
-        </button>
       </div>
 
       <footer className="sidebar-foot">
@@ -80,121 +137,237 @@ export function Sidebar({ snap, view, onNewTask, onOpenTask, onOpenReview, onClo
               {snap.running}
             </span>
           )}
-          {snap && snap.needsInput > 0 && (
-            <span className="need" title={t("sidebar.needsYou", { count: snap.needsInput })}>
-              <span className="status status-needs_input" />
-              {snap.needsInput}
-            </span>
-          )}
         </span>
-        <LanguageMenu />
+        <div className="settings-anchor">
+          <button className="icon-btn" title={t("settings.title")} onClick={() => setSettingsOpen((o) => !o)}>
+            <Settings {...ICON} />
+          </button>
+          {settingsOpen && <SettingsPopover onClose={() => setSettingsOpen(false)} onError={props.onError} />}
+        </div>
       </footer>
       <div className="sidebar-resizer" onMouseDown={startResize} onDoubleClick={() => startResize(null)} />
     </aside>
   );
 }
 
-/** 侧边栏底部的语言切换。 */
-function LanguageMenu() {
-  const { pref, setPref, t } = useI18n();
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
-  }, [open]);
-  const choose = (next: typeof pref) => {
-    setPref(next);
-    setOpen(false);
-  };
+/** 一个任务一行：模型图标、标题、审阅和进度的小图标。当前任务多一行：分支、改动、时长。 */
+function TaskRow({
+  task,
+  current,
+  onOpenTask,
+  onOpenReview,
+  onStartReview,
+  onCloseTask,
+  onError,
+}: Props & { task: Task; current: boolean }) {
+  const t = useT();
+  const writer = writerOf(task);
+  const status = writer?.status ?? "not_started";
+  const untitled = task.untitled;
+  const title = untitled ? t("task.untitled") : task.title;
+  const [renaming, setRenaming] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const diff = useDiff(current ? task.id : null);
+
+  const entries: MenuEntry[] = [
+    { label: t("sidebar.rename"), run: () => setRenaming(true) },
+    { label: t("sidebar.review", { agent: task.reviewer.name }), kbd: "⌘⇧R", run: () => onStartReview(task.id) },
+    { sep: true },
+    { label: t(isMac ? "task.reveal" : "task.openFolder"), run: () => void api.reveal(task.worktree) },
+    { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },
+    { label: t("sidebar.copyBranch"), run: () => void navigator.clipboard.writeText(task.branch) },
+    { sep: true },
+    { label: t("task.close"), kbd: "⌘⇧W", danger: true, run: () => onCloseTask(task.id) },
+  ];
+
   return (
-    <div className="lang" onMouseDown={(e) => e.stopPropagation()}>
-      <button className="icon-btn" title={t("sidebar.language")} onClick={() => setOpen((o) => !o)}>
-        <Globe size={14} strokeWidth={1.75} />
-      </button>
-      {open && (
-        <div className="menu lang-menu">
-          <button className="menu-item" onClick={() => choose("auto")}>
-            <span className="check">{pref === "auto" && <Check size={13} />}</span>
-            <span className="grow">{t("sidebar.languageAuto")}</span>
+    <div
+      className={`task-row ${current ? "is-current" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenTask(task.id)}
+      onDoubleClick={() => setRenaming(true)}
+      onKeyDown={(e) => e.key === "Enter" && !renaming && onOpenTask(task.id)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
+      title={writer ? `${title}\n${writer.name} · ${t(statusKey(status))}` : title}
+    >
+      <div className="task-line">
+        <span className={untitled ? "is-faded" : ""}>
+          <AgentIcon kind={writer?.kind ?? ""} title={writer?.name} />
+        </span>
+        {renaming ? (
+          <RenameInput
+            initial={untitled ? "" : task.title}
+            onDone={(next) => {
+              setRenaming(false);
+              if (next && next !== task.title) api.renameTask(task.id, next).catch(onError);
+            }}
+          />
+        ) : (
+          <span className={`grow ellipsis task-title ${untitled ? "untitled" : ""}`}>{title}</span>
+        )}
+        {task.repo && <span className="repo-tag">{task.repo}</span>}
+        <ReviewChip task={task} onOpen={() => onOpenReview(task.id)} />
+        <span className="row-status">
+          {untitled && status !== "needs_input" ? null : <StatusIcon status={status} />}
+        </span>
+        <span className="row-actions">
+          <button
+            className="icon-btn"
+            title={t("common.more")}
+            onClick={(e) => {
+              e.stopPropagation();
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenu({ x: r.left, y: r.bottom + 4 });
+            }}
+          >
+            <Ellipsis {...ICON} />
           </button>
-          <div className="menu-sep" />
-          {LOCALES.map((l) => (
-            <button key={l.code} className="menu-item" onClick={() => choose(l.code)}>
-              <span className="check">{pref === l.code && <Check size={13} />}</span>
-              <span className="grow">{l.name}</span>
-            </button>
-          ))}
+          <button
+            className="icon-btn"
+            title={t("sidebar.closeTask")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseTask(task.id);
+            }}
+          >
+            <X {...ICON} />
+          </button>
+        </span>
+      </div>
+      {current && (
+        <div className="task-meta">
+          <span className="ellipsis">{task.branch.replace(/^duolo\//, "")}</span>
+          {diff && diff.files > 0 && (
+            <span>
+              <span className="ins">+{diff.insertions}</span> <span className="del">−{diff.deletions}</span>
+            </span>
+          )}
+          <span className="grow" />
+          <span>{elapsed(task.createdAt)}</span>
         </div>
       )}
+      {menu && <ContextMenu at={menu} entries={entries} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }
 
-/** 一个任务一行：模型图标、标题、审阅和进度的小图标。文字说明都放在悬停提示里。 */
-function TaskRows({
-  task,
-  current,
-  onOpen,
-  onOpenReview,
-  onClose,
-}: {
-  task: Task;
-  current: boolean;
-  onOpen(): void;
-  onOpenReview(): void;
-  onClose(): void;
-}) {
+/** 审阅的小标记：审阅中是灰色，通过是绿色，有问题是琥珀色并带问题数，失败是红色。 */
+function ReviewChip({ task, onOpen }: { task: Task; onOpen(): void }) {
   const t = useT();
-  const writer = writerOf(task);
-  const reviewing = task.reviewingSince != null;
-  const status = writer?.status ?? "not_started";
-  const title = task.prompt ? task.title : t("task.untitled");
+  const running = task.reviewingSince != null;
+  const review = task.review;
+  if (!running && !review) return null;
+  let tone = "";
+  let label = t("sidebar.reviewRunning");
+  let count: number | null = null;
+  if (!running && review) {
+    if (!review.ok) {
+      tone = "is-failed";
+      label = t("sidebar.reviewFailed");
+    } else if (review.verdict === "pass") {
+      tone = "is-pass";
+      label = review.summary;
+    } else if (review.verdict === "issues") {
+      tone = "is-issues";
+      count = review.issues;
+      label = review.summary;
+    } else {
+      label = review.summary;
+    }
+  }
   return (
-    <div
-      className={`side-row task-row ${current ? "is-current" : ""}`}
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      title={`${title}\n${writer ? `${writer.name} · ${t(statusKey(status))}` : ""}`}
+    <button
+      className={`review-chip ${running ? "is-running" : tone}`}
+      title={`${t("sidebar.reviewTitle", { agent: task.reviewer.name })} · ${label}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
     >
-      <AgentIcon kind={writer?.kind ?? ""} title={writer?.name} />
-      <span className={`grow ellipsis ${task.prompt ? "" : "untitled"}`}>{title}</span>
-      {(reviewing || task.review) && (
-        <button
-          className={`review-chip ${reviewing ? "is-running" : task.review?.ok ? "" : "is-failed"}`}
-          title={`${t("sidebar.review")} · ${
-            reviewing ? t("sidebar.reviewRunning") : task.review!.ok ? task.review!.summary : t("sidebar.reviewFailed")
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenReview();
-          }}
-        >
-          <AgentIcon kind="codex" size={12} />
-        </button>
-      )}
-      <span className="row-status">
-        <StatusIcon status={status} />
-      </span>
-      <button
-        className="icon-btn close"
-        title={t("sidebar.closeTask")}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-      >
-        <X size={13} strokeWidth={1.75} />
-      </button>
-    </div>
+      <AgentIcon kind="codex" size={11} />
+      {count != null && <span>{count}</span>}
+    </button>
   );
+}
+
+function RenameInput({ initial, onDone }: { initial: string; onDone(next: string | null): void }) {
+  const [value, setValue] = useState(initial);
+  const done = useRef(false);
+  const finish = (next: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(next?.trim() || null);
+  };
+  return (
+    <input
+      className="rename-input grow"
+      autoFocus
+      value={value}
+      onClick={(e) => e.stopPropagation()}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => finish(value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") finish(value);
+        if (e.key === "Escape") finish(null);
+      }}
+    />
+  );
+}
+
+/** 当前任务的改动统计，每 3 秒刷新。 */
+function useDiff(task: number | null) {
+  const [diff, setDiff] = useState<Diff | null>(null);
+  useEffect(() => {
+    setDiff(null);
+    if (task == null) return;
+    let alive = true;
+    const load = () => api.diffStat(task).then((d) => alive && setDiff(d), () => {});
+    void load();
+    const id = window.setInterval(load, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [task]);
+  return diff;
+}
+
+/** 折叠了的项目，记在本机。 */
+function useCollapsed(): [Set<string>, (id: string) => void] {
+  const [set, setSet] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggle = useMemo(
+    () => (id: string) =>
+      setSet((old) => {
+        const next = new Set(old);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        try {
+          localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+        } catch {
+          // 存不了就只在本次生效。
+        }
+        return next;
+      }),
+    [],
+  );
+  return [set, toggle];
 }
 
 /** 侧边栏宽度：拖右边缘调整，双击恢复默认，记在本机。 */
 function useResizableWidth(): [number, (e: React.MouseEvent | null) => void] {
-  const DEFAULT = 264;
+  const DEFAULT = 272;
   const [width, setWidth] = useState(() => {
     try {
       const saved = Number(localStorage.getItem(WIDTH_KEY));

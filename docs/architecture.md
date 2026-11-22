@@ -16,6 +16,34 @@
 
 依赖只能自上而下：`core` 不依赖任何人，`engine` 不依赖 UI。
 
+## 数据安全
+
+- **只有一条改状态的路**：`Engine::update`。它独占 `state.json.lock`，在锁里重新读一遍 `state.json`，改完保存再放开，
+  所以桌面应用、终端界面和 `duolo new` 同时运行也不会互相覆盖。闭包里只改状态，不做 git 操作，也不嵌套调用。
+  界面定期调用 `Engine::sync` 读进别的进程的修改；别处关掉的任务，这里的 Agent 一并结束。
+- **写文件**：先写临时文件、落盘，再改名。`state.json` 每次另存一份 `.bak`；损坏时把坏文件改名成
+  `state.json.damaged-<时间>` 留着，用备份恢复。`config.toml` 写错时用默认配置，文件不动。
+  这些情况放在 `Engine::take_notices` 里，桌面应用弹窗、命令行写 stderr、终端界面显示在底部。
+- **关闭任务**：停 Agent → `duolo_git::save_worktree` 把没提交的改动提交到当前分支（不在任何分支上时新建 `duolo/<编号>-saved`）→
+  worktree 改名成同一层的 `.closing-*` → 再保存一次刚好写进来的 → 删登记 → 后台删文件。任何一步失败，任务和目录都留着：
+  里面有嵌套仓库，或者子模块有改动、没推送的提交、暂存（git 存不下它们的内容）时报 `nestedRepo`；文件一直在变时报 `stillChanging`。
+  `assume-unchanged` / `skip-worktree` 藏起来的改动、rebase 自动暂存的改动也会保存。被 git 忽略的文件会删除，确认框里说明了。
+  目录已经不是 worktree（主仓库没了）时不删，告诉用户留在哪里。
+
+## 不卡住、不留尾巴
+
+- **引擎的锁只在改状态时拿**：界面的按键、250ms 一次的快照都要这把锁。建 worktree、关任务这类要几秒的事放在
+  `duolo_engine::ops`，分成"准备（拿锁）→ 干活（不拿锁）→ 登记（拿锁）"；改动统计在后台线程算（`diffs.rs`），
+  调用方只取最近一次的结果。写终端由 `duolo-pty` 的写线程做，Agent 不读输入也不会卡住调用方。
+- **结束进程就结束整棵树**：`duolo_core::proctree`。npm 装的 `codex` 外面包着一层 node，Claude Code 给每条命令开新的会话，
+  只结束主进程会留下真正干活的。macOS / Linux 按父进程、会话、进程组一起找；Windows 用作业对象，有窗口的程序
+  （Agent 打开的编辑器、浏览器）不动。后台命令用 `process::spawn_tree` 或 `process::Prompted` 启动；终端里的用 `Session::stop`。
+- **带提示词的命令**用 `process::Prompted`：提示词一般是最后一个参数；Windows 的 `.cmd` 不能带换行，改从标准输入给。
+- **排队的消息**等 Agent 画出输入框（打开括号粘贴）、没有在等用户选什么之后才发（`Engine::can_take_message`）。
+- **改动从哪里算**：`duolo_git::fork_point`，任务从基准分支分出来（或最近一次合并它）的提交；统计和审阅都相对它，包括新文件。
+- **退出**：`request_quit` 请界面处理，3 秒没有回应（界面崩溃、卡死）就用系统弹窗问。
+- **环境变量**：macOS / Linux 启动时从登录 shell 读一遍（`shell_env.rs`），PATH 用 shell 的，其他的只补没有的。
+
 ## 数据流
 
 桌面应用：
@@ -68,14 +96,49 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 ## 多语言
 
-界面文案在 `app/src/i18n`，菜单文案在 `duolo-app/src/locale.rs`，后端错误以 `UserError` 错误码交给界面翻译。详见 [i18n.md](i18n.md)。
+所有文案只有一份，在仓库根目录的 `locales/*.json`：桌面界面用 `t()`，菜单、命令行和终端界面用 `duolo_core::{t, tf}`，后端错误以 `UserError` 错误码交给界面翻译。详见 [i18n.md](i18n.md)。
 
 ## 后台审阅和内置语音
 
 - 审阅：`duolo-engine/src/review.rs` 在任务的 worktree 里运行 `review_command`（默认 `codex exec --sandbox read-only`），
   结论保存在 `Task.review`，界面一键交给写代码的 Agent。
-- 语音：`duolo-app/dictate/main.swift` 用 macOS Speech 框架识别，`build.rs` 编译后作为 externalBin 打进应用；
-  输出 `~ 临时结果` / `= 最终结果` 行，`duolo-voice::Recorder` 读取。
+- 语音：内置识别程序输出 `~ 临时结果` / `^ 音量` / `= 最终结果` 行，`duolo-voice::Recorder` 读取，
+  结束录音时 macOS / Linux 发 SIGINT，Windows 往标准输入写一行 `stop`。
+  - macOS：`duolo-app/dictate/main.swift`（Speech 框架），`build.rs` 编译后作为 externalBin 打进应用；
+  - Windows：`duolo-app/dictate/dictate.ps1`（System.Speech），作为资源随应用安装，用 Windows PowerShell 运行；
+  - Linux：没有内置识别，用户配置 `voice.command`（例如 `scripts/voice-whisper.sh`）。
+
+## 跨平台
+
+桌面应用支持 macOS、Windows、Linux，各系统不同的地方集中在：
+
+- `duolo-app/src/platform.rs`：内置语音识别、在文件管理器 / 终端里打开目录、打开系统设置；
+- `duolo-app/src/fnkey.rs`：按住说话。macOS 监听 Fn 键（CGEventTap），Windows / Linux 用全局快捷键 Ctrl+Shift+Space；
+- `duolo-app/src/main.rs`：原生菜单只在 macOS 上用；关窗口在 macOS 上是隐藏，在 Windows / Linux 上是退出；
+- `duolo-core/src/process.rs`：按 PATH / PATHEXT 找可执行文件（Windows 上 npm 装的 `claude` 是 `claude.cmd`）、家目录；
+- `app/src/lib/platform.ts`：快捷键。统一按 macOS 写法定义，Windows / Linux 上 ⌘ 换成 Ctrl，⌘ 加字母再加 Shift，
+  文案里的快捷键也自动换算（Rust 侧见 `duolo_core::i18n::pc_keys`）；
+- 打包配置：`tauri.conf.json` 是公共部分，`tauri.{macos,windows,linux}.conf.json` 是各系统的安装包格式和资源。
+
+## 事件流和远程命令（手机端的基础）
+
+每个任务有一条事件流，电脑端界面、手机端和以后的云端同步都用它（格式在 `duolo-core/src/event.rs`）：
+
+- **来源**：Agent 自己写的会话记录（Claude Code 的 `~/.claude/projects/…/*.jsonl`、Codex 的 `~/.codex/sessions/…`），
+  变成"你说的话 / Agent 的回复 / 工具调用"；终端画面变成状态和"等你选"的提示（问题、说明、选项）；
+  引擎自己记任务建好、改名、关闭、审阅、改动统计。见 `duolo-engine/src/live.rs`、`transcript.rs`、`prompt.rs`。
+- **编号**：每个任务从 1 递增，存在 `~/.duolo/events/<任务编号>.jsonl`。断线重连的客户端说"我有到第几条"，
+  用 `events_since` 补齐。事件里只有数据（文件路径、命令、状态码），不放句子，客户端按自己的语言显示。
+- **状态**要稳定 1.5 秒才记（Agent 界面重绘时会在"运行中 / 空闲"间来回跳）；"等你确认"和"退出"马上记。
+- **命令**（`Command`）是别的设备能对这台电脑做的事：新建任务、发消息（Agent 没运行时先启动，准备好再发）、
+  回答"等你选"（发对应的数字键）、打断、开始审阅、关闭任务。统一由 `Engine::execute` 执行，失败时返回错误码。
+- 桌面应用每 250 毫秒取一次新事件，通过 `task-events` 推给界面；`task_events`、`execute` 两个命令给界面和以后的同步用。
+
+## 服务端（server/）
+
+所有用户共用的一套 Node 服务（TypeScript + Fastify + PostgreSQL），只做三件事：账号（better-auth 邮箱验证码登录）、
+设备配对（电脑端显示二维码，手机扫码即登录同一账号）、电脑端和手机之间的消息转发（WebSocket + 离线信箱）。
+它不理解消息内容：电脑端把事件流、手机把命令都加密后再交给它。详见 `server/README.md`。
 
 ## 约定
 

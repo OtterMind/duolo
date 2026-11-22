@@ -11,4 +11,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 duolo-core.workspace = true
+
+# 结束录音时发 SIGINT（Windows 改为写标准输入，不需要）。
+[target.'cfg(unix)'.dependencies]
 libc.workspace = true

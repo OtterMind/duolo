@@ -86,10 +86,11 @@ pub enum AgentRole {
 }
 
 impl AgentRole {
-    pub fn label(self) -> &'static str {
+    /// 当前语言的"<agent> 写 / 审"。
+    pub fn label(self, agent: &str) -> String {
         match self {
-            Self::Writer => "写",
-            Self::Reviewer => "审",
+            Self::Writer => crate::tf("agentRole.writer", &[("agent", &agent)]),
+            Self::Reviewer => crate::tf("agentRole.reviewer", &[("agent", &agent)]),
         }
     }
 }
@@ -119,6 +120,13 @@ pub struct Task {
     /// Unix 秒。
     pub created_at: u64,
     pub agents: Vec<AgentSpec>,
+    /// 任务改的是项目里的哪个 git 仓库（主仓库的路径，worktree 从它创建）。
+    /// 旧数据里没有：项目本身就是仓库。
+    #[serde(default)]
+    pub repo: Option<PathBuf>,
+    /// 审阅用的 Agent。旧数据里没有，按配置里的默认审阅者。
+    #[serde(default)]
+    pub reviewer: Option<AgentKind>,
     /// 最近一次后台审阅的结果。
     #[serde(default)]
     pub review: Option<Review>,
@@ -134,10 +142,49 @@ pub struct Review {
     pub output: String,
 }
 
+/// 审阅结论的判断，来自结论第一行的标记（见 `DEFAULT_REVIEW_PROMPT`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// `[PASS]`：没有必须修改的问题。
+    Pass,
+    /// `[ISSUES n]`：有 n 个必须修改的问题。
+    Issues(u32),
+    /// 没有标记（自定义提示词或模型没有照做）。
+    Unknown,
+}
+
 impl Review {
-    /// 结论的第一行，用作摘要。
-    pub fn summary(&self) -> &str {
+    fn first_line(&self) -> &str {
         self.output.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
+    }
+
+    /// 第一行开头的标记和剩下的摘要。
+    fn parse(&self) -> (Verdict, &str) {
+        let line = self.first_line();
+        let Some(rest) = line.strip_prefix('[') else { return (Verdict::Unknown, line) };
+        let Some((tag, summary)) = rest.split_once(']') else { return (Verdict::Unknown, line) };
+        let tag = tag.trim().to_ascii_uppercase();
+        let verdict = if tag == "PASS" {
+            Verdict::Pass
+        } else if let Some(n) = tag.strip_prefix("ISSUES") {
+            Verdict::Issues(n.trim().parse().unwrap_or(1))
+        } else {
+            return (Verdict::Unknown, line);
+        };
+        (verdict, summary.trim())
+    }
+
+    /// 结论的第一行（去掉判断标记），用作摘要。
+    pub fn summary(&self) -> &str {
+        self.parse().1
+    }
+
+    pub fn verdict(&self) -> Verdict {
+        if self.ok {
+            self.parse().0
+        } else {
+            Verdict::Unknown
+        }
     }
 }
 
@@ -214,7 +261,7 @@ impl State {
         if !taken(base) {
             return ProjectId(base.to_string());
         }
-        (2..).map(|n| format!("{base}-{n}")).find(|id| !taken(id)).map(ProjectId).expect("序号总能找到空位")
+        (2..).map(|n| format!("{base}-{n}")).find(|id| !taken(id)).map(ProjectId).expect("a free suffix always exists")
     }
 }
 
@@ -241,5 +288,19 @@ mod tests {
     fn display_names() {
         assert_eq!(AgentKind::claude().display_name(), "Claude");
         assert_eq!(AgentKind("aider".into()).display_name(), "Aider");
+    }
+
+    #[test]
+    fn review_verdict() {
+        let review = |output: &str| Review { finished_at: 0, ok: true, output: output.into() };
+        assert_eq!(review("[PASS] No issues found\n").verdict(), Verdict::Pass);
+        assert_eq!(review("[PASS] No issues found").summary(), "No issues found");
+        let r = review("\n[ISSUES 2] 2 critical issues, 3 suggestions\n- a");
+        assert_eq!(r.verdict(), Verdict::Issues(2));
+        assert_eq!(r.summary(), "2 critical issues, 3 suggestions");
+        assert_eq!(review("Looks good").verdict(), Verdict::Unknown);
+        assert_eq!(review("Looks good").summary(), "Looks good");
+        let failed = Review { finished_at: 0, ok: false, output: "[PASS] x".into() };
+        assert_eq!(failed.verdict(), Verdict::Unknown);
     }
 }

@@ -1,11 +1,13 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use duolo_core::proctree::{Members, ProcessTree};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
 use crate::detect::{classify, AgentState};
@@ -14,6 +16,14 @@ use crate::detect::{classify, AgentState};
 const SCROLLBACK_LINES: usize = 5_000;
 /// 状态识别时查看屏幕底部的行数。
 const DETECT_TAIL_LINES: usize = 14;
+
+/// 请 Agent 自己退出后等多久（它要保存会话），还不退出就强制结束。
+const GRACE: Duration = Duration::from_millis(800);
+/// 强制结束后最长等多久。
+const STOP_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// 不支持括号粘贴的 Agent，启动多久之后才当作准备好了。
+const PLAIN_READY_AFTER: Duration = Duration::from_secs(1);
 
 /// 终端尺寸（字符格）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,9 +130,13 @@ pub struct Session {
     terminal: Arc<Mutex<vt100::Parser>>,
     tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
-    writer: Box<dyn Write + Send>,
+    /// 要写给 Agent 的内容，由写线程写（见 [`spawn_writer`]）。
+    writer: Sender<Vec<u8>>,
     master: Box<dyn MasterPty + Send>,
-    child: Box<dyn Child + Send + Sync>,
+    /// 停止后为 None。
+    child: Option<Box<dyn Child + Send + Sync>>,
+    tree: ProcessTree,
+    pid: Option<u32>,
     started: Instant,
     size: Size,
     exit: Option<Exit>,
@@ -131,7 +145,7 @@ pub struct Session {
 impl std::fmt::Debug for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Session")
-            .field("pid", &self.child.process_id())
+            .field("pid", &self.pid)
             .field("size", &self.size)
             .field("exit", &self.exit)
             .finish_non_exhaustive()
@@ -142,8 +156,21 @@ impl Session {
     pub fn spawn(spec: SessionSpec) -> Result<Self> {
         let pair = native_pty_system().openpty(spec.size.to_pty()).context("cannot open a pseudo terminal")?;
 
-        let mut cmd = CommandBuilder::new(&spec.program);
-        cmd.args(&spec.args);
+        let program = duolo_core::process::resolve(&spec.program);
+        let mut cmd = if duolo_core::process::is_batch_file(&program) {
+            // Windows 的批处理文件（npm 装的 claude.cmd）要交给 cmd.exe。portable-pty 会按普通程序的规则给参数加引号，
+            // cmd.exe 不认，所以把整条命令放进环境变量，让 cmd 自己展开（见 process::batch_command_line）。
+            let line = duolo_core::process::batch_command_line(program.as_os_str(), &spec.args)
+                .context("arguments for a batch file cannot contain line breaks")?;
+            let mut cmd = CommandBuilder::new("cmd.exe");
+            cmd.args(["/d", "/c", "%DUOLO_LAUNCH%"]);
+            cmd.env("DUOLO_LAUNCH", line);
+            cmd
+        } else {
+            let mut cmd = CommandBuilder::new(program);
+            cmd.args(&spec.args);
+            cmd
+        };
         cmd.cwd(&spec.cwd);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
@@ -159,12 +186,15 @@ impl Session {
             .map_err(|_| duolo_core::UserError::CommandNotFound { program: spec.program.clone() })?;
         // 子进程已持有从端，父进程这边关闭，进程退出时读端才能收到 EOF。
         drop(pair.slave);
+        let pid = child.process_id();
+        let tree = process_tree(child.as_ref());
 
         let terminal = Arc::new(Mutex::new(vt100::Parser::new(spec.size.rows, spec.size.cols, SCROLLBACK_LINES)));
         let activity = Arc::new(Activity { origin: Instant::now(), last_output_ms: AtomicU64::new(0) });
         let tap = Arc::new(Mutex::new(Tap::default()));
         let reader = pair.master.try_clone_reader().context("cannot read from the pseudo terminal")?;
         let writer = pair.master.take_writer().context("cannot write to the pseudo terminal")?;
+        let writer = spawn_writer(writer);
         spawn_reader(reader, Arc::clone(&terminal), Arc::clone(&tap), Arc::clone(&activity), spec.on_output);
 
         Ok(Self {
@@ -173,18 +203,18 @@ impl Session {
             activity,
             writer,
             master: pair.master,
-            child,
+            child: Some(child),
+            tree,
+            pid,
             started: Instant::now(),
             size: spec.size,
             exit: None,
         })
     }
 
-    /// 把字节原样写给 Agent，例如按键编码。
+    /// 把字节原样写给 Agent，例如按键编码。马上返回，Agent 暂时不读也不会卡住调用方。
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        self.writer.write_all(bytes)?;
-        self.writer.flush()?;
-        Ok(())
+        self.writer.send(bytes.to_vec()).context("the agent has exited")
     }
 
     /// 粘贴一段文字。Agent 开启了括号粘贴模式时会加上标记，避免换行被当成回车。
@@ -252,13 +282,13 @@ impl Session {
     }
 
     pub fn pid(&self) -> Option<u32> {
-        self.child.process_id()
+        self.pid
     }
 
     /// 检查进程是否已退出，退出后结果会被缓存。
     pub fn poll_exit(&mut self) -> Option<Exit> {
         if self.exit.is_none() {
-            if let Ok(Some(status)) = self.child.try_wait() {
+            if let Some(Ok(Some(status))) = self.child.as_mut().map(|c| c.try_wait()) {
                 self.exit = Some(Exit { code: status.exit_code(), success: status.success() });
             }
         }
@@ -274,9 +304,20 @@ impl Session {
         classify(&tail, self.activity.quiet_for())
     }
 
-    pub fn kill(&mut self) {
-        if self.poll_exit().is_none() {
-            let _ = self.child.kill();
+    /// 画面上有内容、而且已经可以接收粘贴了。Claude Code、Codex 准备好输入框时会打开括号粘贴模式；
+    /// 不支持这个模式的 Agent 只看画面是不是空的。
+    pub fn is_ready_for_input(&self) -> bool {
+        let (bracketed, blank) = self.with_screen(|s| (s.bracketed_paste(), s.contents().trim().is_empty()));
+        !blank && (bracketed || self.started.elapsed() >= PLAIN_READY_AFTER)
+    }
+
+    /// 结束 Agent 和它启动的所有进程，等它们真的消失。会等一会儿，不要拿着锁调用。
+    pub fn stop(&mut self) {
+        let Some(mut child) = self.child.take() else { return };
+        let members = self.tree.members();
+        stop_process(child.as_mut(), &self.tree, members, self.exit.is_some());
+        if let Ok(Some(status)) = child.try_wait() {
+            self.exit.get_or_insert(Exit { code: status.exit_code(), success: status.success() });
         }
     }
 
@@ -292,8 +333,65 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        self.kill();
+        // 没有先调用 stop：在后台结束，不让调用方等。自己退出的就不管了（它可能特意留下了开发服务器）。
+        if self.poll_exit().is_some() {
+            return;
+        }
+        let Some(mut child) = self.child.take() else { return };
+        let tree = std::mem::replace(&mut self.tree, ProcessTree::empty());
+        thread::spawn(move || stop_process(child.as_mut(), &tree, tree.members(), false));
     }
+}
+
+fn stop_process(child: &mut (dyn Child + Send + Sync), tree: &ProcessTree, members: Members, exited: bool) {
+    if !exited {
+        tree.hang_up();
+        wait_exit(child, GRACE);
+    }
+    tree.kill(Some(members), STOP_TIMEOUT);
+    if !exited && !wait_exit(child, Duration::ZERO) {
+        // 进程树没能结束它（Windows 上建不了作业对象）。
+        let _ = child.kill();
+        wait_exit(child, STOP_TIMEOUT);
+    }
+}
+
+/// 最多等 `timeout`，返回退出了没有。
+fn wait_exit(child: &mut (dyn Child + Send + Sync), timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            _ if Instant::now() >= deadline => return false,
+            _ => thread::sleep(Duration::from_millis(10)),
+        }
+    }
+}
+
+#[cfg(unix)]
+fn process_tree(child: &(dyn Child + Send + Sync)) -> ProcessTree {
+    child.process_id().map_or_else(ProcessTree::empty, ProcessTree::of_pid)
+}
+
+#[cfg(windows)]
+fn process_tree(child: &(dyn Child + Send + Sync)) -> ProcessTree {
+    child.as_raw_handle().map_or_else(ProcessTree::empty, ProcessTree::of_handle)
+}
+
+/// 写线程：Agent 不读输入时，往终端里写会一直阻塞（例如粘贴一大段文字）。写失败（Agent 退出了）时线程结束。
+fn spawn_writer(mut writer: Box<dyn Write + Send>) -> Sender<Vec<u8>> {
+    let (sender, receiver) = mpsc::channel::<Vec<u8>>();
+    thread::Builder::new()
+        .name("duolo-pty-writer".into())
+        .spawn(move || {
+            for bytes in receiver {
+                if writer.write_all(&bytes).and_then(|()| writer.flush()).is_err() {
+                    break;
+                }
+            }
+        })
+        .expect("cannot spawn writer thread");
+    sender
 }
 
 /// 让 `self.screen().xxx()` 可以直接调用可变的屏幕方法。
@@ -342,7 +440,7 @@ fn spawn_reader(
                 hook();
             }
         })
-        .expect("无法创建读线程");
+        .expect("cannot spawn reader thread");
 }
 
 /// 屏幕底部 `lines` 行非空文本。
@@ -378,7 +476,7 @@ mod tests {
             }
             thread::sleep(Duration::from_millis(20));
         }
-        panic!("等待超时");
+        panic!("timed out");
     }
 
     #[test]
@@ -402,7 +500,7 @@ mod tests {
         wait_until(|| String::from_utf8_lossy(&seen.lock().unwrap()).contains("two"));
         let text = String::from_utf8_lossy(&seen.lock().unwrap()).into_owned();
         assert!(text.find("one").unwrap() < text.find("two").unwrap(), "{text:?}");
-        s.kill();
+        s.stop();
     }
 
     #[test]
@@ -412,7 +510,48 @@ mod tests {
         wait_until(|| s.with_screen(|scr| scr.contents().contains("duolo")));
         s.resize(Size::new(20, 60)).unwrap();
         assert_eq!(s.with_screen(|scr| scr.size()), (20, 60));
-        s.kill();
-        wait_until(|| s.poll_exit().is_some());
+        s.stop();
+        assert!(s.poll_exit().is_some());
+    }
+
+    #[test]
+    fn writing_never_blocks() {
+        // 一直不读输入的 Agent：粘贴很长的文字也要马上返回。
+        let mut s = Session::spawn(spec("sleep", &["30"])).unwrap();
+        let started = Instant::now();
+        s.paste(&"x".repeat(4 * 1024 * 1024)).unwrap();
+        s.write(b"\r").unwrap();
+        assert!(started.elapsed() < Duration::from_secs(1));
+        s.stop();
+        assert!(s.poll_exit().is_some());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn stop_ends_background_processes() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("log");
+        // 后台进程忽略挂断信号，另开一个会话，一直写文件。
+        let script = format!(
+            "perl -e 'use POSIX; if (fork == 0) {{ POSIX::setsid(); $SIG{{HUP}} = q(IGNORE); \
+             while (1) {{ open F, q(>>), q({}); print F qq(x); close F; select(undef, undef, undef, 0.02) }} }}; sleep 60'; true",
+            log.display()
+        );
+        let mut s = Session::spawn(spec("sh", &["-c", &script])).unwrap();
+        wait_until(|| std::fs::metadata(&log).is_ok_and(|m| m.len() > 3));
+        s.stop();
+        let size = || std::fs::metadata(&log).unwrap().len();
+        let before = size();
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(size(), before, "后台进程也要结束");
+    }
+
+    #[test]
+    fn ready_only_after_something_is_drawn() {
+        let mut s = Session::spawn(spec("sh", &["-c", "sleep 0.4; printf '\\033[?2004hhello'; cat"])).unwrap();
+        assert!(!s.is_ready_for_input(), "画面还是空的");
+        wait_until(|| s.is_ready_for_input());
+        assert!(s.started().elapsed() >= Duration::from_millis(300));
+        s.stop();
     }
 }

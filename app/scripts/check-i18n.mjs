@@ -1,41 +1,84 @@
-// 检查各语言包：键和英文一致，且每条译文的占位符（{name}）与英文相同。
-// 键的完整性 TypeScript 也会检查；占位符只能靠这里。由 `pnpm build` 调用。
-import { readdirSync, readFileSync } from "node:fs";
+// 检查语言包（仓库根目录的 locales/*.json）。由 `pnpm build` 和 `pnpm check` 调用。
+//
+// 1. 每种语言的键和英文完全一致；
+// 2. 每条译文的占位符（{name}）和英文相同；
+// 3. 代码里用到的键都存在：Rust 的 t("…") / tf("…")（命令行、终端界面、菜单）。TypeScript 里的键由类型检查保证；
+// 4. TypeScript 里有占位符的文案调用时传了参数；
+// 5. 没有用不到的键：每个键都要在代码里出现（status.*、error.*、menu.*、macos.* 是拼出来的，不检查）。
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const dir = new URL("../src/i18n/locales/", import.meta.url).pathname;
-const entry = /^\s*"([\w.]+)":\s*\n?\s*("(?:[^"\\]|\\.)*")/gm;
-
-function load(file) {
-  const text = readFileSync(join(dir, file), "utf8");
-  const map = new Map();
-  for (const [, key, value] of text.matchAll(entry)) map.set(key, JSON.parse(value));
-  return map;
-}
+const repo = new URL("../../", import.meta.url).pathname;
+const dir = join(repo, "locales");
+const load = (file) => new Map(Object.entries(JSON.parse(readFileSync(join(dir, file), "utf8"))));
 const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");
 
-const base = load("en.ts");
+const base = load("en.json");
+const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 let problems = 0;
-for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "en.ts")) {
+const problem = (msg) => {
+  console.error(msg);
+  problems++;
+};
+
+for (const file of files.filter((f) => f !== "en.json")) {
   const msgs = load(file);
   for (const [key, value] of base) {
-    if (!msgs.has(key)) {
-      console.error(`${file}: missing ${key}`);
-      problems++;
-    } else if (placeholders(msgs.get(key)) !== placeholders(value)) {
-      console.error(`${file}: ${key} placeholders {${placeholders(msgs.get(key))}} ≠ en {${placeholders(value)}}`);
-      problems++;
-    }
+    if (!msgs.has(key)) problem(`${file}: missing ${key}`);
+    else if (placeholders(msgs.get(key)) !== placeholders(value))
+      problem(`${file}: ${key} placeholders {${placeholders(msgs.get(key))}} ≠ en {${placeholders(value)}}`);
+    else if (!msgs.get(key).trim()) problem(`${file}: ${key} is empty`);
   }
-  for (const key of msgs.keys()) {
-    if (!base.has(key)) {
-      console.error(`${file}: unknown key ${key}`);
-      problems++;
+  for (const key of msgs.keys()) if (!base.has(key)) problem(`${file}: unknown key ${key}`);
+}
+
+// Rust 代码里用到的键。
+function* rustFiles(path) {
+  for (const name of readdirSync(path)) {
+    const full = join(path, name);
+    if (statSync(full).isDirectory()) {
+      if (name !== "target" && name !== "gen") yield* rustFiles(full);
+    } else if (name.endsWith(".rs")) yield full;
+  }
+}
+let used = 0;
+let allSource = "";
+function* sourceFiles(path, ext) {
+  for (const name of readdirSync(path)) {
+    const full = join(path, name);
+    if (statSync(full).isDirectory()) {
+      if (!["target", "gen", "node_modules", "dist"].includes(name)) yield* sourceFiles(full, ext);
+    } else if (ext.test(name)) yield full;
+  }
+}
+for (const file of sourceFiles(join(repo, "app/src"), /\.tsx?$/)) allSource += readFileSync(file, "utf8");
+// 服务端（server/）发给用户的文字（验证码邮件）也用这份语言包。
+for (const file of sourceFiles(join(repo, "server/src"), /\.ts$/)) allSource += readFileSync(file, "utf8");
+for (const file of rustFiles(join(repo, "crates"))) {
+  const text = readFileSync(file, "utf8");
+  allSource += text;
+  for (const [, key] of text.matchAll(/\bt[f]?\(\s*"([a-zA-Z]+\.[\w.]+)"/g)) {
+    used++;
+    if (!base.has(key)) problem(`${file.slice(repo.length)}: unknown key ${key}`);
+  }
+}
+
+// TypeScript 里调用 t("key") 却没传参数，而文案里有占位符：显示出来会是 {name} 原样。
+for (const file of sourceFiles(join(repo, "app/src"), /\.tsx?$/)) {
+  const text = readFileSync(file, "utf8");
+  for (const [, key] of text.matchAll(/\bt\(\s*"([\w.]+)"\s*\)/g)) {
+    if (base.has(key) && placeholders(base.get(key))) {
+      problem(`${file.slice(repo.length)}: t("${key}") needs {${placeholders(base.get(key))}}`);
     }
   }
 }
+
+for (const key of base.keys()) {
+  if (!/^(status|error|menu|macos)\./.test(key) && !allSource.includes(`"${key}"`)) problem(`en.json: ${key} is not used anywhere`);
+}
+
 if (problems) {
   console.error(`i18n: ${problems} problem(s)`);
   process.exit(1);
 }
-console.log(`i18n: ${base.size} keys × ${readdirSync(dir).length} locales OK`);
+console.log(`i18n: ${base.size} keys × ${files.length} locales OK (${used} uses in Rust)`);

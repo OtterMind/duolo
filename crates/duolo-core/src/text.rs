@@ -7,9 +7,17 @@ const SLUG_MAX_CHARS: usize = 24;
 
 /// 从需求原文取第一行作为任务标题，过长时截断。
 pub fn derive_title(prompt: &str) -> String {
-    let line = prompt.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("新任务");
+    let line = prompt.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("New task");
     truncate_chars(line, TITLE_MAX_CHARS)
 }
+
+/// 没有需求的任务的默认标题。早期版本写进数据的是中文"新任务"，也算默认标题。
+pub fn is_default_title(title: &str) -> bool {
+    title == derive_title("") || title == LEGACY_DEFAULT_TITLE
+}
+
+/// 早期版本的默认标题，只用来识别旧数据。
+const LEGACY_DEFAULT_TITLE: &str = "\u{65b0}\u{4efb}\u{52a1}";
 
 /// 按字符数截断，截断时加省略号。
 pub fn truncate_chars(text: &str, max: usize) -> String {
@@ -42,6 +50,29 @@ pub fn slug(text: &str) -> String {
     }
 }
 
+/// 把模型给的分支名整理成合法、简短的 git 分支名：取第一行，去掉引号和反引号，
+/// 只留小写字母、数字、`/`、`-`、`.`；整理后没有字母数字时返回 None。
+pub fn clean_branch_name(raw: &str) -> Option<String> {
+    let line = raw.lines().map(str::trim).find(|l| !l.is_empty())?;
+    let line = line.trim_matches(|c| matches!(c, '`' | '"' | '\'' | '*'));
+    let mut out = String::new();
+    for ch in line.chars() {
+        let ch = ch.to_ascii_lowercase();
+        if ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.') {
+            out.push(ch);
+        } else if !out.ends_with('-') && !out.ends_with('/') {
+            out.push('-');
+        }
+        if out.len() >= BRANCH_MAX_CHARS {
+            break;
+        }
+    }
+    let out = out.trim_matches(|c| matches!(c, '-' | '/' | '.')).replace("..", ".");
+    out.chars().any(|c| c.is_ascii_alphanumeric()).then_some(out)
+}
+
+const BRANCH_MAX_CHARS: usize = 50;
+
 pub fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
@@ -63,7 +94,10 @@ mod tests {
     #[test]
     fn titles() {
         assert_eq!(derive_title("\n  接入 Stripe 订阅\n细节"), "接入 Stripe 订阅");
-        assert_eq!(derive_title(""), "新任务");
+        assert_eq!(derive_title(""), "New task");
+        assert!(is_default_title("New task"));
+        assert!(is_default_title(LEGACY_DEFAULT_TITLE));
+        assert!(!is_default_title("Export CSV"));
         assert_eq!(truncate_chars("一二三四五", 3), "一二…");
     }
 
@@ -72,6 +106,15 @@ mod tests {
         assert_eq!(slug("Add Stripe subscriptions!"), "add-stripe-subscriptions");
         assert_eq!(slug("接入 Stripe 订阅"), "stripe");
         assert_eq!(slug("订单导出"), "task");
+    }
+
+    #[test]
+    fn branch_names_from_model_output() {
+        assert_eq!(clean_branch_name("`feat/order-csv-export`\n").as_deref(), Some("feat/order-csv-export"));
+        assert_eq!(clean_branch_name("Feat/Order CSV Export").as_deref(), Some("feat/order-csv-export"));
+        assert_eq!(clean_branch_name("\"fix/login..loop\"").as_deref(), Some("fix/login.loop"));
+        assert_eq!(clean_branch_name("  ").as_deref(), None);
+        assert_eq!(clean_branch_name("订单").as_deref(), None);
     }
 
     #[test]

@@ -1,15 +1,20 @@
 //! 运行外部命令并读取 stdout，支持超时。
 
 use std::io::Read;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
+use duolo_core::process::Prompted;
+use duolo_core::proctree::ProcessTree;
 use duolo_core::UserError;
 
-/// 等待已启动的子进程结束并返回 stdout；超过 `timeout` 时结束它并报错。
-pub(crate) fn wait_output(mut child: Child, timeout: Duration) -> Result<String> {
+/// 超时后结束命令，最长等它消失多久。
+const KILL_WAIT: Duration = Duration::from_secs(2);
+
+/// 等待已启动的子进程结束并返回 stdout；超过 `timeout` 时结束它（和它的子进程）并报错。
+fn wait_output(mut child: Child, tree: &ProcessTree, timeout: Duration) -> Result<String> {
     let mut stdout = child.stdout.take().context("child process has no stdout")?;
     let reader = thread::spawn(move || {
         let mut buf = String::new();
@@ -23,6 +28,7 @@ pub(crate) fn wait_output(mut child: Child, timeout: Duration) -> Result<String>
             break status;
         }
         if Instant::now() >= deadline {
+            tree.kill(None, KILL_WAIT);
             let _ = child.kill();
             let _ = child.wait();
             bail!("command did not finish within {} seconds", timeout.as_secs());
@@ -37,16 +43,12 @@ pub(crate) fn wait_output(mut child: Child, timeout: Duration) -> Result<String>
     Ok(out.trim().to_string())
 }
 
-/// 运行 `argv`（可额外追加一个参数），等待输出。
-pub(crate) fn run(argv: &[String], extra_arg: Option<&str>, timeout: Duration) -> Result<String> {
-    let (program, args) = argv.split_first().context("empty command")?;
-    let mut cmd = Command::new(program);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
-    if let Some(arg) = extra_arg {
-        cmd.arg(arg);
-    }
-    let child = cmd.spawn().map_err(|_| UserError::CommandNotFound { program: program.clone() })?;
-    wait_output(child, timeout)
+/// 运行 `argv`（可额外带一段提示词），等待输出。
+pub(crate) fn run(argv: &[String], prompt: Option<&str>, timeout: Duration) -> Result<String> {
+    let mut command = Prompted::new(argv, prompt).context("empty command")?;
+    command.cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+    let (child, tree) = command.spawn().map_err(|_| UserError::CommandNotFound { program: argv[0].clone() })?;
+    wait_output(child, &tree, timeout)
 }
 
 #[cfg(test)]

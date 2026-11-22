@@ -36,8 +36,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(30);
 
 /// 打开工作台，直到用户退出。`cwd` 是 git 仓库时会自动加入项目。
 pub fn run(mut engine: Engine, cwd: &Path) -> Result<()> {
-    // 终端界面目前只有中文，审阅结论也用中文。
-    engine.set_reply_language("Simplified Chinese");
+    // 审阅结论和界面用同一种语言。
+    engine.set_reply_language(duolo_core::i18n::language_name(duolo_core::i18n::locale()));
     let dirty = Arc::new(AtomicBool::new(true));
     {
         let dirty = Arc::clone(&dirty);

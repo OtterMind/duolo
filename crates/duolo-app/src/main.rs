@@ -7,12 +7,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod locale;
+mod fnkey;
+mod platform;
+#[cfg(unix)]
 mod shell_env;
 mod view;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
@@ -21,9 +24,15 @@ use duolo_core::{Paths, UserError};
 use duolo_engine::Engine;
 use duolo_voice::Recorder;
 use serde::Serialize;
+#[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
+/// 界面多久没回应退出请求，就当作它坏了。
+const QUIT_REPLY: Duration = Duration::from_secs(3);
+/// 强制退出前最多等 Agent 停多久。
+const FORCE_QUIT_AFTER: Duration = Duration::from_secs(8);
 /// 状态推送的间隔。
 const SNAPSHOT_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -35,6 +44,10 @@ pub struct AppState {
     open_request: Mutex<Option<String>>,
     /// 界面当前使用的语言代码，内置语音识别按它选择识别语言。
     locale: Mutex<String>,
+    /// 界面收到了这次退出请求。
+    quit_seen: AtomicBool,
+    /// 正在用系统弹窗问要不要退出。
+    asking_quit: AtomicBool,
 }
 
 impl AppState {
@@ -55,7 +68,7 @@ pub struct Error {
 pub type Res<T> = Result<T, Error>;
 
 impl Error {
-    fn internal(message: String) -> Self {
+    pub(crate) fn internal(message: String) -> Self {
         Self { code: "internal", params: BTreeMap::new(), message }
     }
 }
@@ -88,55 +101,86 @@ impl From<std::io::Error> for Error {
 }
 
 fn main() {
-    shell_env::load_login_path();
+    #[cfg(unix)]
+    shell_env::load();
     let engine = match Paths::discover().and_then(Engine::open) {
         Ok(engine) => engine,
-        Err(err) => {
-            eprintln!("duolo: {err:#}");
-            std::process::exit(1);
-        }
+        Err(err) => return cannot_start(&err),
     };
     let state = AppState {
         engine: Mutex::new(engine),
         recorder: Mutex::new(None),
-        open_request: Mutex::new(path_arg(std::env::args().skip(1), None)),
+        open_request: Mutex::new(path_arg(std::env::args().skip(1), None).inspect(|p| eprintln!("open request: {p}"))),
         locale: Mutex::new("en".into()),
+        quit_seen: AtomicBool::new(false),
+        asking_quit: AtomicBool::new(false),
     };
 
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // 必须最先注册：第二次启动（例如 `duolo <目录>`）时把参数交给已运行的实例。
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(path) = path_arg(args.into_iter().skip(1), Some(PathBuf::from(cwd))) {
+                eprintln!("open request from another instance: {path}");
                 let _ = app.emit("open-project", path);
             }
             show_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)
+        .manage(state);
+    // 原生菜单只在 macOS 上用（菜单在屏幕顶部）。Windows / Linux 上菜单会出现在窗口里，
+    // 而且它的 Ctrl 快捷键会抢走终端的按键，所以那边的快捷键由界面自己处理（见 app/src/lib/platform.ts）。
+    #[cfg(target_os = "macos")]
+    let builder = builder
         // 界面加载后会按用户的语言调用 apply_locale 重建菜单。
         .menu(|app| build_menu(app, "en"))
-        .on_menu_event(|app, event| {
-            if let Some(name) = event.id().as_ref().strip_prefix("duolo:") {
+        .on_menu_event(|app, event| match event.id().as_ref().strip_prefix("duolo:") {
+            Some("quit") => request_quit(app),
+            Some(name) => {
                 let _ = app.emit("menu", name);
             }
-        })
+            None => {}
+        });
+    let app = builder
         .setup(|app| {
+            if let Ok(dir) = app.path().resource_dir() {
+                let _ = platform::RESOURCES.set(dir);
+            }
             spawn_snapshot_loop(app.handle().clone());
+            fnkey::start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 关闭窗口只是隐藏，Agent 继续在后台运行；从 Dock 可以再打开。⌘Q 才真正退出。
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                if cfg!(target_os = "macos") {
+                    // macOS：关闭窗口只是隐藏，Agent 继续在后台运行，从 Dock 可以再打开；⌘Q 才真正退出。
+                    let _ = window.hide();
+                } else {
+                    // Windows / Linux 没有 Dock，隐藏了就找不回来：按"退出"处理，界面会先确认。
+                    request_quit(window.app_handle());
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
             commands::snapshot,
+            commands::startup_notices,
             commands::environment,
             commands::take_open_request,
             commands::add_project,
             commands::create_task,
+            commands::agent_defaults,
+            commands::task_events,
+            commands::execute,
+            commands::rename_task,
+            commands::branches,
+            commands::discover_repos,
+            commands::clone_project,
+            commands::projects_home,
+            commands::create_project_folder,
+            commands::project_repos,
+            commands::add_repo,
+            commands::suggest_branch,
+            commands::rename_branch,
             commands::name_task,
             commands::close_task,
             commands::start_agent,
@@ -149,19 +193,26 @@ fn main() {
             commands::resize,
             commands::diff_stat,
             commands::reveal,
+            commands::open_terminal,
             commands::voice_start,
             commands::voice_cancel,
-            commands::voice_partial,
+            commands::voice_status,
+            commands::get_voice_settings,
+            commands::set_voice_settings,
+            commands::fn_key_status,
+            commands::request_fn_key_permission,
+            commands::open_system_settings,
             commands::voice_finish,
             commands::log,
             commands::quit,
+            commands::quit_seen,
             commands::get_language,
             commands::system_languages,
             commands::set_language,
             commands::apply_locale,
         ])
-        .build(tauri::generate_context!())
-        .expect("无法启动 Duolo");
+        .build(context())
+        .expect("cannot start Duolo");
 
     app.run(|app, event| match event {
         #[cfg(target_os = "macos")]
@@ -169,6 +220,33 @@ fn main() {
         RunEvent::Exit => app.state::<AppState>().engine().shutdown(),
         _ => {}
     });
+}
+
+/// `generate_context!` 会把界面文件和 Info.plist 嵌进程序，只能展开一次。
+fn context() -> tauri::Context {
+    tauri::generate_context!()
+}
+
+/// 打不开数据目录（没有权限、磁盘只读……）：弹窗说明原因再退出，不然双击图标会毫无反应。
+fn cannot_start(err: &anyhow::Error) {
+    eprintln!("duolo: {err:#}");
+    duolo_core::i18n::apply_preference(duolo_core::settings::LANGUAGE_AUTO);
+    let message = UserError::CannotStart { detail: format!("{err:#}") }.localized();
+    let mut context = context();
+    // 不开主窗口：没有数据，界面什么也显示不了。
+    context.config_mut().app.windows.clear();
+    let shown = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            let dialog = app.dialog().message(message).title("Duolo").kind(MessageDialogKind::Error);
+            dialog.show(move |_| handle.exit(1));
+            Ok(())
+        })
+        .run(context);
+    if shown.is_err() {
+        std::process::exit(1);
+    }
 }
 
 /// 命令行参数里的目录（相对路径按 `cwd` 解析）。
@@ -180,6 +258,42 @@ fn path_arg(mut args: impl Iterator<Item = String>, cwd: Option<PathBuf>) -> Opt
         _ => path,
     };
     Some(path.display().to_string())
+}
+
+/// 请界面处理退出（有 Agent 在运行时先确认）。界面没有回应（崩溃、卡死）时改用系统弹窗问，不然窗口会关不掉。
+fn request_quit(app: &AppHandle) {
+    let app = app.clone();
+    app.state::<AppState>().quit_seen.store(false, Ordering::Relaxed);
+    let _ = app.emit("menu", "quit");
+    thread::spawn(move || {
+        thread::sleep(QUIT_REPLY);
+        let state = app.state::<AppState>();
+        if state.quit_seen.load(Ordering::Relaxed) || state.asking_quit.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let buttons =
+            MessageDialogButtons::OkCancelCustom(duolo_core::t("confirm.quitAction"), duolo_core::t("common.cancel"));
+        let dialog = app.dialog().message(duolo_core::t("quit.notResponding")).title("Duolo").buttons(buttons);
+        let handle = app.clone();
+        dialog.kind(MessageDialogKind::Warning).show(move |yes| {
+            handle.state::<AppState>().asking_quit.store(false, Ordering::Relaxed);
+            if yes {
+                force_quit(handle);
+            }
+        });
+    });
+}
+
+/// 尽量先停下 Agent 再退出；后端也卡住时不再等。
+fn force_quit(app: AppHandle) {
+    thread::spawn(|| {
+        thread::sleep(FORCE_QUIT_AFTER);
+        std::process::exit(1);
+    });
+    thread::spawn(move || {
+        app.state::<AppState>().engine().shutdown();
+        app.exit(0);
+    });
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -196,12 +310,19 @@ fn spawn_snapshot_loop(app: AppHandle) {
         let mut last = None;
         loop {
             let state = app.state::<AppState>();
-            let snapshot = {
+            let (snapshot, events) = {
                 let mut engine = state.engine();
+                // `duolo new`、终端界面可能刚改过任务。
+                engine.sync();
                 engine.retry_failed_resumes();
                 engine.poll_reviews();
-                view::snapshot(&mut engine)
+                let events = engine.poll_events();
+                (view::snapshot(&mut engine), events)
             };
+            // 任务的事件流（对话、工具调用、状态、等你选……），以后手机端也用它。
+            if !events.is_empty() {
+                let _ = app.emit("task-events", &events);
+            }
             if last.as_ref() != Some(&snapshot) {
                 let _ = app.emit("snapshot", &snapshot);
                 last = Some(snapshot);
@@ -211,9 +332,11 @@ fn spawn_snapshot_loop(app: AppHandle) {
     });
 }
 
-/// 应用菜单，文案按 `locale` 显示。自定义项的 id 以 `duolo:` 开头，点击后转发给界面处理，快捷键也在这里注册。
+/// 应用菜单（只在 macOS 上用），文案按 `locale` 显示。
+/// 自定义项的 id 以 `duolo:` 开头，点击后转发给界面处理，快捷键也在这里注册。
+#[cfg(target_os = "macos")]
 fn build_menu(app: &AppHandle, locale: &str) -> tauri::Result<Menu<tauri::Wry>> {
-    let text = locale::menu_text(locale);
+    let t = |key: &str| duolo_core::i18n::translate(locale, key);
     let item =
         |id: &str, label: &str, accel: &str| MenuItem::with_id(app, format!("duolo:{id}"), label, true, Some(accel));
     let app_menu = Submenu::with_items(
@@ -221,54 +344,54 @@ fn build_menu(app: &AppHandle, locale: &str) -> tauri::Result<Menu<tauri::Wry>> 
         "Duolo",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(text.about), None)?,
+            &PredefinedMenuItem::about(app, Some(t("menu.about").as_str()), None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, Some(text.hide))?,
-            &PredefinedMenuItem::hide_others(app, Some(text.hide_others))?,
+            &PredefinedMenuItem::hide(app, Some(t("menu.hide").as_str()))?,
+            &PredefinedMenuItem::hide_others(app, Some(t("menu.hideOthers").as_str()))?,
             &PredefinedMenuItem::separator(app)?,
-            &item("quit", text.quit, "CmdOrCtrl+Q")?,
+            &item("quit", &t("menu.quit"), "CmdOrCtrl+Q")?,
         ],
     )?;
     let task_menu = Submenu::with_items(
         app,
-        text.task,
+        t("menu.task"),
         true,
         &[
-            &item("new-task", text.new_task, "CmdOrCtrl+N")?,
-            &item("add-project", text.add_project, "CmdOrCtrl+O")?,
+            &item("new-task", &t("menu.newTask"), "CmdOrCtrl+N")?,
+            &item("add-project", &t("menu.addProject"), "CmdOrCtrl+O")?,
             &PredefinedMenuItem::separator(app)?,
-            &item("review", text.review, "CmdOrCtrl+Shift+R")?,
-            &item("prev-task", text.prev_task, "CmdOrCtrl+Alt+Up")?,
-            &item("next-task", text.next_task, "CmdOrCtrl+Alt+Down")?,
+            &item("review", &t("menu.review"), "CmdOrCtrl+Shift+R")?,
+            &item("prev-task", &t("menu.prevTask"), "CmdOrCtrl+Alt+Up")?,
+            &item("next-task", &t("menu.nextTask"), "CmdOrCtrl+Alt+Down")?,
             &PredefinedMenuItem::separator(app)?,
-            &item("reveal", text.reveal, "CmdOrCtrl+Shift+F")?,
-            &item("close-task", text.close_task, "CmdOrCtrl+Shift+W")?,
+            &item("reveal", &t("menu.reveal"), "CmdOrCtrl+Shift+F")?,
+            &item("close-task", &t("menu.closeTask"), "CmdOrCtrl+Shift+W")?,
         ],
     )?;
     let edit_menu = Submenu::with_items(
         app,
-        text.edit,
+        t("menu.edit"),
         true,
         &[
-            &PredefinedMenuItem::undo(app, Some(text.undo))?,
-            &PredefinedMenuItem::redo(app, Some(text.redo))?,
+            &PredefinedMenuItem::undo(app, Some(t("menu.undo").as_str()))?,
+            &PredefinedMenuItem::redo(app, Some(t("menu.redo").as_str()))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::cut(app, Some(text.cut))?,
-            &PredefinedMenuItem::copy(app, Some(text.copy))?,
-            &PredefinedMenuItem::paste(app, Some(text.paste))?,
-            &PredefinedMenuItem::select_all(app, Some(text.select_all))?,
+            &PredefinedMenuItem::cut(app, Some(t("menu.cut").as_str()))?,
+            &PredefinedMenuItem::copy(app, Some(t("menu.copy").as_str()))?,
+            &PredefinedMenuItem::paste(app, Some(t("menu.paste").as_str()))?,
+            &PredefinedMenuItem::select_all(app, Some(t("menu.selectAll").as_str()))?,
             &PredefinedMenuItem::separator(app)?,
-            &item("voice", text.voice, "CmdOrCtrl+Shift+Space")?,
+            &item("voice", &t("menu.voice"), "CmdOrCtrl+Shift+Space")?,
         ],
     )?;
     let window_menu = Submenu::with_items(
         app,
-        text.window,
+        t("menu.window"),
         true,
         &[
-            &PredefinedMenuItem::minimize(app, Some(text.minimize))?,
-            &PredefinedMenuItem::fullscreen(app, Some(text.fullscreen))?,
-            &PredefinedMenuItem::close_window(app, Some(text.close_window))?,
+            &PredefinedMenuItem::minimize(app, Some(t("menu.minimize").as_str()))?,
+            &PredefinedMenuItem::fullscreen(app, Some(t("menu.fullscreen").as_str()))?,
+            &PredefinedMenuItem::close_window(app, Some(t("menu.closeWindow").as_str()))?,
         ],
     )?;
     Menu::with_items(app, &[&app_menu, &task_menu, &edit_menu, &window_menu])
@@ -276,9 +399,11 @@ fn build_menu(app: &AppHandle, locale: &str) -> tauri::Result<Menu<tauri::Wry>> 
 
 /// 切换界面语言：重建菜单，审阅结论也改用这种语言。
 pub fn apply_locale(app: &AppHandle, locale: &str) -> tauri::Result<()> {
+    duolo_core::i18n::set_locale(locale);
+    #[cfg(target_os = "macos")]
     app.set_menu(build_menu(app, locale)?)?;
     let state = app.state::<AppState>();
-    state.engine().set_reply_language(locale::language_name(locale));
+    state.engine().set_reply_language(duolo_core::i18n::language_name(locale));
     *state.locale.lock().unwrap_or_else(|p| p.into_inner()) = locale.to_string();
     Ok(())
 }

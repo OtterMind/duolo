@@ -51,17 +51,17 @@ mod tests {
     #[test]
     fn prompt_contains_context_and_raw() {
         let ctx = OrganizeContext { project: Some("shop".into()), task: None };
-        let p = organize_prompt("嗯 导出 CSV", &ctx);
+        let p = organize_prompt("um export CSV", &ctx);
         assert!(p.contains("Project: shop"));
-        assert!(p.ends_with("嗯 导出 CSV"));
+        assert!(p.ends_with("um export CSV"));
     }
 
     #[test]
     fn uses_organizer_output() {
         let cfg = VoiceConfig {
-            organizer: vec!["sh".into(), "-c".into(), "echo '\"导出 CSV\"'".into(), "sh".into()],
+            organizer: vec!["sh".into(), "-c".into(), "echo '\"Export CSV\"'".into(), "sh".into()],
             ..VoiceConfig::default()
         };
-        assert_eq!(organize(&cfg, "嗯 导出 CSV", &OrganizeContext::default()).unwrap(), "导出 CSV");
+        assert_eq!(organize(&cfg, "um export CSV", &OrganizeContext::default()).unwrap(), "Export CSV");
     }
 }

@@ -6,7 +6,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { App } from "./App";
 import { I18nProvider } from "./i18n";
+import { isMac } from "./lib/platform";
 import "./styles.css";
+
+// 样式里按系统区分的地方（标题栏留白等）用 .mac / .pc。
+document.documentElement.classList.add(isMac ? "mac" : "pc");
 
 // 界面报错转给后端写日志。
 const report = (message: string) => void invoke("log", { message }).catch(() => {});

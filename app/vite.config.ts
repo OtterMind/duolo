@@ -5,7 +5,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  // 语言包在仓库根目录的 locales/，开发服务器要允许读取上一级目录。
+  server: { port: 1420, strictPort: true, fs: { allow: [".."] } },
   // 本地应用，不需要按体积拆包。
   build: { target: "safari15", outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 2000 },
 });

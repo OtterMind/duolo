@@ -1,8 +1,8 @@
 //! 运行环境检查：git、Agent CLI 和语音是否可用。首页和 `duolo doctor` 共用。
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-use duolo_core::{AgentKind, Config};
+use duolo_core::{t, tf, AgentKind, Config};
 
 /// 检查的是什么。界面按它选择对应语言的文案。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +16,8 @@ pub enum CheckKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub kind: CheckKind,
+    /// Agent 的种类（`claude`、`codex`），其他检查为空。
+    pub agent: String,
     /// 显示名，例如 `git`、`Claude`。
     pub name: String,
     pub ok: bool,
@@ -23,51 +25,64 @@ pub struct Check {
     pub command: String,
     /// 版本号，取不到时为空。
     pub version: String,
-    /// 中文说明（终端界面和 `duolo doctor` 使用）：版本号或问题。
+    /// 当前语言的说明（终端界面和 `duolo doctor` 使用）：版本号或问题。
     pub detail: String,
+    /// 没安装时的安装命令（Agent 才有）。
+    pub install: String,
 }
 
-/// 依次检查 git、写代码和审阅用的 Agent、语音。会调用各个命令的 `--version`，耗时约一秒，
-/// 界面里请在后台线程调用。
+/// 依次检查 git、配置里的每一种 Agent（默认的写代码和审阅 Agent 排在前面）、语音。
+/// 会调用各个命令的 `--version`，耗时约一秒，界面里请在后台线程调用。
 pub fn check_environment(config: &Config) -> Vec<Check> {
     let mut checks = vec![command_check(CheckKind::Git, "git", "git")];
-    let mut kinds: Vec<&AgentKind> = vec![&config.writer];
-    if config.reviewer != config.writer {
-        kinds.push(&config.reviewer);
-    }
+    let mut kinds: Vec<AgentKind> = vec![config.writer.clone(), config.reviewer.clone()];
+    kinds.extend(config.agents.keys().map(|k| AgentKind(k.clone())));
+    let mut seen = std::collections::HashSet::new();
+    kinds.retain(|k| seen.insert(k.clone()));
     for kind in kinds {
-        checks.push(match config.profile(kind) {
-            Some(profile) => command_check(CheckKind::Agent, &kind.display_name(), &profile.command),
+        checks.push(match config.profile(&kind) {
+            Some(profile) => Check {
+                agent: kind.0.clone(),
+                install: profile.install.clone(),
+                ..command_check(CheckKind::Agent, &kind.display_name(), &profile.command)
+            },
             None => Check {
                 kind: CheckKind::Agent,
+                agent: kind.0.clone(),
                 name: kind.display_name(),
                 ok: false,
                 command: kind.0.clone(),
                 version: String::new(),
-                detail: "配置里没有".into(),
+                detail: t("env.notInConfig"),
+                install: String::new(),
             },
         });
     }
     checks.push(Check {
         kind: CheckKind::Voice,
-        name: "语音".into(),
+        agent: String::new(),
+        install: String::new(),
+        name: t("env.voice"),
         ok: config.voice.is_configured(),
         command: config.voice.command.first().cloned().unwrap_or_default(),
         version: String::new(),
-        detail: if config.voice.is_configured() { "已配置".into() } else { "未配置".into() },
+        detail: if config.voice.is_configured() { t("env.configured") } else { t("env.notConfigured") },
     });
     checks
 }
 
 fn command_check(kind: CheckKind, name: &str, command: &str) -> Check {
-    let output = Command::new(command).arg("--version").stdin(Stdio::null()).stderr(Stdio::null()).output();
+    let output =
+        duolo_core::process::command(command).arg("--version").stdin(Stdio::null()).stderr(Stdio::null()).output();
     let base = Check {
         kind,
+        agent: String::new(),
+        install: String::new(),
         name: name.into(),
         ok: false,
         command: command.into(),
         version: String::new(),
-        detail: format!("没有找到 {command}"),
+        detail: tf("env.missing", &[("command", &command)]),
     };
     match output {
         Ok(out) if out.status.success() => {

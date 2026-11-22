@@ -1,6 +1,6 @@
 [package]
 name = "duolo-cli"
-description = "Duolo：本地优先的 AI 开发搭档"
+description = "Duolo: a local-first AI coding workbench"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,8 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
+which.workspace = true
+unicode-width.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 duolo-core.workspace = true

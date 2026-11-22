@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- 合并进 Duolo.app 的 Info.plist。声明支持的语言，macOS 才会按系统语言运行应用
-     （界面里的 navigator.languages、系统菜单项都依赖它）。与 app/src/i18n 的语言列表保持一致。 -->
+     （系统菜单项依赖它）。与 locales/*.json 的语言列表保持一致。
+     下面两条授权说明是英文默认值；各语言的版本由 build.rs 从 locales/*.json 生成到 <lang>.lproj/InfoPlist.strings。 -->
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key>

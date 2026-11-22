@@ -1,6 +1,6 @@
 //! 从屏幕内容和输出节奏判断 Agent 的状态。
 //!
-//! 这是第一版的启发式规则：确认请求按关键字识别，"运行中"按最近是否有输出识别。
+//! 这是第一版的启发式规则：确认请求按关键字识别，"running"按最近是否有输出识别。
 //! 以后接入 hooks 和会话日志后，这里会作为兜底规则保留。
 
 use std::time::Duration;
@@ -12,8 +12,14 @@ const QUIET_THRESHOLD: Duration = Duration::from_millis(1_500);
 
 /// 出现这些文字说明 Agent 在等用户确认（统一按小写比较）。
 /// Claude Code 和 Codex 的确认界面都会给出 "1. Yes" 开头的选项列表。
-const APPROVAL_MARKERS: &[&str] =
-    &["1. yes", "do you want to proceed", "allow command", "would you like to run the following command"];
+/// 不带编号的选择界面（例如 Claude Code 问是否信任目录）底部会写按 Enter 确认。
+const APPROVAL_MARKERS: &[&str] = &[
+    "1. yes",
+    "do you want to proceed",
+    "allow command",
+    "would you like to run the following command",
+    "enter to confirm",
+];
 
 /// 出现这些文字说明 Agent 正在工作，即使暂时没有新输出。
 const BUSY_MARKERS: &[&str] = &["esc to interrupt", "esc to cancel"];
@@ -27,18 +33,6 @@ pub enum AgentState {
     /// 空闲，等待下一条指令。
     Idle,
     Exited(Exit),
-}
-
-impl AgentState {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Running => "运行中",
-            Self::NeedsInput => "等你确认",
-            Self::Idle => "等待输入",
-            Self::Exited(exit) if exit.success => "已结束",
-            Self::Exited(_) => "异常退出",
-        }
-    }
 }
 
 /// `tail` 是屏幕底部的文字，`quiet_for` 是距离最近一次输出的时长。
@@ -65,6 +59,13 @@ mod tests {
         let tail = "Allow command?\n  pnpm add csv-stringify\n› 1. Yes";
         assert_eq!(classify(tail, BUSY), AgentState::NeedsInput);
         let tail = "Do you want to proceed?\n❯ 1. Yes\n  2. No";
+        assert_eq!(classify(tail, QUIET), AgentState::NeedsInput);
+    }
+
+    #[test]
+    fn trust_dialog_needs_input() {
+        // Claude Code 2.1 第一次打开一个目录时的画面：选项没有编号，底部还有 "Esc to cancel"。
+        let tail = " Security guide\n ❯ No, exit\n   Yes, I trust this folder\n Enter to confirm · Esc to cancel";
         assert_eq!(classify(tail, QUIET), AgentState::NeedsInput);
     }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ellipsis, GitBranch, ScanSearch, X } from "lucide-react";
+import { Ellipsis, GitBranch, X } from "lucide-react";
 
 import { useT } from "../i18n";
 
@@ -10,19 +10,22 @@ import type { Voice } from "../lib/voice";
 import { StatusIcon } from "./StatusIcon";
 import { AgentIcon } from "./AgentIcon";
 import { Markdown } from "./Markdown";
-import { Mic } from "./Mic";
+import { VoiceBar } from "./VoiceBar";
+import { isMac, kbd } from "../lib/platform";
 
 interface Props {
   task: Task;
   voice: Voice;
   reviewOpen: boolean;
+  /** 这个任务的审阅 Agent 本机装了没有。 */
+  reviewerInstalled: boolean;
   onReviewOpenChange(open: boolean): void;
   onClose(): void;
   onError(err: unknown): void;
 }
 
 /** 任务页：顶部一行任务信息和审阅入口，下面就是写代码的 Agent 自己的命令行。 */
-export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose, onError }: Props) {
+export function TaskView({ task, voice, reviewOpen, reviewerInstalled, onReviewOpenChange, onClose, onError }: Props) {
   const t = useT();
   const agent = writerOf(task) ?? task.agents[0];
   const ref = { task: task.id, agent: agent.id };
@@ -36,7 +39,7 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
   };
   const sendReview = () => {
     if (!task.review) return;
-    const text = `${t("review.handoff")}\n\n${task.review.output}`;
+    const text = `${t("review.handoff", { agent: task.reviewer.name })}\n\n${task.review.output}`;
     api.sendText(ref, text, true).catch(onError);
     onReviewOpenChange(false);
     focusTerminal();
@@ -46,12 +49,13 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
     <div className="task">
       <header className="topbar" data-tauri-drag-region>
         <AgentIcon kind={agent.kind} title={agent.name} />
-        <span className={`topbar-title ellipsis ${task.prompt ? "" : "untitled"}`} title={task.prompt} data-tauri-drag-region>
-          {task.prompt ? task.title : t("task.untitled")}
+        <span className={`topbar-title ellipsis ${task.untitled ? "untitled" : ""}`} title={task.prompt} data-tauri-drag-region>
+          {task.untitled ? t("task.untitled") : task.title}
         </span>
         <StatusIcon status={agent.status} />
         <span className="topbar-meta" data-tauri-drag-region title={t("task.basedOn", { base: task.base })}>
           <GitBranch size={12} strokeWidth={1.75} />
+          {task.repo && `${task.repo} · `}
           {task.branch}
           {diff && diff.files > 0 && (
             <>
@@ -61,7 +65,13 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
           )}
         </span>
         <span className="grow" data-tauri-drag-region />
-        <ReviewButton task={task} open={reviewOpen} onStart={startReview} onToggle={() => onReviewOpenChange(!reviewOpen)} />
+        <ReviewButton
+          task={task}
+          open={reviewOpen}
+          installed={reviewerInstalled}
+          onStart={startReview}
+          onToggle={() => onReviewOpenChange(!reviewOpen)}
+        />
         <div className="more" onMouseDown={(e) => e.stopPropagation()}>
           <button className="icon-btn" title={t("common.more")} onClick={() => setMenu((m) => !m)}>
             <Ellipsis size={15} strokeWidth={1.75} />
@@ -70,8 +80,8 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
             <MoreMenu
               onDismiss={() => setMenu(false)}
               items={[
-                { label: t("task.reveal"), kbd: "⌘⇧F", run: () => void api.reveal(task.worktree) },
-                { label: t("task.openTerminal"), run: () => void api.reveal(task.worktree, "Terminal") },
+                { label: t(isMac ? "task.reveal" : "task.openFolder"), kbd: "⌘⇧F", run: () => void api.reveal(task.worktree) },
+                { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },
                 { label: t("task.copyPath"), run: () => void navigator.clipboard.writeText(task.worktree) },
                 { sep: true },
                 { label: t("task.close"), kbd: "⌘⇧W", run: onClose, danger: true },
@@ -84,7 +94,7 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
       <div className="task-body">
         <div className="task-main">
           <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
-          <Mic agent={ref} voice={voice} />
+          <VoiceBar agent={ref} voice={voice} />
         </div>
         {reviewOpen && (
           <ReviewPanel
@@ -104,12 +114,24 @@ export function TaskView({ task, voice, reviewOpen, onReviewOpenChange, onClose,
 }
 
 /** 顶部的审阅入口：平时是一个小按钮，审阅中显示用时，有结论时显示摘要。 */
-function ReviewButton({ task, open, onStart, onToggle }: { task: Task; open: boolean; onStart(): void; onToggle(): void }) {
+function ReviewButton({
+  task,
+  open,
+  installed,
+  onStart,
+  onToggle,
+}: {
+  task: Task;
+  open: boolean;
+  installed: boolean;
+  onStart(): void;
+  onToggle(): void;
+}) {
   const t = useT();
   const now = useNow(task.reviewingSince != null);
   if (task.reviewingSince != null) {
     return (
-      <button className={`review-btn is-running ${open ? "is-open" : ""}`} onClick={onToggle} title={t("review.runningTitle")}>
+      <button className={`review-btn is-running ${open ? "is-open" : ""}`} onClick={onToggle} title={t("review.runningTitle", { agent: task.reviewer.name })}>
         <span className="status status-running" />
         {t("review.running", { time: elapsed(task.reviewingSince, now) })}
       </button>
@@ -128,8 +150,17 @@ function ReviewButton({ task, open, onStart, onToggle }: { task: Task; open: boo
     );
   }
   return (
-    <button className="review-btn" onClick={onStart} title={t("review.buttonTitle")}>
-      <ScanSearch size={14} strokeWidth={1.75} />
+    <button
+      className="review-btn"
+      onClick={onStart}
+      disabled={!installed}
+      title={
+        installed
+          ? t("review.buttonTitle", { agent: task.reviewer.name })
+          : t("review.unavailable", { agent: task.reviewer.name })
+      }
+    >
+      <AgentIcon kind={task.reviewer.kind} size={13} />
       {t("review.button")}
     </button>
   );
@@ -149,13 +180,14 @@ function ReviewPanel({
   onClose(): void;
 }) {
   const t = useT();
+  const writerName = writerOf(task)?.name ?? "";
   const running = task.reviewingSince != null;
   const now = useNow(running);
   return (
     <aside className="review-panel">
       <div className="review-head">
         <span className="grow">
-          {t("review.panelTitle")}
+          {t("review.panelTitle", { agent: task.reviewer.name })}
           <span className="meta">
             {running
               ? ` · ${t("review.inProgress", { time: elapsed(task.reviewingSince!, now) })}`
@@ -170,7 +202,12 @@ function ReviewPanel({
       </div>
       <div className="review-body">
         {running && !task.review && (
-          <p className="review-note">{t("review.runningNote", { branch: task.branch, base: task.base })}</p>
+          <p className="review-note">{t("review.runningNote", {
+              branch: task.branch,
+              base: task.base,
+              reviewer: task.reviewer.name,
+              writer: writerName,
+            })}</p>
         )}
         {task.review && (
           <div className={`review-text ${task.review.ok ? "" : "is-failed"}`}>
@@ -188,7 +225,7 @@ function ReviewPanel({
           <>
             {task.review?.ok && (
               <button className="btn primary" onClick={onSend}>
-                {t("review.sendToClaude")}
+                {t("review.sendToWriter", { agent: writerName })}
               </button>
             )}
             <button className="btn" onClick={onRerun}>
@@ -298,7 +335,7 @@ function MoreMenu({ items, onDismiss }: { items: MenuItem[]; onDismiss(): void }
             }}
           >
             <span className="grow">{item.label}</span>
-            {item.kbd && <kbd>{item.kbd}</kbd>}
+            {item.kbd && <kbd>{kbd(item.kbd)}</kbd>}
           </button>
         ),
       )}

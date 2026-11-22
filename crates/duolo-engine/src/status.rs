@@ -23,14 +23,27 @@ impl From<AgentState> for AgentStatus {
 }
 
 impl AgentStatus {
-    pub fn label(self) -> &'static str {
+    /// 当前语言的状态名。
+    pub fn label(self) -> String {
+        duolo_core::t(match self {
+            Self::NotStarted => "status.not_started",
+            Self::Running => "status.running",
+            Self::NeedsInput => "status.needs_input",
+            Self::Idle => "status.idle",
+            Self::Exited(exit) if exit.success => "status.exited",
+            Self::Exited(_) => "status.failed",
+        })
+    }
+
+    /// 状态码，和桌面界面、手机端的状态一一对应。
+    pub fn code(self) -> &'static str {
         match self {
-            Self::NotStarted => "未启动",
-            Self::Running => "运行中",
-            Self::NeedsInput => "等你确认",
-            Self::Idle => "等待输入",
-            Self::Exited(exit) if exit.success => "已结束",
-            Self::Exited(_) => "异常退出",
+            Self::NotStarted => "not_started",
+            Self::Running => "running",
+            Self::NeedsInput => "needs_input",
+            Self::Idle => "idle",
+            Self::Exited(exit) if exit.success => "exited",
+            Self::Exited(_) => "failed",
         }
     }
 

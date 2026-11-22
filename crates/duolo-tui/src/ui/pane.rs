@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use duolo_core::{t, tf};
 use duolo_engine::AgentStatus;
 use duolo_pty::Size;
 use ratatui::buffer::Buffer;
@@ -18,7 +19,6 @@ use super::theme;
 use crate::app::{App, Focus, Mode};
 use crate::voice::Phase;
 
-const VOICE_HINT: &str = "⌃Space 说话";
 /// 启动后多久内画面为空时显示"正在启动"。
 const STARTING_GRACE: Duration = Duration::from_secs(8);
 
@@ -43,20 +43,19 @@ fn render_home(frame: &mut Frame, app: &mut App, area: Rect) {
     let config = app.engine.config();
     let mut lines = if adding {
         vec![
-            Line::styled("添加一个项目", theme::strong()),
+            Line::styled(t("tui.addProjectTitle"), theme::strong()),
             Line::default(),
-            Line::styled("Duolo 在 git 仓库里工作。在下面输入仓库路径，", theme::dim()),
-            Line::styled("或者直接在仓库目录里运行 duolo。", theme::dim()),
+            Line::styled(t("tui.addProjectBody1"), theme::dim()),
+            Line::styled(t("tui.addProjectBody2"), theme::dim()),
         ]
     } else {
         vec![
-            Line::styled("今天让 Agent 做点什么？", theme::strong()),
+            Line::styled(t("tui.homeTitle"), theme::strong()),
             Line::default(),
             Line::styled(
-                format!(
-                    "Duolo 会新开一个 worktree，让 {} 写代码，需要时让 {} 审阅。",
-                    config.writer.display_name(),
-                    config.reviewer.display_name()
+                tf(
+                    "tui.homeBody",
+                    &[("writer", &config.writer.display_name()), ("reviewer", &config.reviewer.display_name())],
                 ),
                 theme::dim(),
             ),
@@ -73,7 +72,7 @@ fn render_home(frame: &mut Frame, app: &mut App, area: Rect) {
 
 fn env_line(app: &App) -> Line<'static> {
     let Some(checks) = app.env_checks() else {
-        return Line::styled("正在检查环境…", theme::faint());
+        return Line::styled(t("tui.checkingEnv"), theme::faint());
     };
     let mut spans = Vec::new();
     for check in checks {
@@ -102,14 +101,12 @@ fn render_home_input(frame: &mut Frame, app: &App, area: Rect) {
 
     // 第一行：输入框是做什么的、在哪个项目；录音状态在最右。
     let mut spans = if app.home.adding_project {
-        vec![Span::styled("添加项目", theme::muted())]
+        vec![Span::styled(t("tui.addProjectLabel"), theme::muted())]
     } else {
-        let mut s = vec![
-            Span::styled("新任务 · ", theme::muted()),
-            Span::styled(app.home_project_name().unwrap_or("").to_string(), theme::muted()),
-        ];
+        let project = app.home_project_name().unwrap_or("").to_string();
+        let mut s = vec![Span::styled(tf("tui.newTaskIn", &[("project", &project)]), theme::muted())];
         if app.engine.state().projects.len() > 1 {
-            s.push(Span::styled("  ⇥ 切换", theme::faint()));
+            s.push(Span::styled(format!("  ⇥ {}", t("tui.hint.switch")), theme::faint()));
         }
         s
     };
@@ -122,11 +119,7 @@ fn render_home_input(frame: &mut Frame, app: &App, area: Rect) {
     // 第二行：输入内容或占位提示。
     let text = app.home.input.text();
     let line = if text.is_empty() {
-        let placeholder = if app.home.adding_project {
-            "仓库路径，例如 ~/code/shop"
-        } else {
-            "描述你想做的事，例如：给订单列表加分页和筛选"
-        };
+        let placeholder = if app.home.adding_project { t("tui.repoPlaceholder") } else { t("tui.promptPlaceholder") };
         Line::from(vec![Span::styled("› ", theme::muted()), Span::styled(placeholder, theme::faint())])
     } else {
         Line::from(vec![Span::styled("› ", theme::muted()), Span::raw(text.to_string())])
@@ -140,12 +133,13 @@ fn render_home_input(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     // 第四行：按键提示。
-    let mut items: Vec<(&str, &str)> =
-        vec![("↵", if app.home.adding_project { "添加" } else { "创建并启动" }), ("⌃Space", "说话")];
+    let enter = if app.home.adding_project { t("tui.hint.add") } else { t("tui.hint.createStart") };
+    let (speak, back, sidebar) = (t("tui.hint.speak"), t("tui.hint.back"), t("tui.hint.sidebar"));
+    let mut items: Vec<(&str, &str)> = vec![("↵", &enter), ("⌃Space", &speak)];
     if app.has_previous_task() || (app.home.adding_project && !app.engine.state().projects.is_empty()) {
-        items.push(("Esc", "返回"));
+        items.push(("Esc", &back));
     }
-    items.push(("⌃]", "侧边栏"));
+    items.push(("⌃]", &sidebar));
     frame.render_widget(Paragraph::new(hint_line(&items)), hints);
 }
 
@@ -153,11 +147,16 @@ fn voice_status(app: &App) -> Option<Span<'static>> {
     match app.voice.phase() {
         Phase::Recording { .. } => {
             let secs = app.voice.recording_elapsed().unwrap_or(Duration::ZERO).as_secs();
-            Some(Span::raw(format!("● 正在听 {}:{:02}", secs / 60, secs % 60)))
+            Some(Span::raw(listening(secs)))
         }
-        Phase::Processing { .. } => Some(Span::styled("整理中…", theme::dim())),
+        Phase::Processing { .. } => Some(Span::styled(t("voice.processing"), theme::dim())),
         _ => None,
     }
+}
+
+/// "● 正在听 0:07"。
+fn listening(secs: u64) -> String {
+    tf("tui.listening", &[("time", &format!("{}:{:02}", secs / 60, secs % 60))])
 }
 
 // ---- 任务 ----
@@ -184,7 +183,7 @@ fn render_header(frame: &mut Frame, app: &mut App, area: Rect) {
         let active = Some(key) == selected;
         let label_style = if active { Style::new().add_modifier(Modifier::BOLD) } else { theme::dim() };
         spans.push(Span::styled(icon, icon_style));
-        spans.push(Span::styled(format!(" {} · {}", agent.kind.display_name(), agent.role.label()), label_style));
+        spans.push(Span::styled(format!(" {}", agent.role.label(&agent.kind.display_name())), label_style));
         spans.push(Span::raw("    "));
     }
 
@@ -208,10 +207,10 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
 
     if !status.is_live() {
         let line = match status {
-            AgentStatus::Exited(exit) if exit.success => format!("{name} 已结束 · 按 ↵ 恢复会话"),
-            AgentStatus::Exited(exit) => format!("{name} 异常退出（退出码 {}）· 按 ↵ 重新启动", exit.code),
-            _ if agent.launched => format!("按 ↵ 恢复 {name} 上次的会话"),
-            _ => format!("按 ↵ 启动 {name}"),
+            AgentStatus::Exited(exit) if exit.success => tf("tui.agentEnded", &[("agent", &name)]),
+            AgentStatus::Exited(exit) => tf("tui.agentCrashed", &[("agent", &name), ("code", &exit.code)]),
+            _ if agent.launched => tf("tui.resumeHint", &[("agent", &name)]),
+            _ => tf("tui.startHint", &[("agent", &name)]),
         };
         centered(frame, area, Line::styled(line, theme::muted()));
         return;
@@ -232,7 +231,7 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
         ((row, col), screen.hide_cursor(), tail_empty, screen.contents().trim().is_empty())
     });
     if blank && just_started {
-        centered(frame, area, Line::styled(format!("正在启动 {name}…"), theme::dim()));
+        centered(frame, area, Line::styled(tf("task.starting", &[("agent", &name)]), theme::dim()));
         return;
     }
     let scrolled = session.scrollback() > 0;
@@ -241,7 +240,7 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
             frame.buffer_mut(),
             area,
             area.y,
-            " 正在查看历史输出 · 任意键回到底部 ",
+            &format!(" {} ", t("tui.scrolledBack")),
             Style::new().bg(theme::CURSOR_BG),
         );
         return;
@@ -258,30 +257,26 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
                 if focused {
                     frame.set_cursor_position(end);
                 }
-                draw_right(frame.buffer_mut(), area, at_cursor.y, "↵ 发送  Esc 还原", theme::dim());
+                let hint = format!("↵ {}  Esc {}", t("tui.hint.send"), t("tui.hint.discard"));
+                draw_right(frame.buffer_mut(), area, at_cursor.y, &hint, theme::dim());
             }
         }
         Phase::Recording { prefix, .. } => {
             let end = draw_wrapped(frame.buffer_mut(), area, at_cursor, prefix, Style::new().bg(theme::PREEDIT_BG));
             let secs = app.voice.recording_elapsed().unwrap_or(Duration::ZERO).as_secs();
-            draw_right(
-                frame.buffer_mut(),
-                area,
-                end.y,
-                &format!("● 正在听 {}:{:02}", secs / 60, secs % 60),
-                Style::new(),
-            );
+            draw_right(frame.buffer_mut(), area, end.y, &listening(secs), Style::new());
         }
         Phase::Processing { prefix, .. } => {
             let end = draw_wrapped(frame.buffer_mut(), area, at_cursor, prefix, Style::new().bg(theme::PREEDIT_BG));
-            draw_right(frame.buffer_mut(), area, end.y, "整理中…", theme::dim());
+            draw_right(frame.buffer_mut(), area, end.y, &t("voice.processing"), theme::dim());
         }
         Phase::Idle => {
             if focused && !cursor_hidden {
                 frame.set_cursor_position(at_cursor);
             }
             if focused && status == AgentStatus::Idle && row_tail_empty {
-                draw_right(frame.buffer_mut(), area, at_cursor.y, VOICE_HINT, theme::faint());
+                let hint = format!("⌃Space {}", t("tui.hint.speak"));
+                draw_right(frame.buffer_mut(), area, at_cursor.y, &hint, theme::faint());
             }
         }
     }
@@ -295,13 +290,13 @@ fn render_bar(frame: &mut Frame, app: &mut App, area: Rect) {
         Mode::ConfirmClose(id) => {
             let title = app.engine.state().task(id).map(|t| t.title.clone()).unwrap_or_default();
             Line::from(vec![
-                Span::styled(format!("关闭「{title}」？会结束它的 Agent 并删除 worktree，分支保留。"), theme::need()),
-                Span::styled("  y 确认  其他键取消", theme::muted()),
+                Span::styled(tf("tui.confirmClose", &[("title", &title)]), theme::need()),
+                Span::styled(format!("  y {}  {}", t("tui.hint.confirm"), t("tui.hint.otherCancels")), theme::muted()),
             ])
         }
         Mode::ConfirmQuit => Line::from(vec![
-            Span::styled("还有 Agent 在运行，退出会结束它们（之后可以恢复会话）。", theme::need()),
-            Span::styled("  y 退出  其他键取消", theme::muted()),
+            Span::styled(t("tui.confirmQuit"), theme::need()),
+            Span::styled(format!("  y {}  {}", t("tui.hint.quit"), t("tui.hint.otherCancels")), theme::muted()),
         ]),
         _ => match app.flash() {
             Some(flash) => {
@@ -310,9 +305,10 @@ fn render_bar(frame: &mut Frame, app: &mut App, area: Rect) {
             None if app.is_home() => Line::default(),
             None => {
                 let status = app.selected_key().map(|k| app.engine.agent_status(k));
-                let mut items = vec![("⌃]", "侧边栏")];
+                let (sidebar, needs_you) = (t("tui.hint.sidebar"), t("tui.needsYou"));
+                let mut items = vec![("⌃]", sidebar.as_str())];
                 if status == Some(AgentStatus::NeedsInput) {
-                    items.insert(0, ("●", "Agent 在等你确认，直接在上面选择"));
+                    items.insert(0, ("●", needs_you.as_str()));
                 }
                 hint_line(&items)
             }

@@ -8,6 +8,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 
 import { agentKey, api, type AgentRef } from "./api";
+import { isMac } from "./platform";
 
 const THEME: ITheme = {
   // 背景透明，由外层元素提供底色，这样输入块可以垫在文字下面。
@@ -53,6 +54,8 @@ interface Entry {
   opened: boolean;
   /** 已订阅的进程编号。Agent 重新启动后编号会变，要重新订阅。 */
   attachedSession: number | null;
+  /** 输入块位置变化时通知（麦克风和录音条跟着它）。 */
+  blockListeners: Set<() => void>;
 }
 
 const pool = new Map<string, Entry>();
@@ -65,15 +68,35 @@ export function setInputListener(listener: typeof inputListener) {
 
 /** 应用自己处理的按键，不交给 Agent。 */
 function isAppShortcut(e: KeyboardEvent) {
-  if (e.metaKey) return true; // ⌘ 组合键都是应用菜单的
+  // macOS：⌘ 组合键都是应用菜单的。Windows / Linux：Ctrl+Shift+字母是应用的（见 lib/platform.ts），
+  // Ctrl+字母留给 Agent。
+  if (isMac ? e.metaKey : e.ctrlKey && e.shiftKey && /^Key[A-Z]$/.test(e.code)) return true;
   if (e.ctrlKey && e.key === "Tab") return true;
   return false;
+}
+
+/**
+ * Windows / Linux 上的复制粘贴，和 Windows Terminal 一样：有选中文字时 Ctrl+C 复制，否则照常发给 Agent（中断）；
+ * Ctrl+V 粘贴。返回 true 表示已经处理，不再交给终端。
+ */
+function pcClipboard(term: Terminal, e: KeyboardEvent) {
+  if (isMac || e.type !== "keydown" || !e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (e.code === "KeyC" && (e.shiftKey || term.hasSelection())) {
+    if (term.hasSelection()) void navigator.clipboard.writeText(term.getSelection());
+    term.clearSelection();
+    e.preventDefault();
+    return true;
+  }
+  // 交给浏览器的默认行为：触发 paste 事件，由 xterm 当作粘贴发给 Agent。
+  return e.code === "KeyV";
 }
 
 function create(ref: AgentRef): Entry {
   const term = new Terminal({
     // 和 Warp 一样默认用 Hack；中文等字形回退到系统字体。
-    fontFamily: 'Hack, "SF Mono", Menlo, "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", monospace',
+    // Windows 回退到 Cascadia Mono / Consolas，Linux 回退到 DejaVu Sans Mono。
+    fontFamily:
+      'Hack, "SF Mono", Menlo, "Cascadia Mono", Consolas, "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Noto Sans CJK SC", monospace',
     fontSize: 13,
     lineHeight: 1.3,
     cursorStyle: "bar",
@@ -96,7 +119,7 @@ function create(ref: AgentRef): Entry {
   el.appendChild(block);
 
   term.attachCustomKeyEventHandler((e) => {
-    if (isAppShortcut(e)) return false;
+    if (pcClipboard(term, e) || isAppShortcut(e)) return false;
     // ⇧↵ 换行：发送 Esc+CR，Claude Code 和 Codex 都把它当作输入框里的换行。
     if (e.type === "keydown" && e.key === "Enter" && e.shiftKey) {
       void api.write(ref, "\x1b\r");
@@ -109,7 +132,7 @@ function create(ref: AgentRef): Entry {
     void api.write(ref, data).catch(() => {});
   });
 
-  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null };
+  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set() };
   let frame = 0;
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(() => ((frame = 0), paintInputBlock(entry)));
@@ -202,6 +225,7 @@ function paintInputBlock(entry: Entry) {
 
   // 输入块的位置每次都更新（滚动或改变窗口大小时行的位置会变）。
   const screen = entry.el.querySelector<HTMLElement>(".xterm-screen");
+  const before = `${block.style.display}:${block.style.top}:${block.style.height}`;
   if (found && screen && term.rows > 0) {
     const rowHeight = screen.getBoundingClientRect().height / term.rows;
     const first = top + 1 - buf.viewportY;
@@ -211,6 +235,9 @@ function paintInputBlock(entry: Entry) {
     block.style.height = `${rows * rowHeight + INPUT_PAD_Y * 2}px`;
   } else {
     block.style.display = "none";
+  }
+  if (`${block.style.display}:${block.style.top}:${block.style.height}` !== before) {
+    entry.blockListeners.forEach((listener) => listener());
   }
 
   const key = found ? `${top}:${bottom}:${term.cols}` : "";
@@ -233,27 +260,18 @@ function paintInputBlock(entry: Entry) {
   }
 }
 
-/** 光标所在行相对终端元素的位置，用来把麦克风放在 Agent 的输入行上。 */
-export function cursorRow(ref: AgentRef): { top: number; height: number } | null {
+/** 输入块相对终端元素的位置；Agent 没有显示输入框时为 null。 */
+export function inputBlock(ref: AgentRef): { top: number; height: number } | null {
   const entry = pool.get(agentKey(ref));
-  const screen = entry?.el.querySelector(".xterm-screen");
-  if (!entry || !screen || entry.term.rows === 0) return null;
-  const height = screen.getBoundingClientRect().height / entry.term.rows;
-  return { top: entry.term.buffer.active.cursorY * height, height };
+  if (!entry || entry.block.style.display !== "block") return null;
+  return { top: entry.block.offsetTop, height: entry.block.offsetHeight };
 }
 
-/** 光标移动或画面变化时回调（每帧最多一次），返回取消函数。 */
-export function onCursorChange(ref: AgentRef, callback: () => void): () => void {
-  const term = terminalFor(ref).term;
-  let frame = 0;
-  const schedule = () => {
-    if (!frame) frame = requestAnimationFrame(() => ((frame = 0), callback()));
-  };
-  const subs = [term.onCursorMove(schedule), term.onResize(schedule), term.onWriteParsed(schedule)];
-  return () => {
-    cancelAnimationFrame(frame);
-    subs.forEach((s) => s.dispose());
-  };
+/** 输入块出现、消失或移动时回调，返回取消函数。 */
+export function onInputBlockChange(ref: AgentRef, callback: () => void): () => void {
+  const listeners = terminalFor(ref).blockListeners;
+  listeners.add(callback);
+  return () => listeners.delete(callback);
 }
 
 /** 任务关闭后释放它的终端。 */

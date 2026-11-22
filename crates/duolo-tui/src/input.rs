@@ -172,7 +172,7 @@ fn agent(app: &mut App, key: KeyEvent) {
     let app_cursor = session.with_screen(|s| s.application_cursor());
     if let Some(bytes) = keys::encode(&key, app_cursor) {
         if let Err(err) = session.write(&bytes) {
-            app.error(format!("{err:#}"));
+            app.error(duolo_core::error::describe(&err));
         }
     }
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "app"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "externalBin": [
+      "binaries/duolo-dictate"
+    ],
+    "resources": {
+      "gen/lproj/en.lproj/InfoPlist.strings": "en.lproj/InfoPlist.strings",
+      "gen/lproj/zh-Hans.lproj/InfoPlist.strings": "zh-Hans.lproj/InfoPlist.strings",
+      "gen/lproj/zh-Hant.lproj/InfoPlist.strings": "zh-Hant.lproj/InfoPlist.strings",
+      "gen/lproj/ja.lproj/InfoPlist.strings": "ja.lproj/InfoPlist.strings",
+      "gen/lproj/ko.lproj/InfoPlist.strings": "ko.lproj/InfoPlist.strings",
+      "gen/lproj/es.lproj/InfoPlist.strings": "es.lproj/InfoPlist.strings",
+      "gen/lproj/fr.lproj/InfoPlist.strings": "fr.lproj/InfoPlist.strings",
+      "gen/lproj/de.lproj/InfoPlist.strings": "de.lproj/InfoPlist.strings",
+      "gen/lproj/pt-BR.lproj/InfoPlist.strings": "pt-BR.lproj/InfoPlist.strings",
+      "gen/lproj/ru.lproj/InfoPlist.strings": "ru.lproj/InfoPlist.strings",
+      "gen/lproj/it.lproj/InfoPlist.strings": "it.lproj/InfoPlist.strings",
+      "gen/lproj/tr.lproj/InfoPlist.strings": "tr.lproj/InfoPlist.strings",
+      "gen/lproj/vi.lproj/InfoPlist.strings": "vi.lproj/InfoPlist.strings",
+      "gen/lproj/id.lproj/InfoPlist.strings": "id.lproj/InfoPlist.strings"
+    }
+  }
+}

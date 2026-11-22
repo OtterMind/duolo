@@ -4,7 +4,7 @@
 //! 所以界面能用任何语言显示；`Display` 给出英文，用于日志和命令行。
 //! 其他内部错误直接用 `anyhow`，界面显示通用文案并附上英文详情。
 //!
-//! 新增变体时：在这里加上 `code`，并在 `app/src/i18n/locales/*.ts` 的 `error.*` 里补上每种语言的文案。
+//! 新增变体时：在这里加上 `code`，并在 `locales/*.json` 的 `error.*` 里补上每种语言的文案。
 
 use std::collections::BTreeMap;
 
@@ -33,10 +33,38 @@ pub enum UserError {
     AgentNotRunning,
     #[error("task not found")]
     TaskNotFound,
+    #[error("the task is being closed")]
+    TaskClosing,
     #[error("project not found")]
     ProjectNotFound,
     #[error("no agent named \"{kind}\" in config")]
     UnknownAgent { kind: String },
+    #[error("{path} already exists")]
+    PathExists { path: String },
+    #[error("\"{url}\" is not a git URL")]
+    InvalidCloneUrl { url: String },
+    #[error("{path} is not a folder")]
+    NotAFolder { path: String },
+    #[error("this project has no git repository yet")]
+    NoRepository,
+    #[error("\"{name}\" is not a valid branch name")]
+    InvalidBranch { name: String },
+    #[error("branch \"{name}\" already exists")]
+    BranchExists { name: String },
+    #[error("{path} is a separate git repository inside the task and cannot be saved automatically")]
+    NestedRepo { path: String },
+    #[error("files in {path} are still being changed, so the task was kept")]
+    StillChanging { path: String },
+    #[error("could not save uncommitted changes, so the task was kept: {detail}")]
+    SaveChangesFailed { detail: String },
+    #[error("state.json was damaged and has been restored from its backup; the damaged file is at {path}")]
+    StateRestored { path: String },
+    #[error("state.json was damaged and has no usable backup; the damaged file is at {path}")]
+    StateReset { path: String },
+    #[error("{path} is not valid, so defaults are used: {detail}")]
+    ConfigInvalid { path: String, detail: String },
+    #[error("Duolo cannot start: {detail}")]
+    CannotStart { detail: String },
 }
 
 impl UserError {
@@ -54,9 +82,31 @@ impl UserError {
             Self::ReviewNotConfigured => "reviewNotConfigured",
             Self::AgentNotRunning => "agentNotRunning",
             Self::TaskNotFound => "taskNotFound",
+            Self::TaskClosing => "taskClosing",
             Self::ProjectNotFound => "projectNotFound",
             Self::UnknownAgent { .. } => "unknownAgent",
+            Self::PathExists { .. } => "pathExists",
+            Self::InvalidCloneUrl { .. } => "invalidCloneUrl",
+            Self::NotAFolder { .. } => "notAFolder",
+            Self::NoRepository => "noRepository",
+            Self::InvalidBranch { .. } => "invalidBranch",
+            Self::BranchExists { .. } => "branchExists",
+            Self::NestedRepo { .. } => "nestedRepo",
+            Self::StillChanging { .. } => "stillChanging",
+            Self::SaveChangesFailed { .. } => "saveChangesFailed",
+            Self::StateRestored { .. } => "stateRestored",
+            Self::StateReset { .. } => "stateReset",
+            Self::ConfigInvalid { .. } => "configInvalid",
+            Self::CannotStart { .. } => "cannotStart",
         }
+    }
+
+    /// 当前语言的说明（命令行和终端界面使用；桌面界面用错误码自己翻译）。
+    pub fn localized(&self) -> String {
+        let params = self.params();
+        let vars: Vec<(&str, &dyn std::fmt::Display)> =
+            params.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+        crate::i18n::tf(&format!("error.{}", self.code()), &vars)
     }
 
     /// 填进文案的参数。
@@ -76,15 +126,90 @@ impl UserError {
             Self::UnknownAgent { kind } => {
                 params.insert("kind", kind.clone());
             }
+            Self::PathExists { path }
+            | Self::NestedRepo { path }
+            | Self::StillChanging { path }
+            | Self::StateRestored { path }
+            | Self::StateReset { path } => {
+                params.insert("path", path.clone());
+            }
+            Self::SaveChangesFailed { detail } | Self::CannotStart { detail } => {
+                params.insert("detail", detail.clone());
+            }
+            Self::ConfigInvalid { path, detail } => {
+                params.insert("path", path.clone());
+                params.insert("detail", detail.clone());
+            }
+            Self::InvalidCloneUrl { url } => {
+                params.insert("url", url.clone());
+            }
+            Self::NotAFolder { path } => {
+                params.insert("path", path.clone());
+            }
+            Self::InvalidBranch { name } | Self::BranchExists { name } => {
+                params.insert("name", name.clone());
+            }
             _ => {}
         }
         params
     }
 }
 
+/// 给用户看的错误说明（命令行和终端界面使用）：用户能处理的错误按当前语言显示，
+/// 其他内部错误套上通用文案，附英文详情。
+pub fn describe(err: &anyhow::Error) -> String {
+    match err.chain().find_map(|e| e.downcast_ref::<UserError>()) {
+        Some(user) => user.localized(),
+        None => crate::i18n::tf("error.internal", &[("message", &format!("{err:#}"))]),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_code_has_text_in_every_language() {
+        let all = [
+            UserError::NotGitRepo { path: "/x".into() },
+            UserError::GitMissing,
+            UserError::GitFailed { command: "c".into(), detail: "d".into() },
+            UserError::CommandNotFound { program: "p".into() },
+            UserError::VoiceNotConfigured,
+            UserError::VoicePermission,
+            UserError::NothingRecognized,
+            UserError::NotRecording,
+            UserError::ReviewNotConfigured,
+            UserError::AgentNotRunning,
+            UserError::TaskNotFound,
+            UserError::TaskClosing,
+            UserError::ProjectNotFound,
+            UserError::UnknownAgent { kind: "k".into() },
+            UserError::PathExists { path: "/x".into() },
+            UserError::InvalidCloneUrl { url: "u".into() },
+            UserError::NotAFolder { path: "/x".into() },
+            UserError::NoRepository,
+            UserError::InvalidBranch { name: "n".into() },
+            UserError::BranchExists { name: "n".into() },
+            UserError::NestedRepo { path: "/x".into() },
+            UserError::StillChanging { path: "/x".into() },
+            UserError::SaveChangesFailed { detail: "d".into() },
+            UserError::StateRestored { path: "/x".into() },
+            UserError::StateReset { path: "/x".into() },
+            UserError::ConfigInvalid { path: "/x".into(), detail: "d".into() },
+            UserError::CannotStart { detail: "d".into() },
+        ];
+        for err in all {
+            let key = format!("error.{}", err.code());
+            for locale in crate::i18n::locales() {
+                let text = crate::i18n::translate(locale, &key);
+                assert_ne!(text, key, "{locale} has no text for {key}");
+                for name in err.params().keys() {
+                    assert!(text.contains(&format!("{{{name}}}")), "{locale} {key} lacks {{{name}}}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn code_and_params() {

@@ -4,54 +4,136 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{Paths, ProjectId};
+use duolo_core::{i18n, t, tf, Paths, ProjectId, Settings};
 use duolo_engine::{check_environment, Engine};
 
 #[derive(Debug, Parser)]
 #[command(
     name = "duolo",
     version,
-    about = "本地优先的 AI 开发搭档：并行运行 Claude Code 和 Codex，一个写、一个审",
-    args_conflicts_with_subcommands = true
+    args_conflicts_with_subcommands = true,
+    disable_help_flag = true,
+    disable_version_flag = true,
+    disable_help_subcommand = true
 )]
 struct Cli {
     #[command(subcommand)]
     command: Option<Cmd>,
-    /// 打开 Duolo；目录是 git 仓库时自动加入项目（默认当前目录）
     path: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
-    /// 在终端里打开工作台（适合 SSH 远程使用）
-    Tui { path: Option<PathBuf> },
-    /// 添加项目（git 仓库）
-    Add { path: PathBuf },
-    /// 新建任务；下次打开工作台时自动启动 Agent
+    Tui {
+        path: Option<PathBuf>,
+    },
+    Add {
+        path: PathBuf,
+    },
     New {
-        /// 需求描述
         #[arg(required = true)]
         prompt: Vec<String>,
-        /// 项目 id，默认是当前目录所在的仓库
         #[arg(short, long)]
         project: Option<String>,
     },
-    /// 列出所有任务
     Ls,
-    /// 检查运行环境
     Doctor,
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    // 命令行和终端界面跟随用户在 Duolo 里选的语言，没选过时跟随系统语言。
+    if let Ok(paths) = Paths::discover() {
+        i18n::apply_preference(&Settings::load(&paths.settings_file()).unwrap_or_default().language);
+    }
+    let parsed = localized_command().try_get_matches().and_then(|m| Cli::from_arg_matches(&m));
+    let cli = match parsed {
+        Ok(cli) => cli,
+        Err(err) => exit_with(err),
+    };
+    match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("duolo: {err:#}");
+            eprintln!("duolo: {}", duolo_core::error::describe(&err));
             ExitCode::FAILURE
         }
     }
+}
+
+/// 命令行参数有误：clap 自己的报错只有英文，这里换成当前语言。帮助和版本照常输出。
+fn exit_with(err: clap::Error) -> ! {
+    use clap::error::{ContextKind, ContextValue, ErrorKind};
+    if matches!(err.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
+        err.exit();
+    }
+    let context = |kind| match err.get(kind) {
+        Some(ContextValue::String(s)) => s.clone(),
+        Some(ContextValue::Strings(list)) => list.join(", "),
+        _ => String::new(),
+    };
+    let message = match err.kind() {
+        ErrorKind::MissingRequiredArgument | ErrorKind::MissingSubcommand => {
+            tf("cli.missingArgs", &[("arg", &context(ContextKind::InvalidArg))])
+        }
+        _ => {
+            let arg = [ContextKind::InvalidArg, ContextKind::InvalidSubcommand, ContextKind::InvalidValue]
+                .into_iter()
+                .map(context)
+                .find(|s| !s.is_empty())
+                .unwrap_or_default();
+            tf("cli.badArgs", &[("arg", &arg)])
+        }
+    };
+    eprintln!("duolo: {message}");
+    std::process::exit(2);
+}
+
+/// `--help` 里的说明按当前语言显示。
+fn localized_command() -> clap::Command {
+    let cmd = Cli::command()
+        .about(t("cli.about"))
+        .mut_arg("path", |a| a.help(t("cli.help.path")))
+        .mut_subcommand("tui", |c| c.about(t("cli.help.tui")).mut_arg("path", |a| a.help(t("cli.help.path"))))
+        .mut_subcommand("add", |c| c.about(t("cli.help.add")))
+        .mut_subcommand("new", |c| {
+            c.about(t("cli.help.new"))
+                .mut_arg("prompt", |a| a.help(t("cli.help.prompt")))
+                .mut_arg("project", |a| a.help(t("cli.help.project")))
+        })
+        .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
+        .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
+        .arg(clap::Arg::new("version").short('V').long("version").action(clap::ArgAction::Version))
+        .mut_arg("version", |a| a.help(t("cli.help.version")));
+    localize_chrome(cmd)
+}
+
+/// clap 自带的标题（用法、命令、参数、选项）和 `-h` 的说明换成当前语言。子命令一并处理。
+fn localize_chrome(mut cmd: clap::Command) -> clap::Command {
+    let ids: Vec<(clap::Id, bool)> = cmd.get_arguments().map(|a| (a.get_id().clone(), a.is_positional())).collect();
+    for (id, positional) in ids {
+        let heading = if positional { t("cli.arguments") } else { t("cli.options") };
+        cmd = cmd.mut_arg(id, |a| a.help_heading(heading));
+    }
+    let help = clap::Arg::new("help").short('h').long("help").action(clap::ArgAction::Help).help(t("cli.help.help"));
+    cmd = cmd
+        .arg(help.help_heading(t("cli.options")))
+        .subcommand_help_heading(t("cli.commands"))
+        .help_template(format!("{{about-with-newline}}\n{}: {{usage}}\n\n{{all-args}}{{after-help}}", t("cli.usage")));
+    let names: Vec<String> = cmd.get_subcommands().map(|c| c.get_name().to_string()).collect();
+    for name in names {
+        cmd = cmd.mut_subcommand(name, localize_chrome);
+    }
+    cmd
+}
+
+/// 打开引擎，启动时发现的问题写到 stderr。
+fn open_engine(paths: Paths) -> Result<Engine> {
+    let mut engine = Engine::open(paths)?;
+    for notice in engine.take_notices() {
+        eprintln!("duolo: {}", notice.localized());
+    }
+    Ok(engine)
 }
 
 fn run(cli: Cli) -> Result<()> {
@@ -63,47 +145,47 @@ fn run(cli: Cli) -> Result<()> {
             if open_app(&dir)? {
                 return Ok(());
             }
-            eprintln!("没有找到 Duolo.app，先在终端里打开。安装桌面应用见 README。");
+            eprintln!("{}", t("cli.appNotFound"));
             duolo_tui::run(Engine::open(paths)?, &dir)
         }
         Some(Cmd::Tui { path }) => duolo_tui::run(Engine::open(paths)?, &path.unwrap_or(cwd)),
         Some(Cmd::Add { path }) => {
-            let mut engine = Engine::open(paths)?;
+            let mut engine = open_engine(paths)?;
             let id = engine.add_project(&path)?;
-            println!("已添加项目 {id}");
+            println!("{}", tf("cli.projectAdded", &[("id", &id)]));
             Ok(())
         }
         Some(Cmd::New { prompt, project }) => {
-            let mut engine = Engine::open(paths)?;
+            let mut engine = open_engine(paths)?;
             let project = match project {
                 Some(id) => {
                     let id = ProjectId(id);
                     if engine.state().project(&id).is_none() {
-                        bail!("没有项目 {id}，可用 duolo ls 查看");
+                        bail!("{}", tf("cli.noSuchProject", &[("id", &id)]));
                     }
                     id
                 }
                 None => engine.add_project(&cwd)?,
             };
             let id = engine.create_task(&project, &prompt.join(" "))?;
-            let task = engine.state().task(id).expect("刚创建的任务");
-            println!("已创建任务 #{id}「{}」", task.title);
-            println!("  分支 {}", task.branch);
-            println!("  运行 duolo 打开 Duolo，点开任务后 Agent 会自动启动");
+            let task = engine.state().task(id).expect("task was just created");
+            println!("{}", tf("cli.taskCreated", &[("id", &id), ("title", &task.title)]));
+            println!("  {}", tf("cli.taskBranch", &[("branch", &task.branch)]));
+            println!("  {}", t("cli.taskHint"));
             Ok(())
         }
         Some(Cmd::Ls) => {
-            let engine = Engine::open(paths)?;
+            let engine = open_engine(paths)?;
             let state = engine.state();
             if state.tasks.is_empty() {
-                println!("还没有任务。用 duolo new \"需求\" 或在工作台里按 n 新建。");
+                println!("{}", t("cli.noTasks"));
             }
             let now = now_secs();
             for project in &state.projects {
                 println!("{}  {}", project.id, project.root.display());
                 for task in state.tasks_of(&project.id) {
                     let agents: Vec<String> =
-                        task.agents.iter().map(|a| format!("{}{}", a.kind.display_name(), a.role.label())).collect();
+                        task.agents.iter().map(|a| a.role.label(&a.kind.display_name())).collect();
                     println!(
                         "  #{:<4} {:<30} {:<8} {}  {}",
                         task.id.0,
@@ -126,7 +208,17 @@ const APP_BUNDLE_ID: &str = "ai.ottermind.duolo";
 /// 打开桌面应用；`dir` 是 git 仓库时交给应用加入项目。没有安装应用时返回 false。
 fn open_app(dir: &std::path::Path) -> Result<bool> {
     if !cfg!(target_os = "macos") {
-        return Ok(false);
+        // Windows / Linux：直接启动应用程序；已经在运行时，新实例会把目录转交给它后退出。
+        let Some(app) = installed_app() else { return Ok(false) };
+        let mut cmd = std::process::Command::new(app);
+        if let Ok(root) = duolo_git::repo_root(dir) {
+            cmd.arg(root);
+        }
+        cmd.stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .context("cannot start Duolo")?;
+        return Ok(true);
     }
     let mut cmd = std::process::Command::new("open");
     match duolo_git::repo_root(dir) {
@@ -138,17 +230,36 @@ fn open_app(dir: &std::path::Path) -> Result<bool> {
     Ok(status.success())
 }
 
-fn doctor(paths: &Paths) -> Result<()> {
-    let engine = Engine::open(paths.clone())?;
-    let config = engine.config();
-    println!("数据目录  {}", paths.root().display());
-    for check in check_environment(config) {
-        println!("{} {:<8} {}", if check.ok { "✓" } else { "✕" }, check.name, check.detail);
+/// Windows / Linux 上装好的桌面应用：Windows 安装程序放在 `%LOCALAPPDATA%\Duolo`（只给当前用户装）
+/// 或 `%ProgramFiles%\Duolo`；Linux 的 deb 包装在 PATH 上。
+fn installed_app() -> Option<std::path::PathBuf> {
+    if cfg!(windows) {
+        return ["LOCALAPPDATA", "ProgramFiles"]
+            .into_iter()
+            .filter_map(std::env::var_os)
+            .map(|dir| std::path::PathBuf::from(dir).join("Duolo").join("Duolo.exe"))
+            .find(|exe| exe.exists());
     }
-    println!("写代码    {}", config.writer.display_name());
-    println!("审阅      {}", config.reviewer.display_name());
+    which::which("Duolo").ok()
+}
+
+fn doctor(paths: &Paths) -> Result<()> {
+    let engine = open_engine(paths.clone())?;
+    let config = engine.config();
+    println!("{}{}", pad(&t("cli.doctor.data"), 12), paths.root().display());
+    for check in check_environment(config) {
+        println!("{} {}{}", if check.ok { "✓" } else { "✕" }, pad(&check.name, 10), check.detail);
+    }
+    println!("{}{}", pad(&t("cli.doctor.writer"), 12), config.writer.display_name());
+    println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), config.reviewer.display_name());
     if !config.voice.is_configured() {
-        println!("语音命令在 {} 的 voice.command 里设置，见 README", paths.config_file().display());
+        println!("{}", tf("cli.doctor.voiceHint", &[("path", &paths.config_file().display())]));
     }
     Ok(())
+}
+
+/// 按显示宽度补空格（中日韩文字占两格）。
+fn pad(text: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthStr;
+    format!("{text}{}", " ".repeat(width.saturating_sub(text.width()).max(1)))
 }

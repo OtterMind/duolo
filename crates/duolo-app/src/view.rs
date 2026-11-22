@@ -1,6 +1,6 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
-use duolo_core::{AgentRole, State, Task};
+use duolo_core::{AgentRole, State, Task, Verdict};
 use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine};
 use serde::Serialize;
 
@@ -28,11 +28,17 @@ pub struct TaskView {
     pub id: u64,
     pub title: String,
     pub prompt: String,
+    /// 还没有需求、也没改过名的空白任务，界面按当前语言显示为"新任务"。
+    pub untitled: bool,
     pub branch: String,
     pub base: String,
     pub worktree: String,
     pub created_at: u64,
     pub agents: Vec<AgentView>,
+    /// 审阅用的 Agent。
+    pub reviewer: ReviewerView,
+    /// 改的是项目里的哪个仓库（相对项目文件夹的路径）；项目本身就是仓库时为空。
+    pub repo: String,
     /// 正在后台审阅时的开始时间（Unix 秒）。
     pub reviewing_since: Option<u64>,
     pub review: Option<ReviewView>,
@@ -40,9 +46,20 @@ pub struct TaskView {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReviewerView {
+    pub kind: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReviewView {
     pub finished_at: u64,
     pub ok: bool,
+    /// `pass`、`issues` 或 `unknown`（没有判断标记）。
+    pub verdict: &'static str,
+    /// 必须修改的问题数（`verdict` 为 `issues` 时）。
+    pub issues: u32,
     pub summary: String,
     pub output: String,
 }
@@ -96,6 +113,10 @@ impl From<AgentStatus> for Status {
 pub struct CheckView {
     /// `git`、`agent` 或 `voice`。
     pub kind: &'static str,
+    /// Agent 的种类（`claude`、`codex`），其他检查为空。
+    pub agent: String,
+    /// 没安装时的安装命令（Agent 才有）。
+    pub install: String,
     pub name: String,
     pub ok: bool,
     pub command: String,
@@ -109,7 +130,15 @@ impl From<Check> for CheckView {
             CheckKind::Agent => "agent",
             CheckKind::Voice => "voice",
         };
-        Self { kind, name: check.name, ok: check.ok, command: check.command, version: check.version }
+        Self {
+            kind,
+            agent: check.agent,
+            install: check.install,
+            name: check.name,
+            ok: check.ok,
+            command: check.command,
+            version: check.version,
+        }
     }
 }
 
@@ -129,6 +158,7 @@ impl From<DiffStat> for DiffView {
 
 pub fn snapshot(engine: &mut Engine) -> Snapshot {
     let state: State = engine.state().clone();
+    let closing: Vec<_> = state.tasks.iter().map(|t| t.id).filter(|id| engine.is_closing(*id)).collect();
     let projects = state
         .projects
         .iter()
@@ -136,14 +166,19 @@ pub fn snapshot(engine: &mut Engine) -> Snapshot {
             id: project.id.0.clone(),
             name: project.name.clone(),
             root: project.root.display().to_string(),
-            tasks: state.tasks_of(&project.id).map(|task| task_view(engine, task)).collect(),
+            // 正在关闭的任务先不显示（停 Agent、保存改动要几秒）；没关成会再出现。
+            tasks: state
+                .tasks_of(&project.id)
+                .filter(|task| !closing.contains(&task.id))
+                .map(|task| task_view(engine, task, &project.root))
+                .collect(),
         })
         .collect();
     let summary = engine.summary();
     Snapshot { projects, running: summary.running, needs_input: summary.needs_input }
 }
 
-fn task_view(engine: &mut Engine, task: &Task) -> TaskView {
+fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -> TaskView {
     let agents = task
         .agents
         .iter()
@@ -163,15 +198,35 @@ fn task_view(engine: &mut Engine, task: &Task) -> TaskView {
         id: task.id.0,
         title: task.title.clone(),
         prompt: task.prompt.clone(),
+        untitled: task.prompt.is_empty() && duolo_core::text::is_default_title(&task.title),
         branch: task.branch.clone(),
         base: task.base.clone(),
         worktree: task.worktree.display().to_string(),
         created_at: task.created_at,
         agents,
+        reviewer: {
+            let kind = engine.reviewer_of(task.id).unwrap_or_else(|_| engine.config().reviewer.clone());
+            ReviewerView { name: kind.display_name(), kind: kind.0 }
+        },
+        repo: task
+            .repo
+            .as_deref()
+            .and_then(|repo| repo.strip_prefix(project_root).ok())
+            .map(|rel| rel.display().to_string())
+            .unwrap_or_default(),
         reviewing_since: engine.review_started_at(task.id),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,
+            verdict: match r.verdict() {
+                Verdict::Pass => "pass",
+                Verdict::Issues(_) => "issues",
+                Verdict::Unknown => "unknown",
+            },
+            issues: match r.verdict() {
+                Verdict::Issues(n) => n,
+                _ => 0,
+            },
             summary: r.summary().to_string(),
             output: r.output.clone(),
         }),

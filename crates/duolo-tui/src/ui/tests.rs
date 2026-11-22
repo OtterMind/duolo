@@ -39,6 +39,8 @@ fn fixture() -> Fixture {
          [agents.codex]\ncommand = \"sh\"\nargs = [\"-c\", \"printf 'review> '; cat\", \"agent\"]\n",
     )
     .unwrap();
+    // 断言用的是英文文案，不随运行测试的机器的系统语言变化。
+    duolo_core::i18n::set_locale("en");
     let engine = Engine::open(Paths::at(&home)).unwrap();
     let app = App::new(engine, &repo);
     Fixture { _dir: dir, repo, app }
@@ -92,14 +94,14 @@ fn wait_for(app: &mut App, mut f: impl FnMut(&str) -> bool) -> String {
 #[test]
 fn first_launch_lands_on_home_input() {
     let mut fx = fixture();
-    let screen = wait_for(&mut fx.app, |s| !s.contains("正在检查环境"));
+    let screen = wait_for(&mut fx.app, |s| !s.contains("Checking the environment"));
     println!("{screen}");
     assert!(fx.app.is_home());
-    assert!(screen.contains("+ 新任务"));
-    assert!(screen.contains("今天让 Agent 做点什么"));
-    assert!(screen.contains("新任务 · shop"));
-    assert!(screen.contains("描述你想做的事"));
-    assert!(screen.contains("+ 添加项目"));
+    assert!(screen.contains("+ New task"));
+    assert!(screen.contains("What should the agent do today"));
+    assert!(screen.contains("New task · shop"));
+    assert!(screen.contains("Describe what to do"));
+    assert!(screen.contains("+ Add project"));
 }
 
 #[test]
@@ -113,7 +115,7 @@ fn typing_on_home_creates_and_opens_task() {
     assert!(!fx.app.is_home());
     assert_eq!(fx.app.focus, Focus::Main);
     assert!(screen.contains("Add order export  │"));
-    assert!(screen.contains("Claude 写"));
+    assert!(screen.contains("Claude writes"));
     assert!(screen.contains("duolo/1-add-order-export"));
     assert!(fx.repo.parent().unwrap().join("home/wt/shop/1-add-order-export").exists());
 }
@@ -129,7 +131,7 @@ fn sidebar_is_keyboard_operable() {
     assert_eq!(fx.app.focus, Focus::Sidebar);
     let screen = draw(&mut fx.app);
     println!("{screen}");
-    assert!(screen.contains("↑↓ 选择"));
+    assert!(screen.contains("↑↓ select"));
     press(&mut fx.app, KeyCode::Char('n'));
     assert!(fx.app.is_home());
     assert_eq!(fx.app.focus, Focus::Main);
@@ -145,12 +147,12 @@ fn sidebar_is_keyboard_operable() {
     press(&mut fx.app, KeyCode::Char('r'));
     let screen = wait_for(&mut fx.app, |s| s.contains("review>"));
     println!("{screen}");
-    assert!(screen.contains("Codex 审"));
+    assert!(screen.contains("Codex reviews"));
     ctrl(&mut fx.app, ']');
     press(&mut fx.app, KeyCode::Char('x'));
-    assert!(draw(&mut fx.app).contains("关闭「first task」"));
+    assert!(draw(&mut fx.app).contains("Close “first task”"));
     press(&mut fx.app, KeyCode::Char('y'));
-    assert!(fx.app.is_home(), "关闭最后一个任务后回到首页");
+    assert!(fx.app.is_home(), "closing the last task goes back home");
 }
 
 #[test]
@@ -160,10 +162,10 @@ fn add_project_from_home() {
     press(&mut fx.app, KeyCode::Char('a'));
     let screen = draw(&mut fx.app);
     println!("{screen}");
-    assert!(screen.contains("添加一个项目"));
+    assert!(screen.contains("Add a project"));
     type_text(&mut fx.app, "/definitely/not/a/repo");
     press(&mut fx.app, KeyCode::Enter);
-    assert!(draw(&mut fx.app).contains("not inside a git repository"));
+    assert!(draw(&mut fx.app).contains("isn't a usable folder"));
     press(&mut fx.app, KeyCode::Esc);
     assert!(!fx.app.home.adding_project);
 }
@@ -175,7 +177,7 @@ fn help_overlay() {
     press(&mut fx.app, KeyCode::Char('?'));
     let screen = draw(&mut fx.app);
     println!("{screen}");
-    assert!(screen.contains("快捷键"));
+    assert!(screen.contains("Shortcuts"));
     press(&mut fx.app, KeyCode::Char('z'));
-    assert!(!draw(&mut fx.app).contains("快捷键"));
+    assert!(!draw(&mut fx.app).contains("Shortcuts"));
 }

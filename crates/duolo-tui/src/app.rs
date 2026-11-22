@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use duolo_core::{AgentKey, ProjectId, Task, TaskId};
+use duolo_core::{t, tf, AgentKey, ProjectId, Task, TaskId};
 use duolo_engine::{check_environment, Check, Engine};
 use duolo_pty::Size;
 use duolo_voice::OrganizeContext;
@@ -16,6 +16,8 @@ use crate::voice::{Delivery, Voice, VoiceTarget};
 
 /// 提示消息显示多久。
 const FLASH_TTL: Duration = Duration::from_secs(4);
+/// 整理事件流的间隔，和桌面应用的快照间隔一样。
+const EVENTS_INTERVAL: Duration = Duration::from_millis(250);
 
 /// 需要用户确认或阅读的弹出状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +81,8 @@ pub struct App {
     flash: Option<Flash>,
     quit: bool,
     env: Arc<Mutex<Option<Vec<Check>>>>,
+    /// 上次整理事件流的时间（识别状态、给刚启动的 Agent 发排队的消息）。
+    last_events: Instant,
 }
 
 impl App {
@@ -116,12 +120,17 @@ impl App {
             flash: None,
             quit: false,
             env,
+            last_events: Instant::now(),
         };
         app.start_pending_agents();
         // 有任务时打开第一个（优先等你确认的），没有任务时停在首页。
         let first = app.ordered_tasks().into_iter().next();
         if let Some(id) = first {
             app.open_task(id);
+        }
+        let notices: Vec<String> = app.engine.take_notices().iter().map(|n| n.localized()).collect();
+        if !notices.is_empty() {
+            app.error(notices.join(" "));
         }
         app
     }
@@ -316,9 +325,9 @@ impl App {
                     self.home.project = self.engine.state().projects.iter().position(|p| p.id == id).unwrap_or(0);
                     self.home.adding_project = false;
                     self.home.input = LineInput::default();
-                    self.info(format!("已添加项目 {id}，现在可以新建任务了"));
+                    self.info(tf("tui.projectAdded", &[("id", &id)]));
                 }
-                Err(err) => self.error(format!("{err:#}")),
+                Err(err) => self.error(duolo_core::error::describe(&err)),
             }
             return;
         }
@@ -330,13 +339,13 @@ impl App {
                 self.home.input = LineInput::default();
                 self.open_task(id);
             }
-            Err(err) => self.error(format!("{err:#}")),
+            Err(err) => self.error(duolo_core::error::describe(&err)),
         }
     }
 
     fn create_and_start(&mut self, project: &ProjectId, prompt: &str) -> anyhow::Result<TaskId> {
         let id = self.engine.create_task(project, prompt)?;
-        let key = self.engine.state().task(id).map(|t| t.key(0)).expect("刚创建的任务");
+        let key = self.engine.state().task(id).map(|t| t.key(0)).expect("task was just created");
         self.engine.start_agent(key)?;
         Ok(id)
     }
@@ -350,7 +359,7 @@ impl App {
             return;
         }
         if let Err(err) = self.engine.start_agent(key) {
-            self.error(format!("{err:#}"));
+            self.error(duolo_core::error::describe(&err));
         }
     }
 
@@ -365,22 +374,22 @@ impl App {
 
     pub fn start_reviewer(&mut self) {
         let Some(task) = self.task_under_cursor() else {
-            self.info("先选中一个任务");
+            self.info(t("tui.selectTaskFirst"));
             return;
         };
         match self.engine.start_reviewer(task) {
             Ok(key) => {
                 self.activate(Item::Agent(key));
-                self.info("已启动审阅（只读）");
+                self.info(t("tui.reviewStarted"));
             }
-            Err(err) => self.error(format!("{err:#}")),
+            Err(err) => self.error(duolo_core::error::describe(&err)),
         }
     }
 
     pub fn request_close(&mut self) {
         match self.task_under_cursor() {
             Some(id) => self.mode = Mode::ConfirmClose(id),
-            None => self.info("先选中一个任务"),
+            None => self.info(t("tui.selectTaskFirst")),
         }
     }
 
@@ -392,7 +401,7 @@ impl App {
             .position(|t| *t == id)
             .and_then(|i| tasks.get(i + 1).or_else(|| i.checked_sub(1).and_then(|j| tasks.get(j))).copied());
         match self.engine.close_task(id) {
-            Ok(()) => {
+            Ok(closed) => {
                 if self.last_task == Some(id) {
                     self.last_task = None;
                 }
@@ -400,9 +409,13 @@ impl App {
                     Some(next) => self.open_task(next),
                     None => self.new_task(),
                 }
-                self.info("任务已关闭，分支保留");
+                self.info(match (closed.saved_to, closed.left_at) {
+                    (Some(branch), _) => tf("task.savedTo", &[("branch", &branch)]),
+                    (None, Some(path)) => tf("task.leftAt", &[("path", &path.display())]),
+                    (None, None) => t("tui.taskClosed"),
+                });
             }
-            Err(err) => self.error(format!("{err:#}")),
+            Err(err) => self.error(duolo_core::error::describe(&err)),
         }
     }
 
@@ -434,7 +447,7 @@ impl App {
             .collect();
         for key in pending {
             if let Err(err) = self.engine.start_agent(key) {
-                self.error(format!("{err:#}"));
+                self.error(duolo_core::error::describe(&err));
             }
         }
     }
@@ -462,11 +475,11 @@ impl App {
             return;
         }
         if !cfg.is_configured() {
-            self.error("语音还没配置：在 ~/.duolo/config.toml 里设置 voice.command，见 README");
+            self.error(t("error.voiceNotConfigured"));
             return;
         }
         if let Err(err) = self.voice.start(&cfg, target) {
-            self.error(format!("{err:#}"));
+            self.error(duolo_core::error::describe(&err));
         }
     }
 
@@ -487,12 +500,17 @@ impl App {
         let Some(session) = self.engine.session_mut(key) else { return };
         let result = session.paste(&text).and_then(|()| if submit { session.write(b"\r") } else { Ok(()) });
         if let Err(err) = result {
-            self.error(format!("{err:#}"));
+            self.error(duolo_core::error::describe(&err));
         }
     }
 
     /// 处理后台任务的结果。返回是否需要重绘。
     pub fn poll_background(&mut self) -> bool {
+        if self.last_events.elapsed() >= EVENTS_INTERVAL {
+            self.last_events = Instant::now();
+            self.engine.sync();
+            self.engine.poll_events();
+        }
         if !self.engine.retry_failed_resumes().is_empty() {
             return true;
         }
@@ -501,15 +519,15 @@ impl App {
         };
         match delivery {
             Delivery::HomeText(text) => self.home.input.insert_str(&text),
-            Delivery::Error(err) => self.error(format!("语音：{err}")),
+            Delivery::Error(err) => self.error(tf("tui.voiceError", &[("error", &err)])),
         }
         true
     }
 }
 
 fn expand_home(path: &str) -> String {
-    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => Path::new(&home).join(rest).to_string_lossy().into_owned(),
-        _ => path.to_string(),
+    match path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
+        Some(rest) => duolo_core::process::home_dir().join(rest).to_string_lossy().into_owned(),
+        None => path.to_string(),
     }
 }

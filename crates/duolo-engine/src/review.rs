@@ -4,42 +4,57 @@
 
 use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use duolo_core::process::Prompted;
+use duolo_core::proctree::ProcessTree;
 use duolo_core::UserError;
 
 /// 审阅最长运行时间，超过就结束它。
 const TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// 结束审阅命令时，最长等它消失多久。
+const KILL_WAIT: Duration = Duration::from_secs(2);
+
+#[derive(Debug)]
+struct Running {
+    child: Child,
+    tree: ProcessTree,
+}
 
 /// 一个正在运行的审阅。
 #[derive(Debug)]
 pub(crate) struct ReviewJob {
     /// Unix 秒。
     started_at: u64,
-    child: Arc<Mutex<Child>>,
+    /// 还在运行的命令，结束后为 None。
+    running: Arc<Mutex<Option<Running>>>,
     result: Arc<Mutex<Option<Result<String, String>>>>,
 }
 
 impl ReviewJob {
     pub(crate) fn spawn(command: &[String], prompt: &str, cwd: PathBuf, env_remove: &[&str]) -> Result<Self> {
-        let (program, args) = command.split_first().ok_or(UserError::ReviewNotConfigured)?;
-        let mut cmd = Command::new(program);
-        cmd.args(args).arg(prompt).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut review = Prompted::new(command, Some(prompt)).ok_or(UserError::ReviewNotConfigured)?;
+        review.cmd.current_dir(cwd).stdout(Stdio::piped()).stderr(Stdio::piped());
         for key in env_remove {
-            cmd.env_remove(key);
+            review.cmd.env_remove(key);
         }
-        let mut child = cmd.spawn().map_err(|_| UserError::CommandNotFound { program: program.clone() })?;
+        let (mut child, tree) =
+            review.spawn().map_err(|_| UserError::CommandNotFound { program: command[0].clone() })?;
         let mut stdout = child.stdout.take().context("review command has no stdout")?;
         let mut stderr = child.stderr.take().context("review command has no stderr")?;
 
-        let child = Arc::new(Mutex::new(child));
+        let running = Arc::new(Mutex::new(Some(Running { child, tree })));
         let result = Arc::new(Mutex::new(None));
-        let job =
-            Self { started_at: duolo_core::text::now_secs(), child: Arc::clone(&child), result: Arc::clone(&result) };
+        let job = Self {
+            started_at: duolo_core::text::now_secs(),
+            running: Arc::clone(&running),
+            result: Arc::clone(&result),
+        };
 
         thread::Builder::new().name("duolo-review".into()).spawn(move || {
             let out_reader = thread::spawn(move || {
@@ -54,16 +69,25 @@ impl ReviewJob {
             });
             let started = Instant::now();
             let status = loop {
-                let mut child = child.lock().unwrap_or_else(|p| p.into_inner());
-                match child.try_wait() {
-                    Ok(Some(status)) => break Some(status),
+                let mut slot = running.lock().unwrap_or_else(|p| p.into_inner());
+                // 被取消了。
+                let Some(current) = slot.as_mut() else { break None };
+                match current.child.try_wait() {
+                    Ok(Some(status)) => {
+                        // 它留下的后台进程可能还占着输出管道，不结束就一直读不完。
+                        if let Some(done) = slot.take() {
+                            done.tree.kill(None, KILL_WAIT);
+                        }
+                        break Some(status);
+                    }
                     Ok(None) if started.elapsed() > TIMEOUT => {
-                        let _ = child.kill();
+                        stop(slot.take());
+                        break None;
                     }
                     Ok(None) => {}
                     Err(_) => break None,
                 }
-                drop(child);
+                drop(slot);
                 thread::sleep(Duration::from_millis(100));
             };
             let out = out_reader.join().unwrap_or_default();
@@ -87,14 +111,33 @@ impl ReviewJob {
         self.result.lock().unwrap_or_else(|p| p.into_inner()).take()
     }
 
+    /// 结束审阅，等它的进程都消失（退出应用时用）。
+    pub(crate) fn stop(self) {
+        let running = self.running.lock().unwrap_or_else(|p| p.into_inner()).take();
+        stop(running);
+    }
+
     pub(crate) fn cancel(&self) {
-        let _ = self.child.lock().unwrap_or_else(|p| p.into_inner()).kill();
+        let running = self.running.lock().unwrap_or_else(|p| p.into_inner()).take();
+        // 等它消失要一会儿，不让调用方（拿着引擎的锁）等。
+        if running.is_some() {
+            thread::spawn(move || stop(running));
+        }
     }
 }
 
 impl Drop for ReviewJob {
     fn drop(&mut self) {
         self.cancel();
+    }
+}
+
+/// 结束审阅命令和它启动的所有进程。
+fn stop(running: Option<Running>) {
+    if let Some(Running { mut child, tree }) = running {
+        tree.kill(None, KILL_WAIT);
+        let _ = child.kill();
+        let _ = child.wait();
     }
 }
 

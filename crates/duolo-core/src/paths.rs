@@ -55,6 +55,11 @@ impl Paths {
         self.root.join("wt")
     }
 
+    /// 每个任务的事件流：`events/<任务编号>.jsonl`，一行一个事件。
+    pub fn events(&self) -> PathBuf {
+        self.root.join("events")
+    }
+
     pub fn ensure(&self) -> Result<()> {
         std::fs::create_dir_all(&self.root)
             .with_context(|| format!("cannot create data directory {}", self.root.display()))

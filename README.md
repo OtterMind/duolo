@@ -133,3 +133,7 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
 - 状态识别是启发式的（看输出节奏和确认提示），还没有接入 hooks 和会话日志。
 - 语音是"说完再出字"，还不能边说边出字。
 - 暂时只支持 macOS；手机端、审阅页、自动化、云端服务在后续版本。
+
+## 许可证
+
+[MIT](LICENSE)。Claude、Claude Code 是 Anthropic 的商标，Codex 是 OpenAI 的商标；Duolo 是独立的项目，和这两家公司没有隶属关系。

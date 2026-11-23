@@ -1,0 +1,125 @@
+{
+  "comment": "电脑和手机之间的消息样例。Rust（crates/duolo-core/src/wire.rs）、Swift、Kotlin 的测试都读这一份。",
+  "phone": [
+    { "name": "sync", "json": { "v": 1, "type": "sync" } },
+    { "name": "fetch", "json": { "v": 1, "type": "fetch", "task": 3, "after": 41 } },
+    {
+      "name": "create task with defaults",
+      "json": {
+        "v": 1,
+        "type": "command",
+        "id": "c-1",
+        "at": 1795370000000,
+        "command": {
+          "type": "create_task",
+          "project": "shop",
+          "prompt": "Export orders as CSV",
+          "repo": null,
+          "base": "main",
+          "branch": null,
+          "writer": "claude",
+          "reviewer": "codex"
+        }
+      }
+    },
+    {
+      "name": "send message",
+      "json": { "v": 1, "type": "command", "id": "c-2", "at": 1795370000000, "command": { "type": "send_message", "task": 3, "text": "Also Excel\nplease" } }
+    },
+    {
+      "name": "answer",
+      "json": { "v": 1, "type": "command", "id": "c-3", "at": 1795370000000, "command": { "type": "answer", "task": 3, "option": 0, "prompt": 42 } }
+    },
+    { "name": "interrupt", "json": { "v": 1, "type": "command", "id": "c-4", "at": 1795370000000, "command": { "type": "interrupt", "task": 3 } } },
+    { "name": "start review", "json": { "v": 1, "type": "command", "id": "c-5", "at": 1795370000000, "command": { "type": "start_review", "task": 3 } } },
+    { "name": "close task", "json": { "v": 1, "type": "command", "id": "c-6", "at": 1795370000000, "command": { "type": "close_task", "task": 3 } } }
+  ],
+  "desktop": [
+    {
+      "name": "overview",
+      "json": {
+        "v": 1,
+        "type": "overview",
+        "rev": 7,
+        "projects": [{ "id": "shop", "name": "shop", "branch": "main", "branches": ["main", "develop"] }],
+        "tasks": [
+          {
+            "id": 3,
+            "project": "shop",
+            "title": "Export orders as CSV",
+            "untitled": false,
+            "branch": "feat/order-csv-export",
+            "status": "needs_input",
+            "writer": { "kind": "claude", "name": "Claude" },
+            "reviewer": { "kind": "codex", "name": "Codex" },
+            "updatedAt": 1795370000000,
+            "since": 1795369990000,
+            "last": "Export is done. I'd like to run the tests.",
+            "prompt": { "seq": 42, "question": "Do you want to proceed?", "detail": "pnpm test", "options": ["Yes", "No"] },
+            "diff": { "files": 3, "insertions": 96, "deletions": 4 },
+            "seq": 42
+          },
+          {
+            "id": 4,
+            "project": "shop",
+            "title": "Upgrade dependencies",
+            "untitled": false,
+            "branch": "chore/deps",
+            "status": "idle",
+            "writer": { "kind": "codex", "name": "Codex" },
+            "reviewer": { "kind": "claude", "name": "Claude" },
+            "updatedAt": 1795360000000,
+            "since": 1795360000000,
+            "last": "Everything is on the latest version.",
+            "review": { "finishedAt": 1795361000000, "ok": true, "verdict": "issues", "issues": 2, "summary": "CI still uses Node 18" },
+            "seq": 18
+          }
+        ],
+        "agents": [{ "kind": "claude", "name": "Claude" }, { "kind": "codex", "name": "Codex" }],
+        "writer": "claude",
+        "reviewer": "codex"
+      }
+    },
+    {
+      "name": "every event kind",
+      "json": {
+        "v": 1,
+        "type": "events",
+        "task": 3,
+        "events": [
+          { "task": 3, "seq": 1, "at": 1, "type": "task_created", "title": "New task", "branch": "duolo/3" },
+          { "task": 3, "seq": 2, "at": 2, "type": "task_renamed", "title": "Export orders", "branch": "feat/export" },
+          { "task": 3, "seq": 3, "at": 3, "type": "message", "speaker": "user", "agent": 0, "text": "Export orders" },
+          { "task": 3, "seq": 4, "at": 4, "type": "message", "speaker": "agent", "agent": 0, "text": "Looking." },
+          { "task": 3, "seq": 5, "at": 5, "type": "tool", "agent": 0, "tool": "Read", "target": "src/orders.ts" },
+          { "task": 3, "seq": 6, "at": 6, "type": "status", "agent": 0, "status": "needs_input" },
+          { "task": 3, "seq": 7, "at": 7, "type": "prompt", "agent": 0, "question": "Proceed?", "detail": "pnpm test", "options": ["Yes", "No"] },
+          { "task": 3, "seq": 8, "at": 8, "type": "review_started", "reviewer": "codex" },
+          { "task": 3, "seq": 9, "at": 9, "type": "review_finished", "ok": true, "verdict": "issues", "issues": 2, "summary": "two problems" },
+          { "task": 3, "seq": 10, "at": 10, "type": "diff", "files": 3, "insertions": 96, "deletions": 4 },
+          { "task": 3, "seq": 11, "at": 11, "type": "task_closed" }
+        ],
+        "latest": 11
+      }
+    },
+    { "name": "review", "json": { "v": 1, "type": "review", "task": 4, "finishedAt": 1795361000000, "output": "[ISSUES 2] Two problems\n\n- CI uses Node 18\n- Old esbuild" } },
+    { "name": "result ok", "json": { "v": 1, "type": "result", "id": "c-1", "result": { "ok": true, "task": 9 } } },
+    { "name": "result error", "json": { "v": 1, "type": "result", "id": "c-3", "result": { "ok": false, "error": "promptChanged" } } }
+  ],
+  "tolerated": [
+    { "name": "unknown message type is ignored", "json": { "v": 1, "type": "something_new", "x": 1 } },
+    {
+      "name": "unknown event types and fields keep their place",
+      "json": {
+        "v": 1,
+        "type": "events",
+        "task": 3,
+        "events": [
+          { "task": 3, "seq": 1, "at": 1, "type": "hologram", "shape": "cube" },
+          { "task": 3, "seq": 2, "at": 2, "type": "message", "speaker": "agent", "agent": 0, "text": "hi", "mood": "good" }
+        ],
+        "latest": 2
+      }
+    }
+  ]
+}

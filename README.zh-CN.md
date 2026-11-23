@@ -164,7 +164,7 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
 - 没有独立的守护进程：退出会结束所有 Agent，重新打开任务时自动恢复会话。
 - 状态识别是启发式的（看输出节奏和确认提示），还没有接入 hooks 和会话日志。
 - Windows 和 Linux 版还没有在真机上完整测过。
-- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；手机端正在做（服务端在 [server/](server/README.zh-CN.md)）。
+- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iOS 和 Android 原生应用正在做（[docs/mobile.md](docs/mobile.md)），服务端在 [server/](server/README.zh-CN.md)，桌面应用还没有接上。
 - Linux 上按住说话的全局快捷键只在 X11 下有效，Wayland 下请点麦克风按钮。
 
 ## 参与开发

@@ -12,7 +12,7 @@ One service shared by all users: accounts, device pairing, and relaying messages
 
 In development, not ready for production:
 
-- The desktop app and the mobile apps do not connect to it yet, so the end-to-end encryption on the client side does not exist yet either.
+- The mobile apps connect to it with end-to-end encryption (see [docs/mobile.md](../docs/mobile.md)). The desktop app does not connect yet; until it does, `true mobile-sandbox` runs the server with a simulated desktop.
 - No email service is wired up. Sign-in codes are only printed to the log, in every environment. To send real email, implement the `Mailer` interface from `src/mailer.ts` and use it in `src/main.ts`.
 - Push tokens are stored, but no push notifications are sent.
 

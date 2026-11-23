@@ -110,7 +110,7 @@ export type TaskEvent = { task: number; seq: number; at: number } & (
 export type RemoteCommand =
   | ({ type: "create_task"; project: string; prompt: string } & NewTaskOptions)
   | { type: "send_message"; task: number; text: string }
-  | { type: "answer"; task: number; option: number }
+  | { type: "answer"; task: number; option: number; prompt?: number }
   | { type: "interrupt" | "start_review" | "close_task"; task: number };
 
 export interface CommandResult {

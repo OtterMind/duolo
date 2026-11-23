@@ -14,6 +14,7 @@ pub mod proctree;
 pub mod settings;
 pub mod store;
 pub mod text;
+pub mod wire;
 
 pub use config::{AgentProfile, Config, VoiceConfig};
 pub use error::UserError;

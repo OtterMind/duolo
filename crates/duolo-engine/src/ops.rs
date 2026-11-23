@@ -55,7 +55,7 @@ pub fn execute(engine: &Mutex<Engine>, command: Command) -> CommandResult {
             })
         }
         Command::SendMessage { task, text } => lock(engine).send_message(task, &text).map(|()| None),
-        Command::Answer { task, option } => lock(engine).answer(task, option).map(|()| None),
+        Command::Answer { task, option, prompt } => lock(engine).answer(task, option, prompt).map(|()| None),
         Command::Interrupt { task } => lock(engine).interrupt(task).map(|()| None),
         Command::StartReview { task } => lock(engine).start_review(task).map(|()| None),
         Command::CloseTask { task } => close_task(engine, task).map(|_| None),

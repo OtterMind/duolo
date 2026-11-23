@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window">#161616</color>
+    <style name="Theme.Duolo" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window</item>
+    </style>
+</resources>

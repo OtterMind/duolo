@@ -18,6 +18,8 @@
   - 不写死 `open`、`$HOME`、`/bin/sh`、unix 专属的 API；启动外部命令用 `duolo_core::process::command`，家目录用 `process::home_dir`。
   - 快捷键按 macOS 写法（`⌘⇧R`）定义和写进文案，Windows / Linux 上自动换算；判断按键用 `matches` / `modKey`，不直接看 `metaKey`。
   - 只有某个系统才有的说法（Finder、Dock、Fn、系统设置的路径）要按系统显示不同的文案。
+- **手机端在 `mobile/`，iOS（Swift）和 Android（Kotlin）两份实现行为一致**，见 docs/mobile.md。改消息格式、列表规则先改
+  `mobile/contract/*.json`，两端的核心库和测试一起改；界面不碰网络和数据库。
 - 文案说清楚发生了什么、怎么处理；能用图标的不加文字说明，图标按钮要有翻译过的悬停提示。代码注释用中文。
 - 桌面界面在 `app/`，只通过 `src/lib/api.ts` 调用后端；后端命令在 `crates/duolo-app/src/commands.rs`，只做参数转换。
   发给界面的数据结构在 `view.rs`，与 `api.ts` 的类型保持一致。

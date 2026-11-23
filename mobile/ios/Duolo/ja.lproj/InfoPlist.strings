@@ -1,0 +1,4 @@
+/* 由 mobile/scripts/gen-ios-strings.mjs 生成 */
+NSCameraUsageDescription = "Duolo はコンピュータに表示されたコードのスキャンにカメラを使用します。";
+NSMicrophoneUsageDescription = "Duolo はコーディングエージェントに話しかけるためにマイクを使用します。";
+NSSpeechRecognitionUsageDescription = "Duolo は話した内容を文字にしてコーディングエージェントに送ります。";

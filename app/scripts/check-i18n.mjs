@@ -2,9 +2,12 @@
 //
 // 1. 每种语言的键和英文完全一致；
 // 2. 每条译文的占位符（{name}）和英文相同；
-// 3. 代码里用到的键都存在：Rust 的 t("…") / tf("…")（命令行、终端界面、菜单）。TypeScript 里的键由类型检查保证；
+// 3. 代码里用到的键都存在：Rust 的 t("…") / tf("…")（命令行、终端界面、菜单），手机端 Swift / Kotlin 的 t("…")。
+//    TypeScript 里的键由类型检查保证；
 // 4. TypeScript 里有占位符的文案调用时传了参数；
-// 5. 没有用不到的键：每个键都要在代码里出现（status.*、error.*、menu.*、macos.* 是拼出来的，不检查）。
+// 5. 没有用不到的键：每个键都要在代码里出现（status.*、error.*、menu.*、macos.*、mobile.perm.* 是拼出来的，不检查）；
+// 6. iOS 系统授权弹窗的说明是最新的（mobile/scripts/gen-ios-strings.mjs）。
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,13 +51,25 @@ function* sourceFiles(path, ext) {
   for (const name of readdirSync(path)) {
     const full = join(path, name);
     if (statSync(full).isDirectory()) {
-      if (!["target", "gen", "node_modules", "dist"].includes(name)) yield* sourceFiles(full, ext);
+      if (!["target", "gen", "node_modules", "dist", "build", ".build"].includes(name)) yield* sourceFiles(full, ext);
     } else if (ext.test(name)) yield full;
   }
 }
 for (const file of sourceFiles(join(repo, "app/src"), /\.tsx?$/)) allSource += readFileSync(file, "utf8");
 // 服务端（server/）发给用户的文字（验证码邮件）也用这份语言包。
 for (const file of sourceFiles(join(repo, "server/src"), /\.ts$/)) allSource += readFileSync(file, "utf8");
+// 手机端（mobile/）：Swift 和 Kotlin 都是 t("key", …)，占位符要给值。
+let mobile = 0;
+for (const file of sourceFiles(join(repo, "mobile"), /\.(swift|kt)$/)) {
+  if (/\/(Tests|test)\//.test(file)) continue;
+  const text = readFileSync(file, "utf8");
+  allSource += text;
+  for (const [, key, next] of text.matchAll(/\bt\(\s*"([a-zA-Z]+\.[\w.]+)"\s*([,)])/g)) {
+    mobile++;
+    if (!base.has(key)) problem(`${file.slice(repo.length)}: unknown key ${key}`);
+    else if (next === ")" && placeholders(base.get(key))) problem(`${file.slice(repo.length)}: t("${key}") needs {${placeholders(base.get(key))}}`);
+  }
+}
 for (const file of rustFiles(join(repo, "crates"))) {
   const text = readFileSync(file, "utf8");
   allSource += text;
@@ -75,11 +90,14 @@ for (const file of sourceFiles(join(repo, "app/src"), /\.tsx?$/)) {
 }
 
 for (const key of base.keys()) {
-  if (!/^(status|error|menu|macos)\./.test(key) && !allSource.includes(`"${key}"`)) problem(`en.json: ${key} is not used anywhere`);
+  if (!/^(status|error|menu|macos|mobile\.perm)\./.test(key) && !allSource.includes(`"${key}"`)) problem(`en.json: ${key} is not used anywhere`);
 }
+
+const strings = spawnSync(process.execPath, [join(repo, "mobile/scripts/gen-ios-strings.mjs"), "--check"], { stdio: "inherit" });
+if (strings.status !== 0) problems++;
 
 if (problems) {
   console.error(`i18n: ${problems} problem(s)`);
   process.exit(1);
 }
-console.log(`i18n: ${base.size} keys × ${files.length} locales OK (${used} uses in Rust)`);
+console.log(`i18n: ${base.size} keys × ${files.length} locales OK (${used} uses in Rust, ${mobile} on mobile)`);

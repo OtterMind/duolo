@@ -1,0 +1,4 @@
+/* 由 mobile/scripts/gen-ios-strings.mjs 生成 */
+NSCameraUsageDescription = "Duolo, bilgisayarınızda gösterilen kodu taramak için kamerayı kullanır.";
+NSMicrophoneUsageDescription = "Duolo, kodlama ajanlarınızla konuşabilmeniz için mikrofonu kullanır.";
+NSSpeechRecognitionUsageDescription = "Duolo, söylediklerinizi metne çevirip kodlama ajanlarınıza gönderir.";

@@ -1,0 +1,8 @@
+/ios/*.xcodeproj
+/ios/build
+/ios/DuoloKit/.build
+/ios/DuoloKit/.swiftpm
+/android/.gradle
+/android/.kotlin
+/android/**/build
+/android/local.properties

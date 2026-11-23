@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 标志：实心圆叠一个圆环，和桌面端的图标一致。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFEDEDED" android:fillType="evenOdd" android:pathData="M59,54m-15.2,0a15.2,15.2 0,1 1,30.4 0a15.2,15.2 0,1 1,-30.4 0M59,54m-11.7,0a11.7,11.7 0,1 1,23.4 0a11.7,11.7 0,1 1,-23.4 0" />
+    <path android:fillColor="#FFEDEDED" android:pathData="M49.4,54m-15.2,0a15.2,15.2 0,1 1,30.4 0a15.2,15.2 0,1 1,-30.4 0" />
+</vector>

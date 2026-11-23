@@ -87,7 +87,8 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 - **守护进程 `duolod`**：把 `Engine` 搬进常驻进程，桌面应用和 TUI 通过 Unix socket 调用同样的方法；`duolo-pty` 无需改动。
   拆分后退出应用不会结束 Agent，手机端也能连接。`duolo-app/src/view.rs` 的快照格式就是以后的协议基础。
-- **网页端 / 手机端**：`app/` 的界面只依赖 `lib/api.ts` 这一层，换成 WebSocket 实现即可复用。
+- **网页端**：`app/` 的界面只依赖 `lib/api.ts` 这一层，换成 WebSocket 实现即可复用。
+- **手机端**：iOS 和 Android 各用原生语言写，在 `mobile/`，见 [mobile.md](mobile.md)。
 - **hooks 和会话日志**：在 `duolo-pty::detect` 之上增加结构化来源（Claude hooks、`~/.claude/projects/*.jsonl`、
   `~/.codex/sessions/*.jsonl`），启发式规则保留为兜底。
 - **新的 Agent CLI**：在配置里加 `[agents.<name>]` 即可，无需改代码。

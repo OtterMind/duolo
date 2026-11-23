@@ -31,6 +31,10 @@ pub enum UserError {
     ReviewNotConfigured,
     #[error("the agent is not running")]
     AgentNotRunning,
+    #[error("the agent is no longer waiting for this answer")]
+    PromptChanged,
+    #[error("the command arrived too late")]
+    CommandExpired,
     #[error("task not found")]
     TaskNotFound,
     #[error("the task is being closed")]
@@ -83,6 +87,8 @@ impl UserError {
             Self::NotRecording => "notRecording",
             Self::ReviewNotConfigured => "reviewNotConfigured",
             Self::AgentNotRunning => "agentNotRunning",
+            Self::PromptChanged => "promptChanged",
+            Self::CommandExpired => "commandExpired",
             Self::TaskNotFound => "taskNotFound",
             Self::TaskClosing => "taskClosing",
             Self::ProjectNotFound => "projectNotFound",

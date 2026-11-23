@@ -13,12 +13,22 @@ use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, TaskEvent, TaskId, Use
 
 use crate::engine::Engine;
 use crate::events::EventLog;
-use crate::prompt::{is_choosing, parse_prompt};
+use crate::prompt::{is_choosing, parse_prompt, Prompt};
 use crate::status::AgentStatus;
 use crate::transcript::{Entry, Flavor, Watcher};
 
 /// 状态要稳定这么久才记成事件。
 const STATUS_SETTLE: Duration = Duration::from_millis(1500);
+
+/// 已经记下来、Agent 正在等的提示。
+#[derive(Debug)]
+struct OpenPrompt {
+    /// 提示的内容，变了就是另一条提示。
+    id: String,
+    /// 记成事件时的编号；没记成（写文件失败）时为空。
+    seq: Option<u64>,
+    options: usize,
+}
 
 /// 事件流用到的状态，挂在 [`Engine`] 上。
 #[derive(Debug)]
@@ -31,7 +41,7 @@ pub(crate) struct LiveState {
     status: HashMap<AgentKey, String>,
     /// 刚变成的状态和变的时间：稳定一会儿才记，避免界面重绘时"运行中 / 空闲"来回跳。
     settling: HashMap<AgentKey, (String, Instant)>,
-    prompt: HashMap<AgentKey, String>,
+    prompt: HashMap<AgentKey, OpenPrompt>,
     diff: HashMap<TaskId, duolo_git::DiffStat>,
     /// Agent 还没准备好时收到的消息，准备好后再发。
     pending: HashMap<AgentKey, Vec<String>>,
@@ -69,11 +79,12 @@ impl Engine {
         self.live.log.since(task, after)
     }
 
-    /// 记一条事件。写文件失败时只丢这一条，不影响正在做的事。
-    pub(crate) fn record(&mut self, task: TaskId, kind: EventKind) {
-        if let Ok(event) = self.live.log.append(task, kind) {
-            self.live.fresh.push(event);
-        }
+    /// 记一条事件，返回它的编号。写文件失败时只丢这一条，不影响正在做的事。
+    pub(crate) fn record(&mut self, task: TaskId, kind: EventKind) -> Option<u64> {
+        let event = self.live.log.append(task, kind).ok()?;
+        let seq = event.seq;
+        self.live.fresh.push(event);
+        Some(seq)
     }
 
     /// Agent 启动后开始跟着它的会话记录。
@@ -131,19 +142,17 @@ impl Engine {
                 }
             }
             if status == AgentStatus::NeedsInput {
-                let prompt =
-                    self.sessions.get(&key).and_then(|s| s.with_screen(|screen| parse_prompt(&screen.contents())));
-                if let Some(prompt) = prompt {
-                    let id = format!("{}\n{}\n{}", prompt.question, prompt.detail, prompt.options.join("\n"));
-                    if self.live.prompt.get(&key) != Some(&id) {
-                        self.live.prompt.insert(key, id);
+                if let Some((id, prompt)) = self.prompt_on_screen(key) {
+                    if self.live.prompt.get(&key).map(|p| &p.id) != Some(&id) {
+                        let options = prompt.options.len();
                         let kind = EventKind::Prompt {
                             agent: key.agent,
                             question: prompt.question,
                             detail: prompt.detail,
                             options: prompt.options,
                         };
-                        self.record(key.task, kind);
+                        let seq = self.record(key.task, kind);
+                        self.live.prompt.insert(key, OpenPrompt { id, seq, options });
                     }
                 }
             } else {
@@ -158,6 +167,13 @@ impl Engine {
                 }
             }
         }
+    }
+
+    /// 画面上现在等着用户选的提示，和区分它的标识。
+    fn prompt_on_screen(&self, key: AgentKey) -> Option<(String, Prompt)> {
+        let prompt = self.sessions.get(&key)?.with_screen(|screen| parse_prompt(&screen.contents()))?;
+        let id = format!("{}\n{}\n{}", prompt.question, prompt.detail, prompt.options.join("\n"));
+        Some((id, prompt))
     }
 
     fn poll_diffs(&mut self) {
@@ -222,8 +238,20 @@ impl Engine {
     }
 
     /// 回答 Agent 正在等的选择（`option` 从 0 开始），等于在终端里按对应的数字键。
-    pub fn answer(&mut self, task: TaskId, option: usize) -> Result<()> {
+    /// `prompt` 有值时只回答那一条提示，Agent 已经不在等它时报 `promptChanged`。
+    pub fn answer(&mut self, task: TaskId, option: usize, prompt: Option<u64>) -> Result<()> {
         let key = self.writer_key(task)?;
+        if let Some(seq) = prompt {
+            // 画面可能刚变，上次轮询记下的还没更新：和现在画面上的比。
+            let waiting = self.agent_status(key) == AgentStatus::NeedsInput;
+            let on_screen = self.prompt_on_screen(key).map(|(id, _)| id);
+            let matches = self.live.prompt.get(&key).is_some_and(|p| {
+                p.seq == Some(seq) && option < p.options && on_screen.as_deref() == Some(p.id.as_str())
+            });
+            if !waiting || !matches {
+                return Err(UserError::PromptChanged.into());
+            }
+        }
         self.write(key, (option + 1).to_string().as_bytes())
     }
 
@@ -352,7 +380,13 @@ mod tests {
         );
         assert!(events.windows(2).all(|w| w[1].seq == w[0].seq + 1), "编号连续");
 
-        assert!(execute(&engine, Command::Answer { task, option: 0 }).ok);
+        // 回答的不是现在这条提示，或者没有这个选项：不执行。
+        let seq = events.iter().rev().find(|e| matches!(e.kind, EventKind::Prompt { .. })).unwrap().seq;
+        for (option, prompt) in [(0, seq + 100), (7, seq)] {
+            let late = execute(&engine, Command::Answer { task, option, prompt: Some(prompt) });
+            assert_eq!(late.error.as_deref(), Some("promptChanged"));
+        }
+        assert!(execute(&engine, Command::Answer { task, option: 0, prompt: Some(seq) }).ok);
         let mut guard = engine.lock().unwrap();
         let key = guard.writer_key(task).unwrap();
         wait_screen(&mut guard, key, "picked-1");

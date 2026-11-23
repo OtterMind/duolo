@@ -110,9 +110,13 @@ pub enum Command {
         text: String,
     },
     /// 回答 Agent 正在等的选择，`option` 从 0 开始。
+    /// `prompt` 是被回答的那条 [`EventKind::Prompt`] 的编号：Agent 已经在等别的了就不执行，
+    /// 避免晚到的"允许"批准了另一条命令。别的设备发来的必须带。
     Answer {
         task: TaskId,
         option: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<u64>,
     },
     /// 打断 Agent 正在做的事（相当于在终端里按 Esc）。
     Interrupt {
@@ -155,7 +159,7 @@ mod tests {
         assert_eq!(serde_json::from_str::<TaskEvent>(&json).unwrap(), event);
 
         let cmd: Command = serde_json::from_str(r#"{"type":"answer","task":3,"option":0}"#).unwrap();
-        assert_eq!(cmd, Command::Answer { task: TaskId(3), option: 0 });
+        assert_eq!(cmd, Command::Answer { task: TaskId(3), option: 0, prompt: None });
         let cmd: Command = serde_json::from_str(r#"{"type":"create_task","project":"shop","prompt":"x"}"#).unwrap();
         assert!(matches!(cmd, Command::CreateTask { repo: None, .. }));
     }

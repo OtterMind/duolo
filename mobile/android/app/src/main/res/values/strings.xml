@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 给用户看的文字都在仓库根目录的 locales/*.json，这里只有品牌名。 -->
+<resources>
+    <string name="app_name" translatable="false">Duolo</string>
+</resources>

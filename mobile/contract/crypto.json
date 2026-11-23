@@ -1,0 +1,45 @@
+{
+  "comment": "由 gen-crypto.mjs 生成",
+  "desktop": {
+    "privateKey": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o=",
+    "publicKey": "yP7Kgb4ZbN8sreq/E8SQPXYy3OSVWqaLbl2a3vVOJhY="
+  },
+  "phone": {
+    "privateKey": "WmFob3Z9hIuSmaCnrrW8w8rR2N/m7fT7AgkQFx4lLDM=",
+    "publicKey": "twkAHKzukP6toa49f0kdtuBtwPAsN892MZpt/c+mvA8="
+  },
+  "secret": "yM/W3eTr8vkABw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqE=",
+  "keys": {
+    "desktopToPhone": "zPXnQtTCTDOHshAxTeUiQWuF3RqJbPn3VUCAmBxQZWA=",
+    "phoneToDesktop": "6zJ92DGW9twKebS6SoIonbaqtdaKyni1K4Zc5u4X5c0="
+  },
+  "messages": [
+    {
+      "direction": "phoneToDesktop",
+      "id": "m-1",
+      "from": "phone-1",
+      "to": "desktop-1",
+      "nonce": "AwoRGB8mLTQ7QklQ",
+      "plaintext": "{\"v\":1,\"type\":\"sync\"}",
+      "body": "AQMKERgfJi00O0JJUCF8wxmtQ1Fe20gLNuJJYUFuYjc8mFZ/3yrD37VSWllTH8+05lo="
+    },
+    {
+      "direction": "desktopToPhone",
+      "id": "m-2",
+      "from": "desktop-1",
+      "to": "phone-1",
+      "nonce": "MjlAR05VXGNqcXh/",
+      "plaintext": "{\"v\":1,\"type\":\"result\",\"id\":\"c-1\",\"result\":{\"ok\":true}}",
+      "body": "ATI5QEdOVVxjanF4f9dSUDtfGQyLnR5AG8Y47T/itLyyA7tZLXde3NbreWKuAy7dZZBSzqG+nlausPqjrkYLkj1uvLTvebYQyYOKWF7p773mvBW8"
+    },
+    {
+      "direction": "desktopToPhone",
+      "id": "m-3",
+      "from": "desktop-1",
+      "to": "phone-1",
+      "nonce": "TVRbYmlwd36FjJOa",
+      "plaintext": "多字节：你好 👋",
+      "body": "AU1UW2JpcHd+hYyTmhMWExGi7kEtzSpQIGnyPIg6txvZzllgR9k7LBs7tQVG0xhw68bxvg=="
+    }
+  ]
+}

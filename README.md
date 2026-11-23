@@ -153,7 +153,7 @@ Details are in [docs/architecture.md](docs/architecture.md), and the localizatio
 - There is no separate daemon: quitting stops all agents, and their sessions resume when you reopen a task.
 - Agent state is detected from the terminal screen, not from hooks.
 - Windows and Linux haven't been tested end to end on real machines.
-- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. A mobile app is in progress; its relay is in [server/](server/README.md).
+- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. Native iOS and Android apps are in progress ([docs/mobile.md](docs/mobile.md)), with a relay in [server/](server/README.md); the desktop app does not connect to it yet.
 - On Linux the push-to-talk shortcut works on X11 only. On Wayland, click the microphone.
 
 ## Contributing

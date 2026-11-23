@@ -1,0 +1,4 @@
+/* 由 mobile/scripts/gen-ios-strings.mjs 生成 */
+NSCameraUsageDescription = "O Duolo usa a câmera para escanear o código exibido no seu computador.";
+NSMicrophoneUsageDescription = "O Duolo usa o microfone para você falar com seus agentes de programação.";
+NSSpeechRecognitionUsageDescription = "O Duolo transforma sua fala em texto para enviar aos seus agentes de programação.";

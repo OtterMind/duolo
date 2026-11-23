@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 明文 http 只给自己架设在局域网里的服务器用。这里没法按网段限制，
+     公网的 http 地址在 PairingLink 里就拒绝了，应用只连配对过的地址。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

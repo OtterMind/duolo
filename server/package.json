@@ -13,7 +13,8 @@
     "start": "node --no-warnings dist/main.js",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "mobile-sandbox": "tsx --no-warnings dev/mobile-sandbox.ts"
   },
   "dependencies": {
     "@fastify/websocket": "^11.3.7",

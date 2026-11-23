@@ -13,7 +13,10 @@ pub const HOME_ENV: &str = "DUOLO_HOME";
 /// ~/.duolo/
 ///   config.toml   用户配置
 ///   state.json    项目和任务
+///   agents/       用户自己装的 Agent 插件
 ///   wt/           每个任务的 git worktree
+///   review/       审阅时的临时副本，审阅完就删
+///   hooks/        Agent 的钩子事件：`<任务>-<Agent>/` 里一个事件一个文件，`<任务>-<Agent>.settings.json` 是交给它的设置
 /// ```
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -51,8 +54,23 @@ impl Paths {
         self.root.join("state.json")
     }
 
+    /// 用户自己装的 Agent 插件：`agents/<id>/agent.toml`。
+    pub fn agents(&self) -> PathBuf {
+        self.root.join("agents")
+    }
+
     pub fn worktrees(&self) -> PathBuf {
         self.root.join("wt")
+    }
+
+    /// Agent 的钩子：事件目录和设置文件，见 `duolo_core::hook`。
+    pub fn hooks(&self) -> PathBuf {
+        self.root.join("hooks")
+    }
+
+    /// 审阅时的临时副本：`review/<开始时间>-<任务>-<序号>`。
+    pub fn reviews(&self) -> PathBuf {
+        self.root.join("review")
     }
 
     /// 每个任务的事件流：`events/<任务编号>.jsonl`，一行一个事件。

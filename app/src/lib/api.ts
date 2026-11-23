@@ -33,6 +33,8 @@ export interface Task {
   /** 正在后台审阅时的开始时间（Unix 秒）。 */
   reviewingSince: number | null;
   review: Review | null;
+  /** 换回来时能接着原来会话的 Agent。 */
+  resumable: string[];
 }
 
 export interface Review {
@@ -62,15 +64,29 @@ export interface Snapshot {
 
 export interface Check {
   kind: "git" | "agent" | "voice";
-  /** Agent 的种类（claude、codex），其他检查为空。 */
+  /** Agent 的种类，其他检查为空。 */
   agent: string;
   /** 没安装时的安装命令（Agent 才有）。 */
   install: string;
-  /** 显示名，例如 git、Claude。 */
+  /** 显示名，例如 git、Agent 的名字。 */
   name: string;
   ok: boolean;
   command: string;
   version: string;
+  /** 装的版本太旧时，最低要求的版本。 */
+  minimum: string;
+}
+
+/** 一种 Agent 的名字和图标。 */
+export interface AgentPlugin {
+  id: string;
+  name: string;
+  /** 单色 SVG，没有时显示首字母。 */
+  icon: string | null;
+  /** 图标的颜色，没有时跟随文字颜色。 */
+  color: string | null;
+  /** 能不能用来审阅。 */
+  reviews: boolean;
 }
 
 /** 关闭任务的结果。 */
@@ -101,6 +117,9 @@ export type TaskEvent = { task: number; seq: number; at: number } & (
   | { type: "tool"; agent: number; tool: string; target: string }
   | { type: "status"; agent: number; status: Status }
   | { type: "prompt"; agent: number; question: string; detail: string; options: string[] }
+  | { type: "approval"; agent: number; tool: string; target: string }
+  | { type: "writer_changed"; from: number; to: number; kind: string }
+  | { type: "reviewer_changed"; reviewer: string }
   | { type: "review_started"; reviewer: string }
   | { type: "review_finished"; ok: boolean; verdict: Review["verdict"]; issues: number; summary: string }
   | { type: "diff"; files: number; insertions: number; deletions: number }
@@ -111,7 +130,8 @@ export type RemoteCommand =
   | ({ type: "create_task"; project: string; prompt: string } & NewTaskOptions)
   | { type: "send_message"; task: number; text: string }
   | { type: "answer"; task: number; option: number; prompt?: number }
-  | { type: "interrupt" | "start_review" | "close_task"; task: number };
+  | { type: "interrupt" | "start_review" | "close_task"; task: number }
+  | { type: "switch_writer" | "set_reviewer"; task: number; agent: string };
 
 export interface CommandResult {
   ok: boolean;
@@ -182,8 +202,8 @@ export const api = {
       repo: opts.repo ?? null,
       base: opts.base ?? null,
       branch: opts.branch ?? null,
-      writer: opts.writer ?? null,
-      reviewer: opts.reviewer ?? null,
+      writer: opts.writer || null,
+      reviewer: opts.reviewer || null,
     }),
   taskEvents: (task: number, after: number) => invoke<TaskEvent[]>("task_events", { task, after }),
   execute: (command: RemoteCommand) => invoke<CommandResult>("execute", { command }),
@@ -194,6 +214,7 @@ export const api = {
   projectsHome: () => invoke<string>("projects_home"),
   createProjectFolder: (name: string, parent: string | null) =>
     invoke<string>("create_project_folder", { name, parent }),
+  agentPlugins: () => invoke<AgentPlugin[]>("agent_plugins"),
   agentDefaults: () => invoke<{ writer: string; reviewer: string }>("agent_defaults"),
   renameTask: (task: number, title: string) => invoke<void>("rename_task", { task, title }),
   branches: (repo: string) => invoke<string[]>("branches", { repo }),
@@ -202,9 +223,13 @@ export const api = {
   nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt, branch: null }),
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
+  /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
+  switchWriter: (task: number, kind: string) => invoke<number>("switch_writer", { task, kind }),
+  setReviewer: (task: number, kind: string) => invoke<void>("set_reviewer", { task, kind }),
   startReview: (task: number) => invoke<void>("start_review", { task }),
   cancelReview: (task: number) => invoke<void>("cancel_review", { task }),
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),
+  newline: (r: AgentRef) => invoke<void>("newline", { ...r }),
   sendText: (r: AgentRef, text: string, submit: boolean) => invoke<void>("send_text", { ...r, text, submit }),
   resize: (rows: number, cols: number) => invoke<void>("resize", { rows, cols }),
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),

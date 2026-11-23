@@ -3,33 +3,23 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use duolo_agent::{Plugin, Registry, Start};
+use duolo_core::config::{CHANGES_IN_FILE, CHANGES_IN_GIT};
+use duolo_core::hook::HOOK_DIR_ENV;
+use duolo_core::process::OneShot;
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
     AgentKey, AgentKind, AgentRole, AgentSpec, Config, EventKind, Paths, Project, ProjectId, Review, Stamp, State,
     Store, Task, TaskId, UserError, Verdict,
 };
 use duolo_git::DiffStat;
-use duolo_pty::{OutputHook, OutputSink, Session, SessionSpec, Size};
+use duolo_pty::{OutputHook, OutputSink, Rules, Session, SessionSpec, Size};
 
 use crate::diffs::Diffs;
 use crate::live::LiveState;
 use crate::review::ReviewJob;
 use crate::status::{AgentStatus, Summary};
 
-/// Claude Code 给自己子进程设置的会话标记。从 Claude Code 里启动 Duolo 时会被继承下来，
-/// 让 Agent 以为自己是子会话（例如不保存对话记录，之后就无法恢复），启动 Agent 前去掉。
-const INHERITED_SESSION_VARS: &[&str] = &[
-    "CLAUDECODE",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_SESSION_ATTENDED",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_CODE_EXECPATH",
-    "CLAUDE_PID",
-    "CLAUDE_EFFORT",
-];
 /// 关闭任务时 worktree 改成的名字：`.closing-<Unix 秒>-<任务编号>`。
 const CLOSING_PREFIX: &str = ".closing-";
 /// 恢复会话后在这段时间内（或者还没画出输入框时）异常退出，就认为没有可以恢复的会话。
@@ -168,19 +158,26 @@ fn rename_when_free(from: &Path, to: &Path) -> std::io::Result<()> {
 pub struct Engine {
     paths: Paths,
     config: Config,
+    agents: Registry,
     store: Store,
     /// 内存里的状态。只通过 [`Engine::update`] 修改，别的进程改了由 [`Engine::sync`] 读进来。
     pub(crate) state: State,
     /// 内存里的状态对应 `state.json` 的哪个版本。
     stamp: Option<Stamp>,
-    /// 启动时发现、要告诉用户的问题（数据文件损坏、配置写错了）。
+    /// 启动时发现、要告诉用户的问题（数据文件损坏、配置或插件写错了）。
     notices: Vec<UserError>,
     pub(crate) sessions: HashMap<AgentKey, Session>,
     /// 每次启动进程都分配一个新编号，界面据此判断要不要重新订阅输出。
-    session_ids: HashMap<AgentKey, u64>,
+    pub(crate) session_ids: HashMap<AgentKey, u64>,
     next_session_id: u64,
     /// 以"恢复会话"方式启动、还在观察期内的 Agent。
-    resuming: HashSet<AgentKey>,
+    pub(crate) resuming: HashSet<AgentKey>,
+    /// 由 Duolo 定了会话编号、还在观察期内的 Agent。
+    assigning: HashSet<AgentKey>,
+    /// 钩子命令用的程序（Duolo 自己，见 `duolo_core::hook`）；没设置时不装钩子。
+    hook_program: Option<PathBuf>,
+    /// 这次运行里发现不认得"指定会话编号"选项的 Agent（版本太旧，或者以后改了名字），之后不再给它定编号。
+    no_session_ids: HashSet<AgentKind>,
     reviews: HashMap<TaskId, ReviewJob>,
     /// 审阅结论使用的语言（英文名），跟随界面语言。
     reply_language: String,
@@ -215,6 +212,8 @@ impl Engine {
             notices.push(UserError::ConfigInvalid { path, detail: err.root_cause().to_string().trim().to_string() });
             Config::default()
         });
+        let (agents, problems) = Registry::load(&config, &paths.agents());
+        notices.extend(problems);
         let store = Store::new(paths.state_file());
         let mut live = LiveState::new(paths.events());
         let (state, stamp) = {
@@ -238,9 +237,11 @@ impl Engine {
             (state, store.stamp())
         };
         remove_leftovers(&paths.worktrees());
+        crate::review::remove_leftovers(&paths.reviews());
         Ok(Self {
             paths,
             config,
+            agents,
             store,
             state,
             stamp,
@@ -249,6 +250,9 @@ impl Engine {
             session_ids: HashMap::new(),
             next_session_id: 1,
             resuming: HashSet::new(),
+            assigning: HashSet::new(),
+            hook_program: None,
+            no_session_ids: HashSet::new(),
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
             pane: Size::new(24, 80),
@@ -267,6 +271,29 @@ impl Engine {
         &self.config
     }
 
+    /// 可用的 Agent 插件。
+    pub fn agents(&self) -> &Registry {
+        &self.agents
+    }
+
+    /// 给新分支起名用的命令；不用 AI 起名、没有能用的 Agent 时为 None。
+    pub fn namer(&self) -> Option<OneShot> {
+        self.small_job(&self.config.namer)
+    }
+
+    /// 整理口述内容用的命令，同上。
+    pub fn organizer(&self) -> Option<OneShot> {
+        self.small_job(&self.config.voice.organizer)
+    }
+
+    fn small_job(&self, configured: &Option<Vec<String>>) -> Option<OneShot> {
+        match configured {
+            Some(argv) if argv.is_empty() => None,
+            Some(argv) => Some(self.agents.clean(argv.clone().into())),
+            None => self.agents.quick(),
+        }
+    }
+
     pub fn state(&self) -> &State {
         &self.state
     }
@@ -279,7 +306,7 @@ impl Engine {
     /// 修改状态并保存。桌面应用、终端界面和 `duolo new` 可能同时在运行，所以独占 `state.json`，
     /// 在最新的内容上改；`change` 报错或保存失败时什么都不变。
     /// `change` 里只改状态，不做 git 操作之类费时间的事，也不再调用会修改状态的方法。
-    fn update<R>(&mut self, change: impl FnOnce(&mut State) -> Result<R>) -> Result<R> {
+    pub(crate) fn update<R>(&mut self, change: impl FnOnce(&mut State) -> Result<R>) -> Result<R> {
         let lock = self.store.lock()?;
         let mut state = self.store.reload()?.unwrap_or_else(|| self.state.clone());
         let result = change(&mut state)?;
@@ -302,6 +329,7 @@ impl Engine {
     }
 
     /// 换成新的状态，已经不在的任务的进程和缓存一并清掉。
+    /// 状态是准的：别的进程（命令行、手机）换下了这里正在跑的 Agent，就在这里停掉它，没发出去的消息交给接手的。
     fn adopt(&mut self, state: State, stamp: Option<Stamp>) {
         let old = std::mem::replace(&mut self.state, state);
         self.stamp = stamp;
@@ -310,6 +338,19 @@ impl Engine {
             self.reviews.remove(&id);
             self.diffs.remove(id);
             self.forget_task(id);
+        }
+        let gone: Vec<AgentKey> = self
+            .sessions
+            .keys()
+            .filter(|key| self.state.task(key.task).is_some_and(|t| t.agent(key.agent).is_none()))
+            .copied()
+            .collect();
+        for key in gone {
+            self.sessions.remove(&key);
+            self.resuming.remove(&key);
+            self.session_ids.remove(&key);
+            let successor = self.writer_key(key.task).ok();
+            self.hand_over(key, successor);
         }
     }
 
@@ -406,7 +447,7 @@ impl Engine {
         let writer = opts.writer.clone().unwrap_or_else(|| self.config.writer.clone());
         let reviewer = opts.reviewer.clone().unwrap_or_else(|| self.config.reviewer.clone());
         for kind in [&writer, &reviewer] {
-            self.profile(kind)?;
+            self.agents.get(kind)?;
         }
         let repo = match &opts.repo {
             Some(repo) => repo.clone(),
@@ -443,7 +484,7 @@ impl Engine {
             None => slug(&title),
         };
         let worktree = self.paths.worktrees().join(&project.id.0).join(format!("{id}-{label}"));
-        let writer = AgentSpec { id: 0, kind: writer, role: AgentRole::Writer, launched: false };
+        let writer = AgentSpec::new(0, writer, AgentRole::Writer);
         let task = Task {
             id,
             project: project.id,
@@ -457,6 +498,7 @@ impl Engine {
             repo: Some(repo.clone()),
             reviewer: Some(reviewer),
             review: None,
+            retired: Vec::new(),
         };
         Ok(NewTask { task, repo })
     }
@@ -578,6 +620,17 @@ impl Engine {
     pub fn finish_close(&mut self, id: TaskId, result: Result<Closed>) -> Result<Closed> {
         self.closing.remove(&id);
         let closed = result?;
+        // 任务的目录没了，替它记下的信任也删掉（每种 Agent 都试一下：中途可能换过人）。钩子的事件也不要了。
+        if let Some(task) = self.state.task(id) {
+            for plugin in self.agents.iter() {
+                let _ = plugin.forget_trust(&self.live.home, &task.worktree);
+            }
+            for agent in task.agents.iter().chain(&task.retired) {
+                let dir = self.hook_dir(task.key(agent.id));
+                let _ = std::fs::remove_dir_all(&dir);
+                let _ = std::fs::remove_file(dir.with_extension("settings.json"));
+            }
+        }
         self.update(|state| {
             state.tasks.retain(|t| t.id != id);
             Ok(())
@@ -600,7 +653,7 @@ impl Engine {
                 return Ok(existing.id);
             }
             let id = t.next_agent_id();
-            t.agents.push(AgentSpec { id, kind: reviewer_kind, role: AgentRole::Reviewer, launched: false });
+            t.agents.push(AgentSpec::new(id, reviewer_kind, AgentRole::Reviewer));
             Ok(id)
         })?;
         let key = AgentKey { task, agent: agent_id };
@@ -618,13 +671,15 @@ impl Engine {
         self.check_open(id)?;
         let reviewer = self.reviewer_of(id)?;
         let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
-        let prompt = self.review_prompt(task);
+        let fork = self.fork_of(task);
+        let prompt = self.config.review_prompt_for(&task.base, &fork, &self.reply_language, CHANGES_IN_FILE);
         // config.toml 里写了 review_command 时用它，否则用审阅 Agent 自己的只读审阅命令。
         let command = match &self.config.review_command {
-            custom if !custom.is_empty() => custom.clone(),
-            _ => self.profile(&reviewer)?.review_command.clone(),
+            custom if !custom.is_empty() => self.agents.clean(custom.clone().into()),
+            _ => self.agents.review(&reviewer)?,
         };
-        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone(), INHERITED_SESSION_VARS)?;
+        let copy = crate::review::copy_dir(&self.paths.reviews(), id.0);
+        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone(), copy, fork)?;
         self.reviews.insert(id, job);
         self.record(id, EventKind::ReviewStarted { reviewer: reviewer.0 });
         Ok(())
@@ -729,6 +784,35 @@ impl Engine {
                 None => {}
             }
         }
+        // 定了会话编号却马上出错退出、而且说的是那个选项：它不认得，不再给它定编号，重新开始。
+        let keys: Vec<AgentKey> = self.assigning.iter().copied().collect();
+        for key in keys {
+            let Some(session) = self.sessions.get_mut(&key) else {
+                self.assigning.remove(&key);
+                continue;
+            };
+            match session.poll_exit() {
+                Some(exit) if !exit.success => {
+                    self.assigning.remove(&key);
+                    let Ok(plugin) = self.plugin_of(key) else { continue };
+                    let option = plugin.session_id_option().unwrap_or_default().to_string();
+                    let said =
+                        self.sessions.get(&key).map(|s| s.with_screen(|screen| screen.contents())).unwrap_or_default();
+                    if !option.is_empty() && said.contains(&option) {
+                        let kind = plugin.kind();
+                        self.no_session_ids.insert(kind);
+                        retry.push(key);
+                    }
+                }
+                Some(_) => {
+                    self.assigning.remove(&key);
+                }
+                None if session.started().elapsed() >= RESUME_GRACE => {
+                    self.assigning.remove(&key);
+                }
+                None => {}
+            }
+        }
         retry.retain(|&key| self.spawn(key, true).is_ok());
         retry
     }
@@ -739,23 +823,34 @@ impl Engine {
     }
 
     /// 正在关闭的任务不能再启动东西。
-    fn check_open(&self, id: TaskId) -> Result<()> {
+    pub(crate) fn check_open(&self, id: TaskId) -> Result<()> {
         if self.closing.contains(&id) {
             return Err(UserError::TaskClosing.into());
         }
         Ok(())
     }
 
-    fn review_prompt(&self, task: &Task) -> String {
-        let commit = duolo_git::fork_point(&task.worktree, &task.base).unwrap_or_else(|_| task.base.clone());
-        self.config.review_prompt_for(&task.base, &commit, &self.reply_language)
+    /// 任务从基准分支分出来的提交（算不出来时用基准分支的名字）。
+    pub(crate) fn fork_of(&self, task: &Task) -> String {
+        duolo_git::fork_point(&task.worktree, &task.base).unwrap_or_else(|_| task.base.clone())
     }
 
     /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
     fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
         self.check_open(key.task)?;
-        let (spec, paste_later) = self.session_spec(key, fresh)?;
-        let resumed = !fresh && self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
+        // 启动过的接着上次的会话；恢复不了的（不知道会话编号，插件又不能"恢复最近一次"）带着需求重新开始。
+        let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent)).cloned();
+        let resumable =
+            spec.as_ref().is_some_and(|a| self.plugin_of(key).is_ok_and(|p| p.can_resume(a.session.as_deref())));
+        let resumed = !fresh && resumable && spec.as_ref().is_some_and(|a| a.launched);
+        let fresh = !resumed;
+        // 新开会话时能定编号的，由 Duolo 定：一开始就知道它的会话记录是哪个，不用猜。
+        let kind = self.state.task(key.task).and_then(|t| t.agent(key.agent)).map(|a| a.kind.clone());
+        let can_assign =
+            self.plugin_of(key)?.assigns_session() && !kind.is_some_and(|k| self.no_session_ids.contains(&k));
+        let assigned = (!resumed && can_assign).then(|| uuid::Uuid::new_v4().to_string());
+        let (spec, paste_later) = self.session_spec(key, fresh, assigned.as_deref())?;
+        self.trust_folder(key);
         let session = Session::spawn(spec)?;
         self.sessions.insert(key, session);
         if !resumed {
@@ -766,7 +861,7 @@ impl Engine {
         if let Some(text) = paste_later {
             self.queue_message(key, text);
         }
-        self.watch_transcript(key);
+        self.unsettle(key);
         self.session_ids.insert(key, self.next_session_id);
         self.next_session_id += 1;
         if resumed {
@@ -774,14 +869,38 @@ impl Engine {
         } else {
             self.resuming.remove(&key);
         }
-        let launched = self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
-        if !launched {
+        if assigned.is_some() {
+            self.assigning.insert(key);
+        } else {
+            self.assigning.remove(&key);
+        }
+        // 换回来的 Agent 接回了原来的会话：准备好之后先告诉它这期间发生了什么。重新开始的话交接说明里都有了。
+        let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent));
+        if let Some(note) = spec.and_then(|a| a.resume_note.clone()).filter(|_| resumed) {
+            self.queue_message(key, note);
+        }
+        // 重新开始的不再是以前那次会话：记下定好的编号，定不了的等读到新的会话记录再记。
+        let stale = self
+            .state
+            .task(key.task)
+            .and_then(|t| t.agent(key.agent))
+            .is_some_and(|a| !a.launched || (!resumed && a.session != assigned) || a.resume_note.is_some());
+        if stale {
             self.update(|state| {
                 if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
                     agent.launched = true;
+                    agent.resume_note = None;
+                    if !resumed {
+                        agent.session.clone_from(&assigned);
+                    }
                 }
                 Ok(())
             })?;
+        }
+        // 定好编号的新会话要从头读，不能当成恢复的（恢复的会跳过已有的内容）。
+        self.watch_transcript(key, resumed);
+        if assigned.is_some() {
+            self.share_sessions(key.task);
         }
         Ok(())
     }
@@ -860,50 +979,87 @@ impl Engine {
     }
 
     /// 启动 Agent 的命令。第二项是要等 Agent 准备好后再粘贴过去的第一句话（见下面的说明），一般是 None。
-    fn session_spec(&self, key: AgentKey, fresh: bool) -> Result<(SessionSpec, Option<String>)> {
-        let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
-        let agent = task.agent(key.agent).context("agent not found")?;
-        let profile = self.profile(&agent.kind)?;
-
-        let mut args = profile.args.clone();
-        if agent.role == AgentRole::Reviewer {
-            args.extend(profile.review_args.iter().cloned());
-        }
-        let mut first = None;
-        if agent.launched && !fresh {
-            args.extend(profile.resume_args.iter().cloned());
-        } else {
-            match agent.role {
-                AgentRole::Writer if task.prompt.is_empty() => {}
-                AgentRole::Writer => first = Some(task.prompt.clone()),
-                AgentRole::Reviewer => first = Some(self.review_prompt(task)),
-            }
-        }
-        // 第一句话一般作为命令行参数交给 Agent。Windows 上 npm 装的 `claude.cmd` 是批处理文件，
-        // 要经过 cmd.exe，带不了换行，也容易被特殊字符打乱：改为 Agent 准备好后粘贴过去。
-        let mut paste_later = None;
-        match first {
-            Some(text) if duolo_core::process::is_batch_file(duolo_core::process::resolve(&profile.command)) => {
-                paste_later = Some(text)
-            }
-            Some(text) => args.push(text),
-            None => {}
-        }
-
-        let spec = SessionSpec {
-            program: profile.command.clone(),
-            args,
-            cwd: task.worktree.clone(),
-            env: vec![("DUOLO_TASK_ID".into(), task.id.to_string())],
-            env_remove: INHERITED_SESSION_VARS.iter().map(|v| v.to_string()).collect(),
-            size: self.pane,
-            on_output: self.on_output.clone(),
-        };
-        Ok((spec, paste_later))
+    /// Agent 的钩子交给哪个程序：桌面应用、命令行启动时传自己（`std::env::current_exe`）。
+    pub fn set_hook_program(&mut self, program: PathBuf) {
+        self.hook_program = Some(program);
     }
 
-    fn profile(&self, kind: &AgentKind) -> Result<&duolo_core::AgentProfile> {
-        self.config.profile(kind).ok_or_else(|| UserError::UnknownAgent { kind: kind.0.clone() }.into())
+    /// Agent 的钩子事件写在哪个目录。
+    pub(crate) fn hook_dir(&self, key: AgentKey) -> PathBuf {
+        self.paths.hooks().join(format!("{}-{}", key.task, key.agent))
+    }
+
+    /// 准备好钩子：清掉上次留下的事件，写好设置文件，返回它的路径。不装钩子时为 None。
+    fn prepare_hooks(&self, key: AgentKey, plugin: &Plugin) -> Option<String> {
+        let program = self.hook_program.as_ref()?;
+        let command = format!("\"{}\" {}", program.display(), duolo_core::hook::HOOK_ARG);
+        let settings = plugin.hook_settings(&command, plugin.version().as_deref())?;
+        let dir = self.hook_dir(key);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).ok()?;
+        let file = dir.with_extension("settings.json");
+        std::fs::write(&file, settings).ok()?;
+        Some(file.display().to_string())
+    }
+
+    /// `assigned` 是新开会话时 Duolo 给它定的会话编号。
+    fn session_spec(
+        &self,
+        key: AgentKey,
+        fresh: bool,
+        assigned: Option<&str>,
+    ) -> Result<(SessionSpec, Option<String>)> {
+        let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
+        let agent = task.agent(key.agent).context("agent not found")?;
+        let plugin = self.agents.get(&agent.kind)?;
+        let resume = agent.launched && !fresh;
+        let prompt = match agent.role {
+            _ if resume => None,
+            _ if agent.prompt.is_some() => agent.prompt.clone(),
+            AgentRole::Writer => Some(task.prompt.clone()).filter(|p| !p.is_empty()),
+            AgentRole::Reviewer => Some(self.config.review_prompt_for(
+                &task.base,
+                &self.fork_of(task),
+                &self.reply_language,
+                CHANGES_IN_GIT,
+            )),
+        };
+        let session = if resume { agent.session.as_deref() } else { assigned };
+        let hooks = self.prepare_hooks(key, plugin);
+        let start = Start { role: agent.role, resume, session, hooks: hooks.as_deref(), prompt: prompt.as_deref() };
+        let launch = plugin.launch(start);
+        let screen = plugin.screen();
+        let spec = SessionSpec {
+            program: launch.program,
+            args: launch.args,
+            cwd: task.worktree.clone(),
+            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())]
+                .into_iter()
+                .chain(hooks.map(|_| (HOOK_DIR_ENV.to_string(), self.hook_dir(key).display().to_string())))
+                .chain(launch.env)
+                .collect(),
+            env_remove: self.agents.env_remove(),
+            size: self.pane,
+            rules: Rules { approval: screen.approval.clone(), busy: screen.busy.clone() },
+            on_output: self.on_output.clone(),
+        };
+        Ok((spec, launch.paste))
+    }
+
+    /// 启动前替用户信任任务的目录，Agent 就不会先停在"信任这个文件夹吗"上。用户添加项目就是信任它。
+    /// 记不下来时它照样会问，不影响启动。
+    fn trust_folder(&self, key: AgentKey) {
+        let (Some(task), Ok(plugin)) = (self.state.task(key.task), self.plugin_of(key)) else { return };
+        let project = self.state.project(&task.project).map(|p| p.root.clone());
+        let Some(repo) = task.repo.clone().or(project) else { return };
+        let _ = plugin.trust(&self.live.home, &task.worktree, &repo);
+    }
+
+    /// 任务里某个 Agent 的插件。
+    pub(crate) fn plugin_of(&self, key: AgentKey) -> Result<&Plugin> {
+        let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
+        let agent = task.agent(key.agent).context("agent not found")?;
+        Ok(self.agents.get(&agent.kind)?)
     }
 }
 
@@ -1223,6 +1379,27 @@ mod tests {
     }
 
     #[test]
+    fn small_jobs_follow_the_config() {
+        let open = |config: &str| {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("config.toml"), config).unwrap();
+            let engine = Engine::open(Paths::at(dir.path())).unwrap();
+            (engine.namer().map(|c| c.argv), engine.organizer().map(|c| c.argv))
+        };
+        // 别的内置 Agent 本机装没装都不影响结果。
+        let fake = "[agents.claude]\ncommand = \"git\"\n[agents.codex]\ncommand = \"duolo-no-such-command\"\n\
+                    [agents.opencode]\ncommand = \"duolo-no-such-command\"\n[agents.pi]\ncommand = \"duolo-no-such-command\"\n";
+        let (namer, organizer) = open(fake);
+        assert_eq!(namer.as_ref().unwrap()[0], "git", "没写时用装了的 Agent");
+        assert_eq!(namer, organizer);
+        let (namer, organizer) = open(&format!("namer = []\n[voice]\norganizer = [\"x\", \"y\"]\n{fake}"));
+        assert_eq!(namer, None, "写成空的就是不用");
+        assert_eq!(organizer.unwrap(), ["x", "y"]);
+        let none = fake.replace("\"git\"", "\"duolo-no-such-command\"");
+        assert_eq!(open(&none), (None, None));
+    }
+
+    #[test]
     fn background_review_saves_conclusion() {
         let (dir, mut engine, project) = engine_with_repo();
         let id = engine.create_task(&project, "Export orders as CSV").unwrap();
@@ -1246,6 +1423,59 @@ mod tests {
         assert!(review.ok, "{}", review.output);
         assert_eq!(review.summary(), "No issues found");
         assert!(engine.review_started_at(id).is_none());
+    }
+
+    /// 审阅在一份副本里：看得到没提交的改动，写了文件也不影响任务的 worktree，结束后副本删掉。
+    #[cfg(unix)]
+    #[test]
+    fn review_runs_in_a_copy() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let worktree = engine.state().task(id).unwrap().worktree.clone();
+        std::fs::write(worktree.join("orders.csv"), "id;total\n").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        // 改动写在 DUOLO_REVIEW.md 里，它不算副本里的改动。
+        let script = "grep -q '+id;total' DUOLO_REVIEW.md && test -z \"$(git status --porcelain)\" && \
+                      cat orders.csv && echo scribbled > orders.csv && touch junk && pwd";
+        std::fs::write(home.join("config.toml"), format!("review_command = [\"sh\", \"-c\", {script:?}]\n")).unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_review(id).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while engine.poll_reviews().is_empty() {
+            assert!(Instant::now() < deadline, "review timed out");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let review = engine.state().task(id).unwrap().review.clone().unwrap();
+        assert!(review.ok, "{}", review.output);
+        assert!(review.output.starts_with("id;total"), "{}", review.output);
+        // 结论里的路径换回任务的 worktree。
+        assert!(review.output.ends_with(&*worktree.to_string_lossy()), "{}", review.output);
+        assert_eq!(std::fs::read_to_string(worktree.join("orders.csv")).unwrap(), "id;total\n");
+        assert!(!worktree.join("junk").exists());
+        let left: Vec<_> = std::fs::read_dir(home.join("review")).unwrap().collect();
+        assert!(left.is_empty(), "{left:?}");
+    }
+
+    #[test]
+    fn cancelled_review_leaves_no_copy() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        std::fs::write(home.join("config.toml"), "review_command = [\"sh\", \"-c\", \"sleep 30\"]\n").unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_review(id).unwrap();
+        thread::sleep(Duration::from_millis(300));
+        engine.cancel_review(id);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while std::fs::read_dir(home.join("review")).is_ok_and(|mut d| d.next().is_some()) {
+            assert!(Instant::now() < deadline, "副本没有删掉");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let repo = engine.state().projects[0].root.clone();
+        let list = std::process::Command::new("git").arg("-C").arg(&repo).args(["worktree", "list"]).output().unwrap();
+        assert!(!String::from_utf8_lossy(&list.stdout).contains("review"), "登记也删了");
     }
 
     #[test]
@@ -1284,13 +1514,13 @@ mod tests {
     fn task_uses_chosen_writer_and_reviewer() {
         let (dir, mut engine, project) = engine_with_repo();
         let opts = TaskOptions {
-            writer: Some(AgentKind::codex()),
-            reviewer: Some(AgentKind::claude()),
+            writer: Some(AgentKind("codex".into())),
+            reviewer: Some(AgentKind("claude".into())),
             ..TaskOptions::default()
         };
         let id = engine.create_task_with(&project, "Export orders as CSV", &opts).unwrap();
-        assert_eq!(engine.state().task(id).unwrap().agents[0].kind, AgentKind::codex());
-        assert_eq!(engine.reviewer_of(id).unwrap(), AgentKind::claude());
+        assert_eq!(engine.state().task(id).unwrap().agents[0].kind.0, "codex");
+        assert_eq!(engine.reviewer_of(id).unwrap().0, "claude");
 
         // 审阅用的是审阅 Agent 自己的审阅命令。
         let home = dir.path().join("home");

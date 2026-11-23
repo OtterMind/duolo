@@ -12,7 +12,7 @@ use duolo_voice::{OrganizeContext, Recorder};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 
-use crate::view::{self, CheckView, DiffView, Snapshot};
+use crate::view::{self, CheckView, DiffView, PluginView, Snapshot};
 use crate::{AppState, Res};
 
 /// 在后台线程里做费时间的事。
@@ -41,9 +41,12 @@ pub fn startup_notices(state: State<'_, AppState>) -> Vec<crate::Error> {
 /// 检查 git、Agent CLI 和语音。会运行几个 `--version`，放到后台线程执行。
 #[tauri::command]
 pub async fn environment(state: State<'_, AppState>) -> Res<Vec<CheckView>> {
-    let mut config = state.engine().config().clone();
+    let (mut config, agents) = {
+        let engine = state.engine();
+        (engine.config().clone(), engine.agents().clone())
+    };
     config.voice = voice_config(&state);
-    let checks = tauri::async_runtime::spawn_blocking(move || check_environment(&config)).await?;
+    let checks = tauri::async_runtime::spawn_blocking(move || check_environment(&config, &agents)).await?;
     Ok(checks.into_iter().map(Into::into).collect())
 }
 
@@ -96,6 +99,12 @@ pub async fn execute(app: AppHandle, command: Command) -> Res<CommandResult> {
     blocking(app, move |state| Ok(ops::execute(&state.engine, command))).await
 }
 
+/// 可用的 Agent 插件：名字和图标。
+#[tauri::command]
+pub fn agent_plugins(state: State<'_, AppState>) -> Vec<PluginView> {
+    state.engine().agents().iter().map(Into::into).collect()
+}
+
 /// 配置里默认写代码和审阅的 Agent。
 #[tauri::command]
 pub fn agent_defaults(state: State<'_, AppState>) -> AgentDefaults {
@@ -113,7 +122,7 @@ pub struct AgentDefaults {
 /// 根据需求让 AI 给新分支起名；没装、超时或结果不能用时返回空，界面用默认名字。
 #[tauri::command]
 pub async fn suggest_branch(state: State<'_, AppState>, prompt: String) -> Res<Option<String>> {
-    let namer = state.engine().config().namer.clone();
+    let Some(namer) = state.engine().namer() else { return Ok(None) };
     Ok(tauri::async_runtime::spawn_blocking(move || duolo_engine::suggest_branch(&namer, &prompt)).await?)
 }
 
@@ -276,6 +285,20 @@ pub async fn start_reviewer(state: State<'_, AppState>, task: u64) -> Res<u32> {
     Ok(state.engine().start_reviewer(TaskId(task))?.agent)
 }
 
+/// 换写代码的 Agent：原来的停下，`kind` 在同一个 worktree 里接着做。返回接手的 Agent。
+#[tauri::command]
+pub async fn switch_writer(app: AppHandle, task: u64, kind: String) -> Res<u32> {
+    blocking(app, move |state| ops::switch_writer(&state.engine, TaskId(task), AgentKind(kind)))
+        .await
+        .map(|key| key.agent)
+}
+
+/// 换审阅的 Agent，下一次审阅起生效。
+#[tauri::command]
+pub async fn set_reviewer(state: State<'_, AppState>, task: u64, kind: String) -> Res<()> {
+    Ok(state.engine().set_reviewer(TaskId(task), AgentKind(kind))?)
+}
+
 /// 在后台审阅任务的改动。
 #[tauri::command]
 pub async fn start_review(state: State<'_, AppState>, task: u64) -> Res<()> {
@@ -301,9 +324,16 @@ pub fn write(state: State<'_, AppState>, task: u64, agent: u32, data: String) ->
     Ok(state.engine().write(key(task, agent), data.as_bytes())?)
 }
 
+/// 在 Agent 的输入框里换行（⇧↵）。
+#[tauri::command]
+pub fn newline(state: State<'_, AppState>, task: u64, agent: u32) -> Res<()> {
+    Ok(state.engine().newline(key(task, agent))?)
+}
+
 #[tauri::command]
 pub fn send_text(state: State<'_, AppState>, task: u64, agent: u32, text: String, submit: bool) -> Res<()> {
-    Ok(state.engine().paste(key(task, agent), &text, submit)?)
+    let (mut engine, key) = (state.engine(), key(task, agent));
+    Ok(if submit { engine.submit(key, &text) } else { engine.paste(key, &text, false) }?)
 }
 
 /// 所有 Agent 共用一个窗格尺寸。
@@ -459,13 +489,14 @@ pub async fn voice_finish(
     crate::fnkey::set_recording(false);
     let recorder = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).take().ok_or(UserError::NotRecording)?;
     let config = voice_config(&state);
+    let organizer = state.engine().organizer().filter(|_| config.organize);
     tauri::async_runtime::spawn_blocking(move || {
         let raw = recorder.finish()?;
-        let organized = if config.organize {
-            duolo_voice::organize(&config, &raw, &OrganizeContext { project, task }).ok().filter(|t| *t != raw)
-        } else {
-            None
-        };
+        let organized = organizer.and_then(|command| {
+            let timeout = Duration::from_secs(config.organize_timeout_secs);
+            duolo_voice::organize(&command, timeout, &raw, &OrganizeContext { project, task }).ok()
+        });
+        let organized = organized.filter(|t| *t != raw);
         Ok(VoiceResult { raw, organized })
     })
     .await?

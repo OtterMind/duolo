@@ -17,83 +17,58 @@ pub struct Config {
     pub writer: AgentKind,
     /// 默认审阅的 Agent。
     pub reviewer: AgentKind,
-    /// 每种 Agent 怎么启动。
-    pub agents: BTreeMap<String, AgentProfile>,
+    /// 对 Agent 插件的修改，或者没有插件、只在这里写一段的 Agent。
+    pub agents: BTreeMap<String, AgentOverride>,
     pub voice: VoiceConfig,
     /// 发给审阅 Agent 的提示词，`{base}` 会替换成基准分支，`{commit}` 替换成从它分出来的提交，`{language}` 会替换成界面语言。
     pub review_prompt: String,
-    /// 后台审阅用的命令，覆盖审阅 Agent 自己的 `review_command`。一般不用设置。
+    /// 后台审阅用的命令，不管审阅的是哪个 Agent。一般不用设置。
     pub review_command: Vec<String>,
-    /// 根据需求给新分支起名的命令，提示词作为最后一个参数，结果从 stdout 读取。为空表示不用 AI 起名。
-    pub namer: Vec<String>,
+    /// 根据需求给新分支起名的命令，提示词作为最后一个参数，结果从 stdout 读取。
+    /// 没写时用装了的 Agent；写成空的表示不用 AI 起名。
+    pub namer: Option<Vec<String>>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        let mut agents = BTreeMap::new();
-        agents.insert(
-            "claude".into(),
-            AgentProfile {
-                command: "claude".into(),
-                args: Vec::new(),
-                resume_args: vec!["--continue".into()],
-                review_args: Vec::new(),
-                // 只读：只给读文件和看 git 改动的工具，print 模式下其他工具会被直接拒绝。
-                review_command: [
-                    "claude",
-                    "-p",
-                    "--allowedTools",
-                    "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)",
-                ]
-                .map(String::from)
-                .to_vec(),
-                install: "npm install -g @anthropic-ai/claude-code".into(),
-            },
-        );
-        agents.insert(
-            "codex".into(),
-            AgentProfile {
-                command: "codex".into(),
-                args: Vec::new(),
-                resume_args: vec!["resume".into(), "--last".into()],
-                review_args: vec!["--sandbox".into(), "read-only".into()],
-                review_command: [
-                    "codex",
-                    "exec",
-                    "--sandbox",
-                    "read-only",
-                    "--skip-git-repo-check",
-                    "--color",
-                    "never",
-                ]
-                .map(String::from)
-                .to_vec(),
-                install: "npm install -g @openai/codex".into(),
-            },
-        );
         Self {
-            writer: AgentKind::claude(),
-            reviewer: AgentKind::codex(),
-            agents,
+            writer: AgentKind(DEFAULT_WRITER.into()),
+            reviewer: AgentKind(DEFAULT_REVIEWER.into()),
+            agents: BTreeMap::new(),
             voice: VoiceConfig::default(),
             review_prompt: DEFAULT_REVIEW_PROMPT.into(),
             review_command: Vec::new(),
-            namer: ["claude", "-p", "--model", "haiku"].map(String::from).to_vec(),
+            namer: None,
         }
     }
 }
 
-/// 默认的审阅提示词。`{base}` 换成基准分支，`{commit}` 换成从它分出来的那个提交，`{language}` 换成界面语言（英文名，例如 `Japanese`）。
+/// 没有配置时谁写、谁审。
+const DEFAULT_WRITER: &str = "claude";
+const DEFAULT_REVIEWER: &str = "codex";
+
+/// 默认的审阅提示词。`{base}` 换成基准分支，`{commit}` 换成从它分出来的那个提交，`{language}` 换成界面语言（英文名，例如 `Japanese`），
+/// `{changes}` 换成去哪里看改动（[`CHANGES_IN_FILE`] 或 [`CHANGES_IN_GIT`]）。
 pub const DEFAULT_REVIEW_PROMPT: &str =
-    "Review every change made in this git worktree since it branched off {base} at commit {commit}. \
-Run `git diff {commit}` for committed and uncommitted changes, and `git status --short --untracked-files=all` to find \
-new files that are not in git yet (lines starting with `??`), then read those files in full. \
+    "Review every change made in this task since it branched off {base} at commit {commit}. {changes} \
 Commits made on {base} after that point are not part of this work. \
 You are a read-only reviewer: do not modify any files.\n\
 Write your review in {language}.\n\
 On the first line, write `[PASS]` if nothing must be fixed, or `[ISSUES n]` where n is the number of critical issues, \
 followed by a one-sentence summary, e.g. \"[ISSUES 2] 2 critical issues, 3 suggestions\" or \"[PASS] No issues found\".\n\
 Then list issues grouped as Critical / Suggestion / Style. For each, give the file and line number and how to fix it.";
+
+/// 后台审阅时，Duolo 把改动写进副本里的这个文件（审阅者不一定能运行命令）。
+pub const REVIEW_FILE: &str = "DUOLO_REVIEW.md";
+
+/// 后台审阅：改动在 [`REVIEW_FILE`] 里。
+pub const CHANGES_IN_FILE: &str = "The commits, the changed files and the full diff are in the file DUOLO_REVIEW.md \
+in the current folder: read it first, then read the changed files where you need more context.";
+
+/// 在终端里审阅：自己用 git 看。
+pub const CHANGES_IN_GIT: &str = "Run `git diff {commit}` for committed and uncommitted changes, and \
+`git status --short --untracked-files=all` to find new files that are not in git yet (lines starting with `??`), \
+then read those files in full.";
 
 /// 没有指定界面语言时，审阅结论使用的语言。
 pub const DEFAULT_REPLY_LANGUAGE: &str = "English";
@@ -102,64 +77,48 @@ impl Config {
     /// 读取配置；文件不存在时返回默认值。
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read_to_string(path) {
-            Ok(text) => {
-                let mut config: Self =
-                    toml::from_str(&text).with_context(|| format!("invalid config file: {}", path.display()))?;
-                config.fill_agent_defaults();
-                Ok(config)
-            }
+            Ok(text) => toml::from_str(&text).with_context(|| format!("invalid config file: {}", path.display())),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(err) => Err(err).with_context(|| format!("cannot read config file {}", path.display())),
         }
     }
 
-    /// config.toml 里的 `[agents.*]` 是在内置 Agent 上增改，不是整个替换：
-    /// 没写到的内置 Agent（Claude、Codex）保留；改了内置 Agent 时（例如只改了 `command`），没写的审阅命令和安装命令沿用内置的。
-    fn fill_agent_defaults(&mut self) {
-        for (name, default) in Self::default().agents {
-            match self.agents.get_mut(&name) {
-                None => {
-                    self.agents.insert(name, default);
-                }
-                Some(profile) => {
-                    if profile.review_command.is_empty() {
-                        profile.review_command = default.review_command;
-                    }
-                    if profile.install.is_empty() {
-                        profile.install = default.install;
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn profile(&self, kind: &AgentKind) -> Option<&AgentProfile> {
-        self.agents.get(&kind.0)
-    }
-
-    /// 填好基准分支、分出来的提交和回答语言的审阅提示词。
-    pub fn review_prompt_for(&self, base: &str, commit: &str, language: &str) -> String {
-        self.review_prompt.replace("{base}", base).replace("{commit}", commit).replace("{language}", language)
+    /// 填好基准分支、分出来的提交、去哪里看改动和回答语言的审阅提示词。
+    /// 自己写的提示词里没有 `{changes}` 时，把它加在最后：审阅者得知道改动在哪里。
+    pub fn review_prompt_for(&self, base: &str, commit: &str, language: &str, changes: &str) -> String {
+        let prompt = if self.review_prompt.contains("{changes}") {
+            self.review_prompt.clone()
+        } else {
+            format!("{}\n{{changes}}", self.review_prompt)
+        };
+        prompt
+            .replace("{changes}", changes)
+            .replace("{base}", base)
+            .replace("{commit}", commit)
+            .replace("{language}", language)
     }
 }
 
-/// 如何启动某种 Agent 的 CLI。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// config.toml 里的 `[agents.<id>]`：在插件的声明上修改，没写的沿用插件的。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-#[derive(Default)]
-pub struct AgentProfile {
-    /// 可执行文件，例如 `claude`。
-    pub command: String,
+pub struct AgentOverride {
+    /// 可执行文件，例如 `claude` 或完整路径。
+    pub command: Option<String>,
     /// 每次启动都带上的参数。
-    pub args: Vec<String>,
+    pub args: Option<Vec<String>>,
     /// 恢复上一次会话时追加的参数，例如 `--continue`。
-    pub resume_args: Vec<String>,
+    pub resume_args: Option<Vec<String>>,
+    /// 按编号恢复某一次会话的参数，`{session}` 换成会话编号，例如 `["--resume", "{session}"]`。
+    pub resume_session_args: Option<Vec<String>>,
+    /// 新开会话时指定会话编号的参数，`{session}` 换成 Duolo 生成的 UUID，例如 `["--session-id", "{session}"]`。
+    pub session_id_args: Option<Vec<String>>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
-    pub review_args: Vec<String>,
-    /// 后台审阅用的命令：在任务的 worktree 里只读运行，提示词作为最后一个参数，结论从 stdout 读取。
-    pub review_command: Vec<String>,
+    pub review_args: Option<Vec<String>>,
+    /// 后台审阅用的整条命令：在任务的 worktree 里只读运行，提示词作为最后一个参数，结论从 stdout 读取。
+    pub review_command: Option<Vec<String>>,
     /// 没安装时提示用户运行的安装命令。
-    pub install: String,
+    pub install: Option<String>,
 }
 
 /// 语音输入配置。
@@ -172,20 +131,15 @@ pub struct VoiceConfig {
     pub command: Vec<String>,
     /// 是否把识别结果整理成一条清晰的指令。
     pub organize: bool,
-    /// 整理用的命令，整理提示词作为最后一个参数传入，结果从 stdout 读取。
-    pub organizer: Vec<String>,
+    /// 整理用的命令，整理提示词作为最后一个参数传入，结果从 stdout 读取。没写时用装了的 Agent。
+    pub organizer: Option<Vec<String>>,
     /// 整理最长等待秒数，超时就直接使用原话。
     pub organize_timeout_secs: u64,
 }
 
 impl Default for VoiceConfig {
     fn default() -> Self {
-        Self {
-            command: Vec::new(),
-            organize: true,
-            organizer: vec!["claude".into(), "-p".into(), "--model".into(), "haiku".into()],
-            organize_timeout_secs: 30,
-        }
+        Self { command: Vec::new(), organize: true, organizer: None, organize_timeout_secs: 30 }
     }
 }
 
@@ -202,49 +156,42 @@ mod tests {
     #[test]
     fn partial_config_keeps_defaults() {
         let cfg: Config = toml::from_str("writer = \"codex\"\n[voice]\ncommand = [\"rec.sh\"]\n").unwrap();
-        assert_eq!(cfg.writer, AgentKind::codex());
-        assert_eq!(cfg.reviewer, AgentKind::codex());
+        assert_eq!((cfg.writer.0.as_str(), cfg.reviewer.0.as_str()), ("codex", "codex"));
         assert!(cfg.voice.is_configured());
         assert!(cfg.voice.organize);
-        assert!(cfg.profile(&AgentKind::claude()).is_some());
+        assert!(cfg.namer.is_none() && cfg.voice.organizer.is_none());
     }
 
     #[test]
-    fn overridden_agent_keeps_builtin_review_command() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("config.toml");
-        std::fs::write(&path, "[agents.claude]\ncommand = \"/opt/claude\"\n").unwrap();
-        let cfg = Config::load(&path).unwrap();
-        let claude = cfg.profile(&AgentKind::claude()).unwrap();
-        assert_eq!(claude.command, "/opt/claude");
-        assert_eq!(claude.review_command[0], "claude");
-        assert!(claude.install.contains("claude-code"));
-    }
-
-    #[test]
-    fn extra_agent_keeps_builtin_agents() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("config.toml");
-        std::fs::write(&path, "[agents.gemini]\ncommand = \"gemini\"\n").unwrap();
-        let cfg = Config::load(&path).unwrap();
-        assert!(cfg.profile(&AgentKind("gemini".into())).is_some());
-        assert!(cfg.profile(&AgentKind::claude()).is_some());
-        assert!(cfg.profile(&AgentKind::codex()).is_some());
+    fn empty_is_different_from_missing() {
+        let cfg: Config = toml::from_str("namer = []\n[agents.claude]\nresume_args = []\n").unwrap();
+        assert_eq!(cfg.namer, Some(Vec::new()));
+        let claude = &cfg.agents["claude"];
+        assert_eq!(claude.resume_args, Some(Vec::new()));
+        assert!(claude.command.is_none() && claude.args.is_none());
     }
 
     #[test]
     fn review_prompt_mentions_base() {
         let cfg = Config::default();
-        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese");
+        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese", CHANGES_IN_GIT);
         assert!(prompt.contains("branched off main at commit abc123"));
         assert!(prompt.contains("git diff abc123"));
         assert!(prompt.contains("Write your review in Japanese."));
+        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese", CHANGES_IN_FILE);
+        assert!(prompt.contains(REVIEW_FILE) && !prompt.contains("git diff"));
+        // 自己写的提示词没提改动在哪里：补在最后。
+        let custom = Config { review_prompt: "Be strict about {base}.".into(), ..Config::default() };
+        assert_eq!(
+            custom.review_prompt_for("main", "c1", "English", CHANGES_IN_GIT).lines().last().unwrap(),
+            CHANGES_IN_GIT.replace("{commit}", "c1").lines().last().unwrap()
+        );
     }
 
     #[test]
     fn missing_file_is_default() {
         let dir = tempfile::tempdir().unwrap();
         let cfg = Config::load(&dir.path().join("none.toml")).unwrap();
-        assert_eq!(cfg.writer, AgentKind::claude());
+        assert_eq!(cfg.writer.0, DEFAULT_WRITER);
     }
 }

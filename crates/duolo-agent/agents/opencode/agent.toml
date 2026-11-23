@@ -1,0 +1,58 @@
+# OpenCode。字段说明见 docs/agents.md，升级后还能用的做法见 docs/agent-compat.md。
+schema = 1
+id = "opencode"
+name = "OpenCode"
+command = "opencode"
+
+[install]
+default = "npm install -g opencode-ai"
+
+[start]
+# 第一句话用 --prompt 交给它，它自己会提交。
+prompt = "flag"
+prompt_flag = "--prompt="
+# 不写 resume_args：它的 --continue 接的是同一个仓库里最近的会话，会接到别的任务（另一个 worktree）的会话上。
+# 会话编号用它自己的命令列出来（见下面的 [session_list]），按编号恢复。
+resume_session_args = ["--session", "{session}"]
+# 在终端里审阅时用它自带的只读 agent。
+review_args = ["--agent", "plan"]
+# 不在启动时自己升级。
+env = { OPENCODE_DISABLE_AUTOUPDATE = "true" }
+
+# 后台审阅：临时定义一个 agent，先关掉全部工具（`"*": false`，用户配置的 MCP 工具也一起关掉），只打开读文件、搜索的；
+# 写文件、运行命令、联网、碰项目外的目录一律拒绝：没人回答的询问会让它一直等着。--pure 不加载外部插件。
+[review]
+args = ["run", "--pure", "--agent", "duolo-review"]
+separator = "--"
+
+[review.env]
+OPENCODE_DISABLE_AUTOUPDATE = "true"
+OPENCODE_CONFIG_CONTENT = '{"agent":{"duolo-review":{"mode":"primary","description":"Duolo read-only review","tools":{"*":false,"read":true,"grep":true,"glob":true,"list":true},"permission":{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny"}}}}'
+
+# 起分支名、整理口述：只要它回一句话。只留读文件一个工具：一个工具都不给的 agent 它会一直卡着不回答（1.19.6）。
+[quick]
+args = ["run", "--pure", "--agent", "duolo-quick"]
+separator = "--"
+
+[quick.env]
+OPENCODE_DISABLE_AUTOUPDATE = "true"
+OPENCODE_CONFIG_CONTENT = '{"agent":{"duolo-quick":{"mode":"primary","description":"Duolo short answers","tools":{"*":false,"read":true},"permission":{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny"}}}}'
+
+[screen]
+# 它不报告状态（OSC 7501），只能认画面。确认框的选项没有编号（Allow once / Allow always / Reject），
+# 按回车就是"允许一次"，所以一定要认出来，这时不发消息。
+approval = ["permission required", "allow once"]
+busy = ["esc interrupt"]
+choosing = ["enter confirm"]
+
+[keys]
+interrupt = "\u001B"
+# ctrl+j
+newline = "\n"
+
+# 会话存在它的数据库里：在任务目录里运行这个命令列出会话，认出这次的编号（公开的命令比读它的数据库稳）。
+[session_list]
+args = ["session", "list", "--format", "json", "-n", "20"]
+id = "id"
+directory = "directory"
+created = "created"

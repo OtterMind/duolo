@@ -10,19 +10,14 @@ use crate::session::Exit;
 /// 超过这个时长没有输出，就认为 Agent 停下来了。
 const QUIET_THRESHOLD: Duration = Duration::from_millis(1_500);
 
-/// 出现这些文字说明 Agent 在等用户确认（统一按小写比较）。
-/// Claude Code 和 Codex 的确认界面都会给出 "1. Yes" 开头的选项列表。
-/// 不带编号的选择界面（例如 Claude Code 问是否信任目录）底部会写按 Enter 确认。
-const APPROVAL_MARKERS: &[&str] = &[
-    "1. yes",
-    "do you want to proceed",
-    "allow command",
-    "would you like to run the following command",
-    "enter to confirm",
-];
-
-/// 出现这些文字说明 Agent 正在工作，即使暂时没有新输出。
-const BUSY_MARKERS: &[&str] = &["esc to interrupt", "esc to cancel"];
+/// 怎么从画面认出状态，由启动会话的一方按 Agent 给出。统一按小写比较，这里的文字也要是小写。
+#[derive(Debug, Clone, Default)]
+pub struct Rules {
+    /// 出现这些文字说明 Agent 在等用户确认。
+    pub approval: Vec<String>,
+    /// 出现这些文字说明 Agent 正在工作，即使暂时没有新输出。
+    pub busy: Vec<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentState {
@@ -36,12 +31,12 @@ pub enum AgentState {
 }
 
 /// `tail` 是屏幕底部的文字，`quiet_for` 是距离最近一次输出的时长。
-pub fn classify(tail: &str, quiet_for: Duration) -> AgentState {
+pub fn classify(rules: &Rules, tail: &str, quiet_for: Duration) -> AgentState {
     let lower = tail.to_lowercase();
-    if APPROVAL_MARKERS.iter().any(|m| lower.contains(m)) {
+    if rules.approval.iter().any(|m| lower.contains(m)) {
         return AgentState::NeedsInput;
     }
-    if BUSY_MARKERS.iter().any(|m| lower.contains(m)) || quiet_for < QUIET_THRESHOLD {
+    if rules.busy.iter().any(|m| lower.contains(m)) || quiet_for < QUIET_THRESHOLD {
         return AgentState::Running;
     }
     AgentState::Idle
@@ -54,24 +49,20 @@ mod tests {
     const QUIET: Duration = Duration::from_secs(10);
     const BUSY: Duration = Duration::from_millis(100);
 
-    #[test]
-    fn approval_prompt_wins() {
-        let tail = "Allow command?\n  pnpm add csv-stringify\n› 1. Yes";
-        assert_eq!(classify(tail, BUSY), AgentState::NeedsInput);
-        let tail = "Do you want to proceed?\n❯ 1. Yes\n  2. No";
-        assert_eq!(classify(tail, QUIET), AgentState::NeedsInput);
+    fn classify(tail: &str, quiet_for: Duration) -> AgentState {
+        let rules = Rules { approval: vec!["1. yes".into()], busy: vec!["esc to interrupt".into()] };
+        super::classify(&rules, tail, quiet_for)
     }
 
     #[test]
-    fn trust_dialog_needs_input() {
-        // Claude Code 2.1 第一次打开一个目录时的画面：选项没有编号，底部还有 "Esc to cancel"。
-        let tail = " Security guide\n ❯ No, exit\n   Yes, I trust this folder\n Enter to confirm · Esc to cancel";
-        assert_eq!(classify(tail, QUIET), AgentState::NeedsInput);
+    fn approval_prompt_wins() {
+        assert_eq!(classify("Allow command?\n› 1. Yes", BUSY), AgentState::NeedsInput);
+        assert_eq!(classify("Proceed?\n❯ 1. YES\n  2. No\nesc to interrupt", QUIET), AgentState::NeedsInput);
     }
 
     #[test]
     fn spinner_means_running() {
-        assert_eq!(classify("✻ Thinking… (esc to interrupt)", QUIET), AgentState::Running);
+        assert_eq!(classify("✻ Thinking… (Esc to interrupt)", QUIET), AgentState::Running);
         assert_eq!(classify("> ", BUSY), AgentState::Running);
     }
 

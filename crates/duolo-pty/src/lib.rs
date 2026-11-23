@@ -7,7 +7,9 @@
 
 mod detect;
 mod session;
+mod status;
 
-pub use detect::{classify, AgentState};
+pub use detect::{classify, AgentState, Rules};
 pub use session::{Exit, OutputHook, OutputSink, Session, SessionSpec, Size};
+pub use status::Reported;
 pub use vt100::Screen;

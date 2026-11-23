@@ -9,7 +9,7 @@
 
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real Claude Code or Codex CLI running inside it. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
+Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real agent CLI running inside it: Claude Code, Codex, OpenCode or pi. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
 
 > Duolo is early. There are no released installers yet, so for now you build it from source. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 
@@ -30,20 +30,22 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 ## Features
 
 - **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
-- **The real CLIs.** The main pane is Claude Code or Codex itself. Duolo doesn't change how they behave.
+- **The real CLIs.** The main pane is Claude Code, Codex, OpenCode or pi itself, and you can switch between them per task. Duolo doesn't change how they behave.
 - **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
-- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files, without touching anything. One click sends the findings to Claude.
+- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews in a temporary copy with only read-only tools: Claude can only read files, and Codex runs in its read-only sandbox with connectors and plugins turned off. Nothing it does can touch your work. One click sends the findings to Claude.
+- **Switch agents mid-task.** Click the agent icon in the task's top bar to change who writes or who reviews. The new writer continues in the same folder: it gets the request and the recent conversation, and looks at the current changes first. Switch back within a day and the earlier agent picks up its own conversation, told what happened while it was away. From the command line: `duolo switch <task> --writer codex`.
 - **Projects.** A project is a folder: one git repository, or a folder holding several. Add one (`⌘O`) by opening a folder, creating one, cloning from GitHub, or picking a repository found on your computer. You can also drop a folder on the window. New folders and clones go to `~/DuoloProjects`.
 - **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
 - **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
 - **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
-- **Sessions resume.** Reopening a task continues its last conversation (`claude --continue`, `codex resume --last`).
+- **No startup questions.** Before starting an agent in a task, Duolo marks the folder as trusted in Claude Code (`~/.claude.json`) and Codex (`~/.codex/config.toml`, for the repository) and turns off their update prompts, so they don't stop to ask. Claude's entry is removed when the task closes.
+- **Sessions resume.** Reopening a task continues that agent's own conversation, by session ID (`claude --resume <id>`, `codex resume <id>`).
 - **Keeps working in the background** (macOS). `⌘W` hides the window and agents keep going; `⌘Q` stops them. On Windows and Linux closing the window quits, after asking if agents are running.
 - **14 languages**, in the app, the command line and the terminal UI.
 
 ## Install
 
-You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`) or [Codex](https://github.com/openai/codex) (`npm install -g @openai/codex`). Building from source also needs Rust 1.89+, Node 20+ and pnpm.
+You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`), [Codex](https://github.com/openai/codex) (`npm install -g @openai/codex`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`) or [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`). Building from source also needs Rust 1.89+, Node 20+ and pnpm.
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo
@@ -70,6 +72,7 @@ cd ~/code/shop
 duolo                                              # open Duolo with this repository
 duolo new "Export orders as CSV, filter by date"   # create a task without opening the app
 duolo ls                                           # list tasks
+duolo switch 3 --writer codex                      # let Codex take over task 3
 duolo tui                                          # terminal UI, handy over SSH
 ```
 
@@ -103,22 +106,21 @@ Holding Fn needs the Accessibility permission once; Settings in the bottom left 
 writer = "claude"          # default agent for writing code
 reviewer = "codex"         # default agent for reviews
 
-[agents.claude]
-command = "claude"
-resume_args = ["--continue"]
-
-[agents.codex]
-command = "codex"
-resume_args = ["resume", "--last"]
-review_args = ["--sandbox", "read-only"]
+[agents.claude]            # changes the built-in settings; anything not listed stays as it is
+command = "/opt/homebrew/bin/claude"
+args = ["--model", "opus"]
 
 [voice]
 # A command that records and transcribes. It starts recording when launched and prints the text when told to stop
 # (SIGINT on macOS and Linux, a line saying "stop" on standard input on Windows).
 command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # tidy up filler words and self-corrections
-organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it
+organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it; defaults to an installed agent
 ```
+
+### Adding another agent
+
+Every agent is a plugin: an `agent.toml` that says how to start, resume and review with it, in `~/.duolo/agents/<id>/`. See [docs/agents.md](docs/agents.md) (in Chinese). How Duolo keeps working when an agent updates (status reports, no startup dialogs, version checks, hooks) is in [docs/agent-compat.md](docs/agent-compat.md).
 
 ### Voice
 

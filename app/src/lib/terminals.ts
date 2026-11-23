@@ -120,9 +120,9 @@ function create(ref: AgentRef): Entry {
 
   term.attachCustomKeyEventHandler((e) => {
     if (pcClipboard(term, e) || isAppShortcut(e)) return false;
-    // ⇧↵ 换行：发送 Esc+CR，Claude Code 和 Codex 都把它当作输入框里的换行。
+    // ⇧↵ 换行：各个 Agent 的按键不同，由插件决定。
     if (e.type === "keydown" && e.key === "Enter" && e.shiftKey) {
-      void api.write(ref, "\x1b\r");
+      void api.newline(ref).catch(() => {});
       return false;
     }
     return true;

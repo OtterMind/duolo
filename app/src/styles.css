@@ -336,6 +336,9 @@ body.is-resizing * {
   flex: none;
   color: var(--muted);
 }
+.agent-mask {
+  display: inline-block;
+}
 .agent-letter {
   display: inline-flex;
   align-items: center;
@@ -708,6 +711,16 @@ body.is-resizing * {
   gap: 10px;
   padding: 0 10px 0 18px;
   border-bottom: 1px solid var(--line);
+}
+/* 写代码的 Agent 的图标，点开换谁写、谁审 */
+.agent-switch {
+  margin-left: -5px;
+}
+.agent-switch.is-open {
+  background: var(--active);
+}
+.topbar .dropdown {
+  width: 260px;
 }
 .topbar-title {
   font-weight: 500;
@@ -1096,6 +1109,9 @@ body.is-resizing * {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.dialog:focus {
+  outline: none;
 }
 .dialog {
   width: 400px;

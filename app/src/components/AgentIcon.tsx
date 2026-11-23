@@ -1,51 +1,24 @@
-/** Agent 的图标：用图形区分模型，不写名字。未知的 Agent 显示首字母。 */
+import { pluginOf } from "../lib/plugins";
+
+/** Agent 的图标：用图形区分模型，不写名字。图标来自插件（单色 SVG），没有的显示首字母。 */
 export function AgentIcon({ kind, size = 14, title }: { kind: string; size?: number; title?: string }) {
-  if (kind === "claude") {
-    // 放射状星芒，Claude 的标志色。
-    const rays = Array.from({ length: 12 }, (_, i) => i * 30);
+  const plugin = pluginOf(kind);
+  if (!plugin?.icon) {
     return (
-      <svg className="agent-icon" width={size} height={size} viewBox="0 0 16 16" aria-label={title}>
-        {title && <title>{title}</title>}
-        {rays.map((deg, i) => (
-          <line
-            key={deg}
-            x1="8"
-            y1="8"
-            x2="8"
-            y2={i % 2 ? 2.6 : 1.2}
-            stroke="#d97757"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            transform={`rotate(${deg} 8 8)`}
-          />
-        ))}
-      </svg>
+      <span className="agent-icon agent-letter" style={{ width: size, height: size }} title={title}>
+        {kind.slice(0, 1).toUpperCase()}
+      </span>
     );
   }
-  if (kind === "codex") {
-    // 三个交叠的椭圆，类似花结。
-    return (
-      <svg className="agent-icon" width={size} height={size} viewBox="0 0 16 16" aria-label={title}>
-        {title && <title>{title}</title>}
-        {[0, 60, 120].map((deg) => (
-          <ellipse
-            key={deg}
-            cx="8"
-            cy="8"
-            rx="6.2"
-            ry="2.9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            transform={`rotate(${deg} 8 8)`}
-          />
-        ))}
-      </svg>
-    );
-  }
+  // 当作遮罩而不是插进页面：颜色能跟随文字，SVG 里的脚本也不会运行。
+  const mask = `url("data:image/svg+xml,${encodeURIComponent(plugin.icon)}") center / contain no-repeat`;
   return (
-    <span className="agent-icon agent-letter" style={{ width: size, height: size }} title={title}>
-      {kind.slice(0, 1).toUpperCase()}
-    </span>
+    <span
+      className="agent-icon agent-mask"
+      role="img"
+      aria-label={title}
+      title={title}
+      style={{ width: size, height: size, mask, WebkitMask: mask, backgroundColor: plugin.color ?? "currentColor" }}
+    />
   );
 }

@@ -98,7 +98,7 @@ fn build_rows(app: &mut App, width: usize) -> Vec<(Line<'static>, Option<Item>)>
                         Span::raw("     "),
                         Span::styled(icon, icon_style),
                         Span::raw(" "),
-                        Span::styled(agent.role.label(&agent.kind.display_name()), theme::muted()),
+                        Span::styled(agent.role.label(&app.engine.agents().name(&agent.kind)), theme::muted()),
                         Span::styled(" · ", theme::dim()),
                         Span::styled(status.label(), state_style),
                     ],

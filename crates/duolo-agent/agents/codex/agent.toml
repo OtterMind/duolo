@@ -1,0 +1,80 @@
+# Codex CLI。字段说明见 docs/agents.md。
+schema = 1
+id = "codex"
+name = "Codex"
+command = "codex"
+# 更旧的版本少了 Duolo 要用的东西（和 Orca 的下限一样）。
+minimum_version = "0.136.0"
+
+[install]
+default = "npm install -g @openai/codex"
+
+[start]
+# 启动时的"有新版本"对话框：在那里按回车会选"现在升级"，装完就退出。
+always_args = ["-c", "check_for_update_on_startup=false"]
+prompt = "argument"
+separator = "--"
+resume_args = ["resume", "--last"]
+resume_session_args = ["resume", "{session}"]
+review_args = ["--sandbox", "read-only"]
+
+# 只读沙箱由系统强制（macOS、Linux）。沙箱管不到的也关掉：MCP 服务、联网搜索；
+# 功能只留下运行只读命令要用的，其余开着的一律关掉（连到云端应用、插件、浏览器、钩子……），以后新加的功能也默认关着。
+# Codex 升级后审阅读不了文件时，看看运行命令是不是换了功能名，补进 allow。
+[review]
+args = [
+  "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never", "--ephemeral",
+  "-c", "mcp_servers={}",
+  "-c", "web_search=disabled",
+  "-c", "check_for_update_on_startup=false",
+]
+separator = "--"
+
+[review.features]
+list = ["features", "list"]
+allow = [
+  "shell_tool", "unified_exec", "unified_exec_tty", "shell_snapshot",
+  "code_mode_host", "code_mode_host_grpc", "code_mode_host_output_truncation", "code_mode_interrupt",
+]
+disable = ["-c", "features.{feature}=false"]
+
+# 起分支名、整理口述：只要它回一句话，什么工具都不用。
+[quick]
+args = [
+  "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never",
+  "--ephemeral", "-c", "model_reasoning_effort=low",
+  "-c", "mcp_servers={}",
+  "-c", "web_search=disabled",
+  "-c", "check_for_update_on_startup=false",
+]
+separator = "--"
+
+[quick.features]
+list = ["features", "list"]
+disable = ["-c", "features.{feature}=false"]
+
+[screen]
+# 信任目录、是否升级这样的对话框，底部写着 "enter continue"（旧版是 "Press enter to continue"）。
+approval = [
+  "1. yes", "allow command", "would you like to run the following command",
+  "enter to confirm", "enter continue", "enter to continue",
+]
+busy = ["esc to interrupt", "esc to cancel"]
+choosing = ["enter to confirm", "enter continue", "enter to continue"]
+
+[keys]
+interrupt = "\u001B"
+newline = "\u001B\r"
+
+[transcript]
+format = "codex"
+home = ".codex"
+home_env = "CODEX_HOME"
+
+# 信任是按仓库记的：在 worktree 里启动时，记的是主仓库（"Trusting will apply to the repository root"）。
+[trust]
+format = "codex"
+file = ".codex/config.toml"
+env = "CODEX_HOME"
+env_file = "config.toml"
+scope = "repo"

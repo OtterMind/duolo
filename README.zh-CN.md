@@ -9,7 +9,7 @@
 
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
 
-Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Claude Code 或 Codex；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
+Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode 或 pi；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
 
 > Duolo 还在早期，还没有发布安装包，目前需要从源码构建。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 
@@ -30,19 +30,21 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 ## 能做什么
 
 - **多任务并行**：每个任务一个新分支和独立的工作目录（git worktree，放在 `~/.duolo/wt/`），互不干扰，也不碰你正在用的那份代码。
-- **原生 CLI 嵌入**：右侧就是 Claude Code / Codex 本身，Duolo 不改变它们的任何行为。
+- **原生 CLI 嵌入**：右侧就是 Claude Code / Codex / OpenCode / pi 本身，Duolo 不改变它们的任何行为，每个任务都可以换。
 - **侧边栏看状态**：一个任务一行，左边是模型图标，右边一个状态小图标（运行中 / 等你确认 / 做完了 / 出错），审阅结果也是一个小标记；有任务等你时顶部出现提醒。搜索、折叠项目、双击改名、右键菜单。
-- **一写一审**：点"审阅"，Codex 在后台只读审阅这个任务从基准分支分出来之后的全部改动（包括还没提交的和新文件），结论一键交给 Claude 修改。
+- **一写一审**：点"审阅"，Codex 在后台只读审阅这个任务从基准分支分出来之后的全部改动（包括还没提交的和新文件）。审阅在一份临时副本里进行，只给只读的工具：Claude 只能读文件，Codex 在它的只读沙箱里运行，连接的云端应用和插件都关掉。它做什么都碰不到你的代码。结论一键交给 Claude 修改。
+- **中途换 Agent**：点任务顶栏左边的 Agent 图标，可以换谁写、谁审。新的写代码的 Agent 在同一个文件夹里接着做：它会拿到需求和最近的对话，并先看一遍现在的改动。一天之内换回原来的 Agent，它会接着自己原来的会话，并被告知这期间发生了什么。命令行里也能换：`duolo switch <任务> --writer codex`。
 - **项目**：项目就是一个工作文件夹，可以是一个 git 仓库，也可以是装了几个仓库的文件夹。侧边栏顶部"添加项目"（`⌘O`）：打开现有文件夹、新建文件夹、从 GitHub 克隆，或者点这台电脑上找到的仓库；也可以把文件夹拖进窗口。新建和克隆默认放在 `~/DuoloProjects`。
 - **新建任务**：点项目名后面的 +（或 `⌘N`），写一句需求回车就开始。其他都有默认值，想改再点：改项目里的哪个仓库、基于哪个分支、新分支叫什么（AI 根据需求起名，比如 `feat/order-csv-export`），以及谁写、谁审（Claude / Codex，没装的会给出安装命令）。
 - **语音输入**：按住 `Fn` 说话（Windows / Linux 是 `Ctrl+Shift+Space`），松开插入（按住 Fn 再点空格可以锁定）；macOS 和 Windows 用系统自带的识别，免配置。说话时输入块变成录音条，实时出字、显示音量，没声音会提示。整理后填进 Agent 的输入框，可以换回原话或撤销。
-- **会话恢复**：重新打开任务时自动接着上次的会话（`claude --continue` / `codex resume --last`）；没有可恢复的会话时带着原始需求重新开始。
+- **启动时不停下来问**：在任务里启动 Agent 之前，Duolo 先在 Claude Code（`~/.claude.json`）和 Codex（`~/.codex/config.toml`，按仓库记）里把这个文件夹记为已信任，并关掉它们启动时的升级提示，它们就不会停下来问。Claude 的那一项在任务关闭时删掉。
+- **会话恢复**：重新打开任务时按会话编号接着这个 Agent 自己的那次会话（`claude --resume <id>` / `codex resume <id>`）；没有可恢复的会话时带着原始需求重新开始。
 - **不丢改动**：关闭任务时，没提交的改动先提交到任务的分支，再删除工作目录；没法完整保存（例如里面有嵌套仓库）就不关，并说明原因。被 git 忽略的文件（如 `.env`）会删除。
 - **关窗口不停工**（macOS）：`⌘W` 只是收起窗口，Agent 继续在后台运行，点 Dock 图标回来；`⌘Q` 才会结束它们。Windows / Linux 上关窗口就是退出，有 Agent 在运行时会先确认。
 
 ## 安装
 
-需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`npm install -g @anthropic-ai/claude-code`）或 [Codex](https://github.com/openai/codex)（`npm install -g @openai/codex`）。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
+需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`npm install -g @anthropic-ai/claude-code`）、[Codex](https://github.com/openai/codex)（`npm install -g @openai/codex`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）或 [pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo
@@ -71,6 +73,7 @@ cd ~/code/shop
 duolo                          # 打开 Duolo，当前仓库自动加入项目
 duolo new "订单导出 CSV，支持按日期筛选"   # 不打开界面直接建任务
 duolo ls                       # 列出任务
+duolo switch 3 --writer codex  # 让 Codex 接手 3 号任务
 duolo tui                      # 在终端里打开（适合 SSH 远程）
 ```
 
@@ -104,22 +107,21 @@ duolo tui                      # 在终端里打开（适合 SSH 远程）
 writer = "claude"          # 默认写代码的 Agent
 reviewer = "codex"         # 默认审阅的 Agent
 
-[agents.claude]
-command = "claude"
-resume_args = ["--continue"]
-
-[agents.codex]
-command = "codex"
-resume_args = ["resume", "--last"]
-review_args = ["--sandbox", "read-only"]
+[agents.claude]            # 在内置的设置上改，没写的保持不变
+command = "/opt/homebrew/bin/claude"
+args = ["--model", "opus"]
 
 [voice]
 # 录音并转写的命令：启动时开始录音，收到停止信号后把文字打印到 stdout
 # （macOS / Linux 发 SIGINT，Windows 往标准输入写一行 stop）
 command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # 整理口头语和改口
-organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令
+organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认用装了的 Agent
 ```
+
+### 接入别的 Agent
+
+每种 Agent 都是一个插件：一份说明怎么启动、恢复、审阅它的 `agent.toml`，放在 `~/.duolo/agents/<id>/`。写法见 [docs/agents.md](docs/agents.md)。Agent 升级后 Duolo 怎么还能用（状态报告、不让启动对话框出现、版本检查、钩子）见 [docs/agent-compat.md](docs/agent-compat.md)。
 
 ### 语音
 

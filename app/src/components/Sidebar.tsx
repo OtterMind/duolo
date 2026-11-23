@@ -288,7 +288,7 @@ function ReviewChip({ task, onOpen }: { task: Task; onOpen(): void }) {
         onOpen();
       }}
     >
-      <AgentIcon kind="codex" size={11} />
+      <AgentIcon kind={task.reviewer.kind} size={11} />
       {count != null && <span>{count}</span>}
     </button>
   );

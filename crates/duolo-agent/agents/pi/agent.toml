@@ -1,0 +1,65 @@
+# pi（pi.dev）。字段说明见 docs/agents.md，升级后还能用的做法见 docs/agent-compat.md。
+schema = 1
+id = "pi"
+name = "Pi"
+command = "pi"
+
+[install]
+default = "npm install -g @earendil-works/pi-coding-agent"
+
+[start]
+prompt = "argument"
+separator = "--"
+# --continue 是"这个目录里最近一次"，每个任务的 worktree 是单独的目录，不会接错。
+resume_args = ["--continue"]
+# --session-id：这个目录里有这个编号的会话就接着，没有就用它新建。所以 Duolo 能自己定编号。
+resume_session_args = ["--session-id", "{session}"]
+session_id_args = ["--session-id", "{session}"]
+# 在终端里审阅时只给读文件、搜索的工具。
+review_args = ["--tools", "read,grep,find,ls"]
+# 不在启动时去查新版本。
+env = { PI_SKIP_VERSION_CHECK = "1" }
+
+# 后台审阅：只给读文件、搜索的工具（--tools 是"只给这些"），不连 MCP、不加载扩展和技能，
+# 不信任项目里的 .pi 设置（--no-approve），不留会话。
+[review]
+args = [
+  "-p", "--no-session", "--no-approve", "--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates",
+  "--tools", "read,grep,find,ls",
+]
+separator = "--"
+
+[review.env]
+PI_SKIP_VERSION_CHECK = "1"
+
+# 起分支名、整理口述：什么工具都不给，不用想太久。
+[quick]
+args = [
+  "-p", "--no-session", "--no-approve", "--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates",
+  "--no-tools", "--thinking", "off",
+]
+separator = "--"
+
+[quick.env]
+PI_SKIP_VERSION_CHECK = "1"
+
+[screen]
+# pi 运行工具不要求确认（它的设计就是这样，见它的 docs/security.md），只有仓库里有 .pi/ 下的设置、扩展时，
+# 第一次会问"信任这个项目文件夹吗"。状态靠它自己报告（OSC 7501），画面上的字只是兜底（启动时的这个对话框期间它还不报告）。
+approval = ["trust project folder?"]
+busy = []
+choosing = ["trust project folder?", "enter select"]
+
+[keys]
+interrupt = "\u001B"
+# ctrl+j
+newline = "\n"
+
+[transcript]
+format = "pi"
+home = ".pi/agent"
+home_env = "PI_CODING_AGENT_DIR"
+
+# pi 给自己的子进程设置的标记；从 pi 里启动 Duolo 时不传下去。
+[env]
+remove = ["PI_CODING_AGENT"]

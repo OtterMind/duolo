@@ -4,16 +4,25 @@
 //! 会报找不到命令。这里用 `which` 按 PATH 和 PATHEXT 查找，找不到时原样交给系统（报错由调用方处理）。
 
 use std::ffi::OsStr;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::proctree::ProcessTree;
+
+/// 结束命令时，最长等它的进程消失多久。
+const KILL_WAIT: Duration = Duration::from_secs(2);
+
+/// 可执行文件的完整路径；找不到时为 None。
+pub fn find(program: impl AsRef<OsStr>) -> Option<PathBuf> {
+    which::which(program).ok()
+}
 
 /// 可执行文件的完整路径；找不到时返回原来的名字。
 pub fn resolve(program: impl AsRef<OsStr>) -> PathBuf {
     let program = program.as_ref();
-    which::which(program).unwrap_or_else(|_| PathBuf::from(program))
+    find(program).unwrap_or_else(|| PathBuf::from(program))
 }
 
 /// 和 `Command::new` 一样，但先按当前系统的规则找到可执行文件；Windows 上不弹出控制台窗口。
@@ -29,7 +38,126 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
     cmd
 }
 
-/// 运行 `argv` 并把 `prompt` 交给它的命令。提示词一般是最后一个参数。
+/// 运行一次就退出的命令：给它一段提示词，结果从 stdout 读。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OneShot {
+    pub argv: Vec<String>,
+    /// 放在提示词前面的参数（一般是 `--`），见 [`prompt_args`]。
+    pub separator: Option<String>,
+    /// 提示词改从标准输入给时追加的参数。
+    pub stdin_args: Vec<String>,
+    /// 不传给它的环境变量。
+    pub env_remove: Vec<String>,
+    /// 要设置的环境变量。
+    pub env: Vec<(String, String)>,
+    /// 运行前关掉不在允许名单里的功能（见 [`FeatureGate`]）。
+    pub features: Option<FeatureGate>,
+}
+
+/// 只留下允许的功能：运行前先问程序开着哪些功能，不在 `allow` 里的都用 `disable` 关掉。
+/// 程序以后新加的功能（例如连到云端的工具）也就默认关着，不用每次升级都补名单。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FeatureGate {
+    /// 列出功能的参数（跟在程序后面）。输出每行 `<功能名> … <true|false>`，最后一列是开没开。
+    pub list: Vec<String>,
+    pub allow: Vec<String>,
+    /// 关掉一个功能的参数，`{feature}` 换成功能名。
+    pub disable: Vec<String>,
+}
+
+impl FeatureGate {
+    /// 要关掉的功能的参数。列不出来时为空（还有命令本身写死的限制）。
+    pub fn disable_args(&self, program: &str) -> Vec<String> {
+        enabled_features(program, &self.list)
+            .into_iter()
+            .filter(|name| !self.allow.contains(name))
+            .flat_map(|name| self.disable.iter().map(move |arg| arg.replace("{feature}", &name)))
+            .collect()
+    }
+}
+
+/// 程序开着的功能（程序自己升级后重新问）。
+fn enabled_features(program: &str, list: &[String]) -> Vec<String> {
+    probe(program, list, PROBE_TIMEOUT).map(|out| parse_enabled(&out)).unwrap_or_default()
+}
+
+/// 问程序一件事（版本号、功能列表）最长等多久。
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 记住的输出：键是（程序的真实路径，修改时间，参数），程序自己升级后修改时间变了，就重新问。
+type ProbeCache =
+    std::sync::Mutex<std::collections::HashMap<(PathBuf, Option<std::time::SystemTime>, Vec<String>), String>>;
+
+fn probe_cache() -> &'static ProbeCache {
+    static CACHE: std::sync::OnceLock<ProbeCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+fn probe_key(program: &str, args: &[String]) -> (PathBuf, Option<std::time::SystemTime>, Vec<String>) {
+    let path = resolve(program);
+    let real = std::fs::canonicalize(&path).unwrap_or(path);
+    let modified = std::fs::metadata(&real).and_then(|m| m.modified()).ok();
+    (real, modified, args.to_vec())
+}
+
+/// 运行 `program args`，返回并记住它的标准输出。没运行成功（找不到、出错、超时）时为 None，不记住。
+pub fn probe(program: &str, args: &[String], timeout: Duration) -> Option<String> {
+    if let Some(found) = probed(program, args) {
+        return Some(found);
+    }
+    let argv: Vec<String> = std::iter::once(program.to_string()).chain(args.iter().cloned()).collect();
+    let (status, out) = output_within(Prompted::new(&OneShot::from(argv), None)?, timeout).ok()?;
+    status.success().then(|| remember(program, args, &out)).flatten()
+}
+
+/// 只看记住的，不运行（拿着锁的时候用）。
+pub fn probed(program: &str, args: &[String]) -> Option<String> {
+    probe_cache().lock().unwrap_or_else(|p| p.into_inner()).get(&probe_key(program, args)).cloned()
+}
+
+/// 记住别处运行得到的输出（例如环境检查里的 `--version`），返回它。
+pub fn remember(program: &str, args: &[String], output: &str) -> Option<String> {
+    probe_cache().lock().unwrap_or_else(|p| p.into_inner()).insert(probe_key(program, args), output.to_string());
+    Some(output.to_string())
+}
+
+/// `<功能名> … <true|false>` 的行里开着的功能名。
+fn parse_enabled(listing: &str) -> Vec<String> {
+    let name_ok =
+        |name: &str| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    listing
+        .lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let name = words.next()?;
+            (words.last() == Some("true") && name_ok(name)).then(|| name.to_string())
+        })
+        .collect()
+}
+
+impl From<Vec<String>> for OneShot {
+    fn from(argv: Vec<String>) -> Self {
+        Self { argv, ..Self::default() }
+    }
+}
+
+impl OneShot {
+    pub fn program(&self) -> &str {
+        self.argv.first().map_or("", String::as_str)
+    }
+}
+
+/// 提示词作为参数时怎么写，免得以 `-` 开头（例如列表）时被当成选项：
+/// 前面放 `separator`；命令不支持的话在最前面加一个空格，意思不变。
+pub fn prompt_args(separator: Option<&str>, prompt: &str) -> Vec<String> {
+    match separator {
+        Some(separator) => vec![separator.to_string(), prompt.to_string()],
+        None if prompt.starts_with('-') => vec![format!(" {prompt}")],
+        None => vec![prompt.to_string()],
+    }
+}
+
+/// 把 `prompt` 交给 [`OneShot`] 的命令。提示词一般是最后一个参数。
 ///
 /// Windows 上 npm 装的 `claude.cmd`、`codex.cmd` 是批处理文件，参数里不能有换行（Rust 直接拒绝），
 /// 提示词改从标准输入给：`claude -p` 和 `codex exec` 没有提示词参数时都从标准输入读。
@@ -42,24 +170,40 @@ pub struct Prompted {
 
 impl Prompted {
     /// `argv` 为空时返回 None。
-    pub fn new(argv: &[String], prompt: Option<&str>) -> Option<Self> {
-        let (program, args) = argv.split_first()?;
-        Some(Self::build(program, args, prompt, is_batch_file(resolve(program))))
+    pub fn new(command: &OneShot, prompt: Option<&str>) -> Option<Self> {
+        let program = command.argv.first()?;
+        Some(Self::build(command, prompt, is_batch_file(resolve(program))))
     }
 
-    fn build(program: &str, args: &[String], prompt: Option<&str>, batch: bool) -> Self {
-        let mut cmd = command(program);
-        cmd.args(args);
+    fn build(one: &OneShot, prompt: Option<&str>, batch: bool) -> Self {
+        let mut cmd = command(one.program());
+        cmd.args(one.argv.iter().skip(1));
+        if let Some(gate) = &one.features {
+            cmd.args(gate.disable_args(one.program()));
+        }
+        for key in &one.env_remove {
+            cmd.env_remove(key);
+        }
+        cmd.envs(one.env.iter().map(|(k, v)| (k, v)));
         let mut stdin = None;
         match prompt {
-            Some(prompt) if batch => stdin = Some(prompt.to_string()),
+            Some(prompt) if batch => {
+                cmd.args(&one.stdin_args);
+                stdin = Some(prompt.to_string());
+            }
             Some(prompt) => {
-                cmd.arg(prompt);
+                cmd.args(prompt_args(one.separator.as_deref(), prompt));
             }
             None => {}
         }
         cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
         Self { cmd, stdin }
+    }
+
+    /// 在 `dir` 里运行。同时设置 `PWD`：有的程序（例如 OpenCode）按 `PWD` 而不是真正的工作目录找项目，
+    /// 只改工作目录的话它会去看 Duolo 自己被启动时所在的目录。
+    pub fn in_dir(&mut self, dir: &std::path::Path) -> &mut Command {
+        self.cmd.current_dir(dir).env("PWD", dir)
     }
 
     /// 启动，连同它之后启动的子进程一起管理（见 [`spawn_tree`]）。
@@ -81,6 +225,35 @@ pub fn spawn_tree(cmd: &mut Command) -> io::Result<(Child, ProcessTree)> {
     let child = cmd.spawn()?;
     let tree = ProcessTree::of(&child);
     Ok((child, tree))
+}
+
+/// 运行 `command`（和它启动的子进程），读它的 stdout；超过 `timeout` 就全部结束，返回 `TimedOut`。
+pub fn output_within(mut command: Prompted, timeout: Duration) -> io::Result<(ExitStatus, String)> {
+    command.cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+    let (mut child, tree) = command.spawn()?;
+    let mut stdout = child.stdout.take().ok_or(io::ErrorKind::BrokenPipe)?;
+    let reader = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        let _ = stdout.read_to_end(&mut out);
+        out
+    });
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait()? {
+            Some(status) => break Some(status),
+            None if Instant::now() >= deadline => break None,
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    // 正常结束的，它留下的后台进程也可能还占着输出管道，不结束就一直读不完。
+    tree.kill(None, KILL_WAIT);
+    let Some(status) = status else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(io::ErrorKind::TimedOut.into());
+    };
+    let out = reader.join().unwrap_or_default();
+    Ok((status, String::from_utf8_lossy(&out).into_owned()))
 }
 
 /// Windows 上 npm 装的命令（`claude.cmd`、`codex.cmd`）是批处理文件，不能直接作为程序启动，
@@ -142,19 +315,88 @@ mod tests {
         assert_eq!(batch_command_line(OsStr::new("a.cmd"), &["two\nlines".into()]), None);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn runs_in_the_folder_it_says() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut prompted = Prompted::new(&OneShot::from(vec!["printenv".into(), "PWD".into()]), None).unwrap();
+        prompted.in_dir(dir.path()).stdout(Stdio::piped());
+        let (child, _tree) = prompted.spawn().unwrap();
+        let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap();
+        assert_eq!(out.trim(), dir.path().display().to_string(), "PWD 也是这个目录");
+    }
+
+    #[test]
+    fn only_allowed_features_stay_on() {
+        let listing = "apps                 stable             true\nshell_tool  stable  true\n\
+                       removed_one          removed            false\nName Stage Enabled\n";
+        assert_eq!(parse_enabled(listing), ["apps", "shell_tool"]);
+        // 假程序：`features list` 时列出功能，其他时候打印收到的参数。
+        let dir = tempfile::tempdir().unwrap();
+        let prog = dir.path().join("agent.sh");
+        std::fs::write(&prog, "if [ \"$1\" = features ]; then printf 'apps x true\\nshell_tool x true\\nold x false\\n'; else echo \"$*\"; fi\n").unwrap();
+        let gate = FeatureGate {
+            list: vec![prog.display().to_string(), "features".into(), "list".into()],
+            allow: vec!["shell_tool".into()],
+            disable: vec!["-c".into(), "features.{feature}=false".into()],
+        };
+        let one = OneShot {
+            argv: vec!["sh".into(), "-c".into(), "echo \"$*\"".into(), "sh".into(), "exec".into()],
+            features: Some(gate),
+            ..Default::default()
+        };
+        let mut prompted = Prompted::build(&one, Some("go"), false);
+        prompted.cmd.stdout(Stdio::piped());
+        let (child, _tree) = prompted.spawn().unwrap();
+        let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap();
+        assert_eq!(out.trim(), "exec -c features.apps=false go", "新功能默认关掉，允许的留着");
+    }
+
     #[test]
     fn prompt_goes_to_stdin_for_batch_files() {
         let run = |batch: bool| {
             // 打印参数个数和标准输入。提示词里有空格，免得 Windows 上 Git 自带的 sh 按换行拆开参数。
-            let args = ["-c", "echo $#; cat", "sh"].map(String::from);
-            let mut prompted = Prompted::build("sh", &args, Some("two words\nand lines"), batch);
+            let argv = ["sh", "-c", "echo $#; cat", "sh"].map(String::from).to_vec();
+            let mut prompted = Prompted::build(&argv.into(), Some("two words\nand lines"), batch);
             prompted.cmd.stdout(Stdio::piped());
             let (child, _tree) = prompted.spawn().unwrap();
             String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
         };
         assert_eq!(run(false), "1\n");
         assert_eq!(run(true), "0\ntwo words\nand lines");
-        assert!(Prompted::new(&[], Some("x")).is_none());
+        assert!(Prompted::new(&OneShot::default(), Some("x")).is_none());
+    }
+
+    #[test]
+    fn prompt_is_not_read_as_an_option() {
+        let run = |one: &OneShot, batch: bool| {
+            let mut prompted = Prompted::build(one, Some("- two words"), batch);
+            prompted.cmd.stdout(Stdio::piped());
+            let (child, _tree) = prompted.spawn().unwrap();
+            String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
+        };
+        let argv = ["sh", "-c", "for a; do echo \"[$a]\"; done; cat", "sh"].map(String::from).to_vec();
+        let mut one = OneShot::from(argv);
+        assert_eq!(run(&one, false), "[ - two words]\n");
+        one.separator = Some("--".into());
+        one.stdin_args = vec!["-".into()];
+        assert_eq!(run(&one, false), "[--]\n[- two words]\n");
+        assert_eq!(run(&one, true), "[-]\n- two words", "从标准输入给的时候不用分隔");
+    }
+
+    #[test]
+    fn output_is_limited_in_time() {
+        let sh = |script: &str| {
+            let argv = ["sh", "-c", script].map(String::from).to_vec();
+            output_within(Prompted::new(&argv.into(), None).unwrap(), Duration::from_secs(1))
+        };
+        let (status, out) = sh("echo hi; exit 3").unwrap();
+        assert_eq!((status.code(), out.trim()), (Some(3), "hi"));
+        let started = Instant::now();
+        assert_eq!(sh("sleep 30").unwrap_err().kind(), io::ErrorKind::TimedOut);
+        // 命令结束了，它留下的后台进程还占着输出管道。
+        assert_eq!(sh("sleep 30 & echo done").unwrap().1.trim(), "done");
+        assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
     }
 
     /// 真实的批处理文件：带换行和特殊字符的提示词要原样到它手里。
@@ -162,14 +404,14 @@ mod tests {
     #[test]
     fn batch_file_receives_a_multi_line_prompt() {
         let dir = tempfile::tempdir().unwrap();
-        // 路径里有空格，像 C:\\Program Files 那样。
+        // 路径里有空格，像 C:\Program Files 那样。
         let bin = dir.path().join("my tools");
         std::fs::create_dir(&bin).unwrap();
         let script = bin.join("codex.cmd");
         std::fs::write(&script, "@echo off\r\necho args=%*\r\nfindstr \"^\"\r\n").unwrap();
         let prompt = "first line\nsecond & \"quoted\" 100% %PATH% ^ > <\nlast";
         let argv = [script.display().to_string(), "exec".into(), "--color".into(), "never".into()];
-        let mut prompted = Prompted::new(&argv, Some(prompt)).unwrap();
+        let mut prompted = Prompted::new(&argv.to_vec().into(), Some(prompt)).unwrap();
         prompted.cmd.stdout(Stdio::piped());
         let (child, _tree) = prompted.spawn().unwrap();
         let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap().replace('\r', "");

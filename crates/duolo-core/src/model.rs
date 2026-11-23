@@ -45,32 +45,18 @@ pub struct Project {
     pub root: PathBuf,
 }
 
-/// 用哪个 CLI 来跑 Agent。名字对应配置里的 `[agents.<name>]`。
+/// 用哪个 Agent 插件（见 `duolo-agent`）。名字也是配置里 `[agents.<name>]` 的名字。
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AgentKind(pub String);
 
 impl AgentKind {
-    pub fn claude() -> Self {
-        Self("claude".into())
-    }
-
-    pub fn codex() -> Self {
-        Self("codex".into())
-    }
-
-    /// 界面上显示的名字。
-    pub fn display_name(&self) -> String {
-        match self.0.as_str() {
-            "claude" => "Claude".into(),
-            "codex" => "Codex".into(),
-            other => {
-                let mut chars = other.chars();
-                match chars.next() {
-                    Some(first) => first.to_uppercase().chain(chars).collect(),
-                    None => String::new(),
-                }
-            }
+    /// 找不到对应的插件时显示的名字：首字母大写。
+    pub fn fallback_name(&self) -> String {
+        let mut chars = self.0.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => String::new(),
         }
     }
 }
@@ -104,6 +90,36 @@ pub struct AgentSpec {
     /// 是否已经启动过。第一次启动带上需求，之后用恢复会话的参数启动。
     #[serde(default)]
     pub launched: bool,
+    /// Agent 自己的会话编号（从它的会话记录里读到的），恢复时按它找回这一次会话。
+    #[serde(default)]
+    pub session: Option<String>,
+    /// 第一次启动时交给它的话；没有时用任务的需求。中途接手的 Agent 用它拿到交接说明。
+    #[serde(default)]
+    pub prompt: Option<String>,
+    /// 中途被换下来的时候：之后换回它时，告诉它这期间发生了什么。
+    #[serde(default)]
+    pub left: Option<Departure>,
+    /// 下次恢复会话后先发给它的话（换回来时，这期间发生了什么）。
+    #[serde(default)]
+    pub resume_note: Option<String>,
+}
+
+impl AgentSpec {
+    pub fn new(id: u32, kind: AgentKind, role: AgentRole) -> Self {
+        Self { id, kind, role, launched: false, session: None, prompt: None, left: None, resume_note: None }
+    }
+}
+
+/// Agent 中途被换下来的时候。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Departure {
+    /// Unix 秒。
+    pub at: u64,
+    /// 当时任务事件的最后一条（之后的对话是它不知道的）。
+    pub seq: u64,
+    /// 当时代码的样子（包括没提交的改动），见 `duolo_git::snapshot_commit`；没记下来时为 None。
+    #[serde(default)]
+    pub commit: Option<String>,
 }
 
 /// 一个任务：一段需求、一个独立的 worktree，以及在里面工作的若干 Agent。
@@ -130,6 +146,9 @@ pub struct Task {
     /// 最近一次后台审阅的结果。
     #[serde(default)]
     pub review: Option<Review>,
+    /// 中途换下来的 Agent。事件里的 Agent 编号还指着它们，编号也不再分给新的。
+    #[serde(default)]
+    pub retired: Vec<AgentSpec>,
 }
 
 /// 一次后台审阅的结果。
@@ -154,8 +173,15 @@ pub enum Verdict {
 }
 
 impl Review {
+    /// 带判断标记的那一行；有的 Agent 在结论前先说一句"我先看看"，所以不只看第一行。没有标记时取第一行。
     fn first_line(&self) -> &str {
-        self.output.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
+        let mut lines = self.output.lines().map(str::trim).filter(|l| !l.is_empty());
+        let first = lines.clone().next().unwrap_or("");
+        let marked = |l: &&str| {
+            let upper = l.to_ascii_uppercase();
+            upper.starts_with("[PASS]") || upper.starts_with("[ISSUES")
+        };
+        lines.find(marked).unwrap_or(first)
     }
 
     /// 第一行开头的标记和剩下的摘要。
@@ -202,7 +228,7 @@ impl Task {
     }
 
     pub fn next_agent_id(&self) -> u32 {
-        self.agents.iter().map(|a| a.id + 1).max().unwrap_or(0)
+        self.agents.iter().chain(&self.retired).map(|a| a.id + 1).max().unwrap_or(0)
     }
 
     pub fn key(&self, agent: u32) -> AgentKey {
@@ -285,9 +311,9 @@ mod tests {
     }
 
     #[test]
-    fn display_names() {
-        assert_eq!(AgentKind::claude().display_name(), "Claude");
-        assert_eq!(AgentKind("aider".into()).display_name(), "Aider");
+    fn fallback_names() {
+        assert_eq!(AgentKind("aider".into()).fallback_name(), "Aider");
+        assert_eq!(AgentKind(String::new()).fallback_name(), "");
     }
 
     #[test]
@@ -298,6 +324,8 @@ mod tests {
         let r = review("\n[ISSUES 2] 2 critical issues, 3 suggestions\n- a");
         assert_eq!(r.verdict(), Verdict::Issues(2));
         assert_eq!(r.summary(), "2 critical issues, 3 suggestions");
+        let chatty = review("I'll start by reading the review file.\n[ISSUES 1] 1 critical issue\n- a");
+        assert_eq!((chatty.verdict(), chatty.summary()), (Verdict::Issues(1), "1 critical issue"), "前面多说了一句");
         assert_eq!(review("Looks good").verdict(), Verdict::Unknown);
         assert_eq!(review("Looks good").summary(), "Looks good");
         let failed = Review { finished_at: 0, ok: false, output: "[PASS] x".into() };

@@ -4,18 +4,18 @@
 //! 引擎自己（任务建好、改名、审阅、改动统计）。界面定期调用 [`Engine::poll_events`] 取新事件。
 //! 别的设备能对这台电脑做的事（`Command`）统一由 [`crate::ops::execute`] 执行。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, TaskEvent, TaskId, UserError};
+use duolo_agent::{Entry, Home, HookEvent, Sessions, Watch};
+use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, State, TaskEvent, TaskId, UserError};
 
 use crate::engine::Engine;
 use crate::events::EventLog;
 use crate::prompt::{is_choosing, parse_prompt, Prompt};
 use crate::status::AgentStatus;
-use crate::transcript::{Entry, Flavor, Watcher};
 
 /// 状态要稳定这么久才记成事件。
 const STATUS_SETTLE: Duration = Duration::from_millis(1500);
@@ -36,7 +36,7 @@ pub(crate) struct LiveState {
     pub(crate) log: EventLog,
     /// 上次 poll 之后新记的事件。
     fresh: Vec<TaskEvent>,
-    watchers: HashMap<AgentKey, Watcher>,
+    watchers: HashMap<AgentKey, Watch>,
     /// 上次记下的状态和提示，变了才记新事件。
     status: HashMap<AgentKey, String>,
     /// 刚变成的状态和变的时间：稳定一会儿才记，避免界面重绘时"运行中 / 空闲"来回跳。
@@ -44,9 +44,23 @@ pub(crate) struct LiveState {
     prompt: HashMap<AgentKey, OpenPrompt>,
     diff: HashMap<TaskId, duolo_git::DiffStat>,
     /// Agent 还没准备好时收到的消息，准备好后再发。
-    pending: HashMap<AgentKey, Vec<String>>,
-    /// Agent 会话记录所在的家目录。
-    home: PathBuf,
+    pub(crate) pending: HashMap<AgentKey, Vec<String>>,
+    /// 这次启动之后已经画出过输入框的 Agent。
+    settled: HashSet<AgentKey>,
+    /// Agent 的家目录：去哪里找它的会话记录、配置文件。
+    pub(crate) home: Home,
+}
+
+/// 环境变量 `DUOLO_AGENT_HOME` 指定的目录，没设置时是用户的家目录。
+/// 测试时默认用一个不存在的目录：启动 Agent 会替用户改它的配置文件（信任目录），不能改到真的上面。
+fn agent_home() -> Home {
+    match std::env::var_os("DUOLO_AGENT_HOME").filter(|dir| !dir.is_empty()) {
+        Some(dir) => Home::At(dir.into()),
+        None if cfg!(test) => {
+            Home::At(std::env::temp_dir().join(format!("duolo-test-agent-home-{}", std::process::id())))
+        }
+        None => Home::User,
+    }
 }
 
 impl LiveState {
@@ -60,7 +74,8 @@ impl LiveState {
             prompt: HashMap::new(),
             diff: HashMap::new(),
             pending: HashMap::new(),
-            home: duolo_core::process::home_dir(),
+            settled: HashSet::new(),
+            home: agent_home(),
         }
     }
 }
@@ -68,6 +83,7 @@ impl LiveState {
 impl Engine {
     /// 收集新事件并记下来，返回这次新增的（界面每次刷新时调用）。
     pub fn poll_events(&mut self) -> Vec<TaskEvent> {
+        self.poll_hooks();
         self.poll_transcripts();
         self.poll_agent_states();
         self.poll_diffs();
@@ -87,26 +103,34 @@ impl Engine {
         Some(seq)
     }
 
-    /// Agent 启动后开始跟着它的会话记录。
-    pub(crate) fn watch_transcript(&mut self, key: AgentKey) {
+    /// Agent 启动后开始跟着它的会话记录。`resumed` 时接着读它原来的那次会话。
+    pub(crate) fn watch_transcript(&mut self, key: AgentKey, resumed: bool) {
         let Some(task) = self.state.task(key.task) else { return };
-        let Some(flavor) = task.agent(key.agent).and_then(|a| Flavor::of(&a.kind.0)) else { return };
-        let watcher = Watcher::new(flavor, &task.worktree, std::time::SystemTime::now(), self.live.home.clone());
-        self.live.watchers.insert(key, watcher);
+        let own = task.agent(key.agent).and_then(|a| a.session.clone()).filter(|_| resumed);
+        let others =
+            task.agents.iter().chain(&task.retired).filter(|a| a.id != key.agent).filter_map(|a| a.session.clone());
+        let sessions = Sessions { own, others: others.collect() };
+        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.live.home, sessions)) {
+            Some(watch) => self.live.watchers.insert(key, watch),
+            None => self.live.watchers.remove(&key),
+        };
     }
 
-    /// 读 Agent 会话记录的时候用哪个家目录（测试里换成临时目录）。
+    /// Agent 的家目录：读会话记录、改配置文件都在这里（测试里换成临时目录）。
     pub fn set_agent_home(&mut self, home: PathBuf) {
-        self.live.home = home;
+        self.live.home = Home::At(home);
     }
 
     fn poll_transcripts(&mut self) {
         let mut found = Vec::new();
-        for (key, watcher) in &mut self.live.watchers {
-            for entry in watcher.poll() {
-                found.push((*key, entry));
+        let mut sessions = Vec::new();
+        for (key, watch) in &self.live.watchers {
+            found.extend(watch.take().into_iter().map(|entry| (*key, entry)));
+            if let Some(id) = watch.session() {
+                sessions.push((*key, id));
             }
         }
+        self.remember_sessions(sessions);
         for (key, entry) in found {
             let kind = match entry {
                 Entry::User(text) => EventKind::Message { speaker: Speaker::User, agent: key.agent, text },
@@ -114,6 +138,97 @@ impl Engine {
                 Entry::Tool { tool, target } => EventKind::Tool { agent: key.agent, tool, target },
             };
             self.record(key.task, kind);
+        }
+    }
+
+    /// Agent 的钩子写下的事件（见 `duolo_core::hook`）：会话编号以它为准，请求授权记成事件。
+    fn poll_hooks(&mut self) {
+        let keys: Vec<AgentKey> = self.sessions.keys().copied().collect();
+        for key in keys {
+            let events = duolo_core::hook::take_events(&self.hook_dir(key));
+            if events.is_empty() {
+                continue;
+            }
+            let Ok(plugin) = self.plugin_of(key) else { continue };
+            let found: Vec<HookEvent> = events.iter().filter_map(|e| plugin.hook_event(e)).collect();
+            for event in found {
+                match event {
+                    HookEvent::Session(id) => self.set_session(key, id),
+                    HookEvent::Approval { tool, target } => {
+                        self.record(key.task, EventKind::Approval { agent: key.agent, tool, target });
+                    }
+                }
+            }
+        }
+    }
+
+    /// Agent 亲口说的会话编号（钩子）：直接记下，告诉同一个任务里的其他 Agent。
+    fn set_session(&mut self, key: AgentKey, id: String) {
+        let known = self.state.task(key.task).and_then(|t| t.agent(key.agent)).and_then(|a| a.session.clone());
+        if known.as_deref() == Some(id.as_str()) {
+            return;
+        }
+        let _ = self.update(|state| {
+            if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
+                agent.session = Some(id.clone());
+            }
+            Ok(())
+        });
+        self.share_sessions(key.task);
+    }
+
+    /// 记下 Agent 的会话编号，下次按编号恢复。同一个任务里别的 Agent 已经认领的编号不抢，
+    /// 并告诉同一个任务里的其他 Agent：这个会话不是它们的。
+    fn remember_sessions(&mut self, mut found: Vec<(AgentKey, String)>) {
+        let claimed = |state: &State, key: AgentKey, id: &String| {
+            state.task(key.task).is_some_and(|t| {
+                t.agents.iter().chain(&t.retired).any(|a| a.id != key.agent && a.session.as_ref() == Some(id))
+            })
+        };
+        let known = |state: &State, key: AgentKey| state.task(key.task).and_then(|t| t.agent(key.agent)).cloned();
+        // 已经有会话的 Agent 又认出一个新的：同一个任务里还有正在运行、还没认出自己会话的 Agent 时先不认，
+        // 那多半是它的。
+        let unsure = |state: &State, key: AgentKey| {
+            state.task(key.task).is_some_and(|t| {
+                t.agents
+                    .iter()
+                    .any(|a| a.id != key.agent && a.session.is_none() && self.sessions.contains_key(&t.key(a.id)))
+            })
+        };
+        found.retain(|(key, id)| {
+            let Some(agent) = known(&self.state, *key) else { return false };
+            agent.session.as_ref() != Some(id)
+                && !claimed(&self.state, *key, id)
+                && (agent.session.is_none() || !unsure(&self.state, *key))
+        });
+        // 两个 Agent 同时认出同一个会话：给还没有会话的那个（另一个是看到了别人新建的文件）。
+        found.sort_by_key(|(key, _)| known(&self.state, *key).is_some_and(|a| a.session.is_some()));
+        let mut taken = HashSet::new();
+        found.retain(|(key, id)| taken.insert((key.task, id.clone())));
+        if found.is_empty() {
+            return;
+        }
+        // 没存上只是下次恢复最近的一次会话。
+        let _ = self.update(|state| {
+            for (key, id) in &found {
+                if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
+                    agent.session = Some(id.clone());
+                }
+            }
+            Ok(())
+        });
+        let tasks: HashSet<TaskId> = found.iter().map(|(key, _)| key.task).collect();
+        for task in tasks {
+            self.share_sessions(task);
+        }
+    }
+
+    /// 告诉任务里每个 Agent 的会话记录：别的 Agent 的会话是哪些，不要认成自己的。
+    pub(crate) fn share_sessions(&self, task: TaskId) {
+        let Some(t) = self.state.task(task) else { return };
+        for (key, watch) in self.live.watchers.iter().filter(|(key, _)| key.task == task) {
+            let others = t.agents.iter().chain(&t.retired).filter(|a| a.id != key.agent);
+            watch.set_others(others.filter_map(|a| a.session.clone()).collect());
         }
     }
 
@@ -158,8 +273,11 @@ impl Engine {
             } else {
                 self.live.prompt.remove(&key);
             }
-            // 刚启动的 Agent 准备好输入框之后，把排队的消息发过去。
-            if status == AgentStatus::Idle && self.live.pending.contains_key(&key) && self.can_take_message(key) {
+            if status == AgentStatus::Idle && self.can_take_message(key) {
+                self.live.settled.insert(key);
+            }
+            // 准备好输入框、没有在等用户选什么之后，把排队的消息发过去。
+            if status == AgentStatus::Idle && self.live.pending.contains_key(&key) && self.accepts_message(key) {
                 if let Some(queued) = self.live.pending.remove(&key) {
                     for text in queued {
                         let _ = self.paste(key, &text, true);
@@ -191,11 +309,38 @@ impl Engine {
 
     // ---- 发消息 ----
 
-    /// 画面上已经有准备好的输入框，而且没有在等用户选什么（第一次启动时选主题、确认信任目录……）。
+    /// 可以发消息了：它报告自己空闲；不报告状态的 Agent 看画面上有没有准备好的输入框、
+    /// 有没有在等用户选什么（第一次启动时选主题、确认信任目录……）。
     pub(crate) fn can_take_message(&self, key: AgentKey) -> bool {
-        self.sessions
-            .get(&key)
-            .is_some_and(|s| s.is_ready_for_input() && !s.with_screen(|screen| is_choosing(&screen.contents())))
+        let Ok(plugin) = self.plugin_of(key) else { return false };
+        let choosing = &plugin.screen().choosing;
+        // 它自己报告状态的话以报告为准；否则看画面上有没有在等用户选的列表。
+        self.sessions.get(&key).is_some_and(|s| {
+            s.is_ready_for_input()
+                && (s.reported().is_some() || !s.with_screen(|screen| is_choosing(&screen.contents(), choosing)))
+        })
+    }
+
+    /// 现在可以发消息。启动时要看仔细（[`Engine::can_take_message`]）；画出过输入框之后，画面上的编号列表
+    /// 可能只是用户自己说过的话，只看它是不是在等用户确认。
+    fn accepts_message(&mut self, key: AgentKey) -> bool {
+        if self.live.settled.contains(&key) {
+            return !matches!(self.agent_status(key), AgentStatus::NeedsInput);
+        }
+        self.can_take_message(key)
+    }
+
+    /// 替用户发一句话（粘贴并回车）。Agent 停在要选的列表上（信任目录、是否升级、是否允许）时，
+    /// 回车会变成替用户选，所以先排着，等用户选完再发。
+    pub fn submit(&mut self, key: AgentKey, text: &str) -> Result<()> {
+        if self.session_mut(key).ok_or(UserError::AgentNotRunning)?.poll_exit().is_some() {
+            return Err(UserError::AgentNotRunning.into());
+        }
+        if self.accepts_message(key) {
+            return self.paste(key, text, true);
+        }
+        self.queue_message(key, text.to_string());
+        Ok(())
     }
 
     /// 给任务写代码的 Agent 发一句话并发送。Agent 没在运行时接着上次的会话启动，准备好后再发。
@@ -212,7 +357,7 @@ impl Engine {
         self.name_task(task, text, None)?;
         let running = self.sessions.get_mut(&key).is_some_and(|s| s.poll_exit().is_none());
         if running {
-            self.paste(key, text, true)
+            self.submit(key, text)
         } else {
             self.start_agent(key)?;
             if !becomes_prompt {
@@ -230,6 +375,11 @@ impl Engine {
                 self.live.pending.remove(&key);
             }
         }
+    }
+
+    /// Agent 新启动了：重新看它准备好没有。
+    pub(crate) fn unsettle(&mut self, key: AgentKey) {
+        self.live.settled.remove(&key);
     }
 
     /// 刚启动的 Agent 准备好之后再发这句话（并回车）。
@@ -255,16 +405,35 @@ impl Engine {
         self.write(key, (option + 1).to_string().as_bytes())
     }
 
-    /// 打断 Agent 正在做的事（终端里按 Esc）。
+    /// 打断 Agent 正在做的事。
     pub fn interrupt(&mut self, task: TaskId) -> Result<()> {
         let key = self.writer_key(task)?;
-        self.write(key, b"\x1b")
+        let interrupt = self.plugin_of(key)?.keys().interrupt.clone();
+        self.write(key, interrupt.as_bytes())
+    }
+
+    /// 在 Agent 的输入框里换行。
+    pub fn newline(&mut self, key: AgentKey) -> Result<()> {
+        let newline = self.plugin_of(key)?.keys().newline.clone();
+        self.write(key, newline.as_bytes())
     }
 
     pub(crate) fn writer_key(&self, task: TaskId) -> Result<AgentKey> {
         let t = self.state.task(task).ok_or(UserError::TaskNotFound)?;
         let agent = t.agent_with_role(AgentRole::Writer).ok_or(UserError::AgentNotRunning)?;
         Ok(t.key(agent.id))
+    }
+
+    /// 换下来的 Agent：不再跟着它，没发出去的消息交给 `successor`。
+    pub(crate) fn hand_over(&mut self, key: AgentKey, successor: Option<AgentKey>) {
+        self.live.watchers.remove(&key);
+        self.live.status.remove(&key);
+        self.live.settling.remove(&key);
+        self.live.prompt.remove(&key);
+        self.live.settled.remove(&key);
+        if let (Some(queued), Some(successor)) = (self.live.pending.remove(&key), successor) {
+            self.live.pending.entry(successor).or_default().extend(queued);
+        }
     }
 
     /// 任务关闭后不再跟着它的 Agent。
@@ -274,6 +443,7 @@ impl Engine {
         self.live.settling.retain(|k, _| k.task != task);
         self.live.prompt.retain(|k, _| k.task != task);
         self.live.pending.retain(|k, _| k.task != task);
+        self.live.settled.retain(|k| k.task != task);
         self.live.diff.remove(&task);
     }
 }
@@ -295,6 +465,11 @@ mod tests {
 
     /// 一个仓库，写代码的 Agent 是 `script`（sh 脚本）。
     fn engine(script: &str) -> (tempfile::TempDir, Engine, ProjectId) {
+        engine_with(script, "")
+    }
+
+    /// `extra` 追加在 `[agents.claude]` 后面，例如关掉由 Duolo 定会话编号。
+    fn engine_with(script: &str, extra: &str) -> (tempfile::TempDir, Engine, ProjectId) {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("shop");
         std::fs::create_dir(&repo).unwrap();
@@ -302,7 +477,7 @@ mod tests {
         git(&repo, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"]);
         let home = dir.path().join("home");
         std::fs::create_dir(&home).unwrap();
-        let config = format!("[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\n");
+        let config = format!("[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\n{extra}");
         std::fs::write(home.join("config.toml"), config).unwrap();
         let mut engine = Engine::open(Paths::at(&home)).unwrap();
         engine.set_agent_home(dir.path().join("user-home"));
@@ -410,7 +585,7 @@ mod tests {
     /// 假 Agent：和 Claude Code 一样，先空白一阵（此时的输入会丢），画出输入框后才打开括号粘贴、开始读。
     /// 打印启动时带的需求（`arg:…`）和收到的每一行（`got:…`）。
     const SLOW_START: &str = "sleep 2.2; stty -echo; perl -e 'use POSIX; tcflush(0, TCIFLUSH)'; \
-                              printf 'arg:%s\\n\\033[?2004h> ' \"$1\"; while read -r line; do echo \"got:$line\"; done";
+                              for prompt; do :; done; printf 'arg:%s\\n\\033[?2004h> ' \"$prompt\"; while read -r line; do echo \"got:$line\"; done";
 
     #[test]
     fn message_waits_until_the_agent_is_ready() {
@@ -424,6 +599,31 @@ mod tests {
         wait_screen(&mut engine, key, "and Excel");
         thread::sleep(Duration::from_millis(300));
         assert_eq!(screen(&engine, key).matches("and Excel").count(), 1, "{}", screen(&engine, key));
+    }
+
+    /// 报告状态的 Agent：报告在等用户时不发消息，报告空闲后再发；画面上写什么都不看。
+    #[cfg(unix)]
+    #[test]
+    fn message_waits_for_a_reported_idle() {
+        let script = "stty raw -echo; printf '\\033[?2004h> \\033]7501;?\\033\\\\'; head -c 9 >/dev/null; \
+                      printf '\\033]7501;state=blocked:kind=permission\\033\\\\'; sleep 2; \
+                      printf '\\033]7501;state=idle\\033\\\\'; exec perl -e '$|=1; while (sysread(STDIN,$c,1)) { print \"got:$c\" if $c =~ /\\w/ }'";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while engine.agent_status(key) != AgentStatus::NeedsInput {
+            assert!(Instant::now() < deadline, "没认出它在等用户");
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(20));
+        }
+        engine.submit(key, "hi").unwrap();
+        thread::sleep(Duration::from_millis(500));
+        engine.poll_events();
+        assert!(!screen(&engine, key).contains("got:"), "在等用户时不能发：{}", screen(&engine, key));
+        wait_screen(&mut engine, key, "got:hgot:i");
+        engine.shutdown();
     }
 
     #[test]
@@ -448,7 +648,7 @@ mod tests {
     fn batch_file_agent_gets_a_multi_line_prompt() {
         let (dir, mut engine, project) = engine("cat");
         let agent = dir.path().join("agent.sh");
-        std::fs::write(&agent, "sleep 1; echo \"args:$#\"; while read -r line; do echo \"got:$line\"; done\n").unwrap();
+        std::fs::write(&agent, "sleep 1; echo \"args:$*\"; while read -r line; do echo \"got:$line\"; done\n").unwrap();
         let script = dir.path().join("claude.cmd");
         std::fs::write(&script, "@sh \"%~dp0agent.sh\" %*\r\n").unwrap();
         let config = format!("[agents.claude]\ncommand = {:?}\n", script.display().to_string());
@@ -458,10 +658,310 @@ mod tests {
         let task = engine.create_task(&project, "Export orders\nas CSV & \"Excel\" 100%").unwrap();
         let key = engine.writer_key(task).unwrap();
         engine.start_agent(key).unwrap();
-        wait_screen(&mut engine, key, "args:0");
+        // 参数里只有 Duolo 定的会话编号，需求等它准备好后粘贴。
+        let id = engine.state().task(task).unwrap().agents[0].session.clone().unwrap();
+        wait_screen(&mut engine, key, &format!("args:--session-id {id}\n"));
         wait_screen(&mut engine, key, "got:Export orders");
         wait_screen(&mut engine, key, "got:as CSV & \"Excel\" 100%");
         engine.close_task(task).unwrap();
+    }
+
+    #[test]
+    fn message_does_not_answer_a_later_dialog() {
+        // 假 Agent：第一句话之后弹出确认框（默认选中的是危险的那个），选完才接着读消息。
+        let script = "stty -echo; printf '\\033[?2004h> '; read -r line; \
+                      printf '\\033[2J\\033[HDo you want to proceed?\\n❯ 1. Yes, delete\\n  2. No\\n'; read -r pick; \
+                      printf '\\033[2J\\033[Hpicked:%s\\n> ' \"$pick\"; while read -r line; do echo \"got:$line\"; done";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, ">");
+        wait_for(&mut engine, "idle", |all| {
+            all.iter().any(|e| matches!(&e.kind, EventKind::Status { status, .. } if status == "idle"))
+        });
+        // 用户自己说的话里有编号，不该被当成在选。
+        engine.submit(key, "1. go").unwrap();
+        wait_screen(&mut engine, key, "Yes, delete");
+        engine.send_message(task, "second").unwrap();
+        engine.submit(key, "third").unwrap();
+        let until = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < until {
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(screen(&engine, key).contains("Yes, delete"), "不能替用户选：{}", screen(&engine, key));
+        engine.write(key, b"2\r").unwrap();
+        wait_screen(&mut engine, key, "third");
+        let shown = screen(&engine, key);
+        assert!(shown.contains("picked:2") && shown.contains("second"), "{shown}");
+    }
+
+    #[test]
+    fn own_words_do_not_look_like_a_dialog() {
+        // 假 Agent：像 Claude Code 一样把用户说的话带着 ❯ 显示出来。
+        let script = "stty -echo; printf '\\033[?2004h> '; read -r first; \
+                      printf '\\n❯ 1. %s\\n  2. and tests\\n> ' \"$first\"; while read -r line; do echo \"got:$line\"; done";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_for(&mut engine, "idle", |all| {
+            all.iter().any(|e| matches!(&e.kind, EventKind::Status { status, .. } if status == "idle"))
+        });
+        engine.submit(key, "export").unwrap();
+        wait_screen(&mut engine, key, "2. and tests");
+        engine.submit(key, "next").unwrap();
+        wait_screen(&mut engine, key, "got:");
+        assert!(screen(&engine, key).contains("next"), "{}", screen(&engine, key));
+    }
+
+    /// 用户装在 `~/.duolo/agents/` 的插件：和内置的一样用，行为都按它的声明来。
+    #[cfg(unix)]
+    #[test]
+    fn user_plugin_works_end_to_end() {
+        let (dir, engine, project) = engine("cat");
+        drop(engine);
+        let plugin = dir.path().join("home/agents/toy");
+        std::fs::create_dir_all(&plugin).unwrap();
+        let agent = dir.path().join("toy.sh");
+        // 打印参数，然后把收到的字节按十六进制打印出来。`review` 时打印结论就退出。
+        let script = "if [ \"$1\" = review ]; then echo \"[PASS] $# args\"; exit; fi; \
+                      stty raw -echo; printf 'args:%s\\r\\n' \"$*\"; printf '\\033[?2004hPICK ONE\\r\\n'; \
+                      exec perl -e '$|=1; while (sysread(STDIN,$c,1)) { printf \"%02x \", ord $c }'\n";
+        std::fs::write(&agent, script).unwrap();
+        let manifest = format!(
+            "schema = 1\nid = \"toy\"\nname = \"Toy\"\ncommand = \"sh\"\n\
+             [start]\nargs = [{agent:?}]\nprompt = \"flag\"\nprompt_flag = \"--say=\"\nresume_args = [\"--again\"]\n\
+             [review]\nargs = [{agent:?}, \"review\"]\nseparator = \"--\"\n\
+             [screen]\napproval = [\"pick one\"]\nbusy = []\nchoosing = []\n\
+             [keys]\ninterrupt = \"\\u0003\"\nnewline = \"\\n\"\n",
+        );
+        std::fs::write(plugin.join("agent.toml"), manifest).unwrap();
+        std::fs::create_dir(dir.path().join("home/agents/bad")).unwrap();
+        std::fs::write(dir.path().join("home/agents/bad/agent.toml"), "schema = 1\n").unwrap();
+
+        let mut engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        let notices = engine.take_notices();
+        assert!(
+            matches!(&notices[..], [UserError::AgentPluginInvalid { path, .. }] if path.contains("bad")),
+            "{notices:?}"
+        );
+
+        let toy = duolo_core::AgentKind("toy".into());
+        let opts = crate::TaskOptions { writer: Some(toy.clone()), reviewer: Some(toy), ..Default::default() };
+        let task = engine.create_task_with(&project, "- list", &opts).unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--say=- list");
+        wait_screen(&mut engine, key, "PICK ONE");
+        assert_eq!(engine.agent_status(key), AgentStatus::NeedsInput, "按它自己的写法认状态");
+        engine.interrupt(task).unwrap();
+        wait_screen(&mut engine, key, "03");
+        engine.newline(key).unwrap();
+        wait_screen(&mut engine, key, "0a");
+
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--again");
+
+        engine.start_review(task).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while engine.poll_reviews().is_empty() {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(50));
+        }
+        let review = engine.state().task(task).unwrap().review.clone().unwrap();
+        assert_eq!((review.ok, review.output.as_str()), (true, "[PASS] 3 args"), "review -- <提示词>");
+        engine.close_task(task).unwrap();
+    }
+
+    /// 启动前替用户信任任务的目录，关任务时删掉；用户的别的设置不动。
+    #[test]
+    fn trusts_the_task_folder_while_it_exists() {
+        let (dir, mut engine, project) = engine("cat");
+        let home = dir.path().join("user-home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join(".claude.json"), r#"{"numStartups": 1}"#).unwrap();
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let worktree = engine.state().task(task).unwrap().worktree.canonicalize().unwrap();
+        let read = || {
+            serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(home.join(".claude.json")).unwrap())
+                .unwrap()
+        };
+        assert_eq!(read()["projects"][worktree.display().to_string()]["hasTrustDialogAccepted"], true);
+        assert_eq!(read()["numStartups"], 1);
+        engine.close_task(task).unwrap();
+        assert!(read()["projects"].get(worktree.display().to_string()).is_none(), "任务关了，信任也删掉");
+    }
+
+    /// 钩子：设置文件随启动交给它；它在钩子里说的会话编号以此为准，请求授权记成事件。
+    #[cfg(unix)]
+    #[test]
+    fn hook_events_are_picked_up() {
+        let (dir, engine, project) = engine("cat");
+        drop(engine);
+        // 假的钩子程序：和 Duolo 的 `__hook` 一样，把标准输入写成事件目录里的一个文件。
+        let hook = dir.path().join("hook.sh");
+        std::fs::write(
+            &hook,
+            "f=\"$DUOLO_HOOK_DIR/$(date +%s)$$-$1.json\"; cat > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"\n",
+        )
+        .unwrap();
+        // 假 Agent：打印参数，然后像 Claude 一样运行两个钩子。
+        let script = format!(
+            "echo \"args:$*\"; \
+             printf '%s' '{{\"hook_event_name\":\"SessionStart\",\"session_id\":\"zz-1\"}}' | sh {hook} 1; \
+             printf '%s' '{{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":\"pnpm test\"}}}}' | sh {hook} 2; \
+             cat",
+            hook = hook.display()
+        );
+        let config = format!(
+            "[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\nsession_id_args = []\n"
+        );
+        std::fs::write(dir.path().join("home/config.toml"), config).unwrap();
+        let mut engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        engine.set_agent_home(dir.path().join("user-home"));
+        // 环境检查问过版本；钩子命令交给假的钩子程序（真的是 Duolo 自己）。
+        duolo_core::process::remember("sh", &["--version".to_string()], "2.1.300 (Claude Code)");
+        engine.set_hook_program(hook.clone());
+
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--settings ");
+        let settings_file =
+            screen(&engine, key).split("--settings ").nth(1).unwrap().split_whitespace().next().unwrap().to_string();
+        let settings: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_file).unwrap()).unwrap();
+        assert!(settings["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("hook.sh\" __hook"));
+        let events = wait_for(&mut engine, "approval", |events| {
+            events.iter().any(|e| matches!(&e.kind, EventKind::Approval { tool, target, .. } if tool == "Bash" && target == "pnpm test"))
+        });
+        assert!(!events.is_empty());
+        assert_eq!(engine.state().task(task).unwrap().agents[0].session.as_deref(), Some("zz-1"));
+        engine.close_task(task).unwrap();
+        assert!(!std::path::Path::new(&settings_file).exists(), "关任务时清掉");
+    }
+
+    /// 能定会话编号的：启动时就定好、记下，下次按它恢复；重新开始时换一个新的。
+    #[test]
+    fn assigned_session_is_resumed() {
+        let (_dir, mut engine, project) = engine("echo \"args:$*\"; cat");
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let id = engine.state().task(task).unwrap().agents[0].session.clone().expect("启动时就定好了");
+        assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+        wait_screen(&mut engine, key, &format!("args:--session-id {id} -- Export orders"));
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, &format!("args:--resume {id}"));
+        engine.shutdown();
+    }
+
+    /// 不认得"指定会话编号"选项的版本：马上出错退出，就不再给它定编号，重新开始。
+    #[test]
+    fn agent_without_session_ids_is_restarted_without() {
+        let script = "case \"$*\" in *--session-id*) echo \"error: unknown option '--session-id'\"; exit 1;; esac; \
+                      echo \"args:$*\"; cat";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut retried = Vec::new();
+        while retried.is_empty() {
+            assert!(Instant::now() < deadline, "没有重新开始");
+            retried = engine.retry_failed_resumes();
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(retried, [key]);
+        wait_screen(&mut engine, key, "args:-- Export orders");
+        assert!(engine.state().task(task).unwrap().agents[0].session.is_none(), "编号等从会话记录里认");
+        // 同一种 Agent 的下一个任务也不再定编号。
+        let other = engine.create_task(&project, "Next").unwrap();
+        let next = engine.writer_key(other).unwrap();
+        engine.start_agent(next).unwrap();
+        wait_screen(&mut engine, next, "args:-- Next");
+        engine.shutdown();
+    }
+
+    /// 不能定编号的：读到会话编号后记下来，下次按编号恢复。
+    #[test]
+    fn resumes_the_session_it_read() {
+        let (dir, mut engine, project) = engine_with("echo \"args:$*\"; cat", "session_id_args = []\n");
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:-- Export orders");
+
+        let worktree = engine.state().task(task).unwrap().worktree.display().to_string();
+        let folder: String =
+            worktree.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+        let sessions = dir.path().join("user-home/.claude/projects").join(folder);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let line = r#"{"type":"user","timestamp":"2100-01-01T00:00:00Z","message":{"content":"Export orders"}}"#;
+        std::fs::write(sessions.join("5b4c8a2e-0000-4000-8000-000000000001.jsonl"), format!("{line}\n")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while engine.state().task(task).unwrap().agents[0].session.is_none() {
+            assert!(Instant::now() < deadline, "没有记下会话编号");
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--resume 5b4c8a2e-0000-4000-8000-000000000001");
+        engine.shutdown();
+    }
+
+    /// 同一个 worktree 里两个同种的 Agent（终端里审阅的那个后启动）：各认各的会话。
+    #[test]
+    fn agents_in_one_folder_keep_their_own_sessions() {
+        // 不能定编号、只能从会话记录里认的 Agent。
+        let (dir, mut engine, project) = engine_with("cat", "session_id_args = []\n");
+        let claude = duolo_core::AgentKind("claude".into());
+        let opts = crate::TaskOptions { writer: Some(claude.clone()), reviewer: Some(claude), ..Default::default() };
+        let task = engine.create_task_with(&project, "Export orders", &opts).unwrap();
+        let writer = engine.writer_key(task).unwrap();
+        engine.start_agent(writer).unwrap();
+        let worktree = engine.state().task(task).unwrap().worktree.display().to_string();
+        let folder: String =
+            worktree.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+        let sessions = dir.path().join("user-home/.claude/projects").join(folder);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let line = r#"{"type":"user","timestamp":"2100-01-01T00:00:00Z","message":{"content":"hi"}}"#;
+        let session_of = |engine: &Engine, key: AgentKey| {
+            engine.state().task(key.task).unwrap().agent(key.agent).unwrap().session.clone()
+        };
+        let wait = |engine: &mut Engine, key: AgentKey, want: &str| {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while session_of(engine, key).as_deref() != Some(want) {
+                assert!(Instant::now() < deadline, "{key:?}: {:?}", session_of(engine, key));
+                engine.poll_events();
+                thread::sleep(Duration::from_millis(50));
+            }
+        };
+        std::fs::write(sessions.join("aaaa-1.jsonl"), format!("{line}\n")).unwrap();
+        wait(&mut engine, writer, "aaaa-1");
+
+        let reviewer = engine.start_reviewer(task).unwrap();
+        thread::sleep(Duration::from_millis(50));
+        std::fs::write(sessions.join("bbbb-2.jsonl"), format!("{line}\n")).unwrap();
+        wait(&mut engine, reviewer, "bbbb-2");
+        // 写代码的那个也会看到这个更新的文件，但它不是它的。
+        for _ in 0..60 {
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(session_of(&engine, writer).as_deref(), Some("aaaa-1"));
+        engine.shutdown();
     }
 
     #[test]

@@ -11,6 +11,7 @@ repository = "https://github.com/OtterMind/duolo"
 
 [workspace.dependencies]
 duolo-core = { path = "crates/duolo-core" }
+duolo-agent = { path = "crates/duolo-agent" }
 duolo-git = { path = "crates/duolo-git" }
 duolo-pty = { path = "crates/duolo-pty" }
 duolo-voice = { path = "crates/duolo-voice" }
@@ -34,6 +35,7 @@ unicode-width = "0.2"
 libc = "0.2"
 windows-sys = "0.61"
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

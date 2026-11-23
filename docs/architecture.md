@@ -5,10 +5,11 @@
 | Crate | 职责 | 依赖 |
 |---|---|---|
 | `duolo-core` | 领域模型（项目、任务、Agent）、配置、`state.json` 持久化、文本工具 | 无 UI、无进程 |
+| `duolo-agent` | Agent 插件：每种 Agent 怎么启动、恢复、审阅，画面怎么认，会话记录怎么读（见 [agents.md](agents.md)） | core |
 | `duolo-git` | git 命令行封装：仓库定位、worktree、改动统计 | git |
-| `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态 | portable-pty、vt100 |
+| `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态（规则由插件给） | portable-pty、vt100 |
 | `duolo-voice` | 语音：调用外部录音转写命令、调用整理命令 | core |
-| `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、git、pty |
+| `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、git、pty |
 | `duolo-app` | 桌面应用后端（Tauri）：把 Engine 的能力作为命令提供给界面，推送状态快照和 Agent 输出 | engine、voice、tauri |
 | `app/` | 桌面应用界面（React + xterm.js）：侧边栏、首页、任务页、语音 | 只通过 Tauri 命令访问后端 |
 | `duolo-tui` | 终端界面（`duolo tui`，适合 SSH）：自己做 VT 合成 | engine、voice、ratatui |
@@ -39,7 +40,8 @@
   只结束主进程会留下真正干活的。macOS / Linux 按父进程、会话、进程组一起找；Windows 用作业对象，有窗口的程序
   （Agent 打开的编辑器、浏览器）不动。后台命令用 `process::spawn_tree` 或 `process::Prompted` 启动；终端里的用 `Session::stop`。
 - **带提示词的命令**用 `process::Prompted`：提示词一般是最后一个参数；Windows 的 `.cmd` 不能带换行，改从标准输入给。
-- **排队的消息**等 Agent 画出输入框（打开括号粘贴）、没有在等用户选什么之后才发（`Engine::can_take_message`）。
+- **替用户发消息**用 `Engine::submit`，不直接粘贴加回车：Agent 停在对话框上（信任目录、是否升级、是否允许）时，
+  回车会变成替用户选。这时先排队，等画出输入框（打开括号粘贴）、没有在等用户选什么之后才发。
 - **改动从哪里算**：`duolo_git::fork_point`，任务从基准分支分出来（或最近一次合并它）的提交；统计和审阅都相对它，包括新文件。
 - **退出**：`request_quit` 请界面处理，3 秒没有回应（界面崩溃、卡死）就用系统弹窗问。
 - **环境变量**：macOS / Linux 启动时从登录 shell 读一遍（`shell_env.rs`），PATH 用 shell 的，其他的只补没有的。
@@ -79,8 +81,8 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 `duolo-pty::detect::classify` 按以下顺序判断：
 
 1. 进程已退出 → 已结束；
-2. 屏幕底部出现确认选项（`1. Yes`、`Do you want to proceed` 等）→ 等你确认；
-3. 出现 `esc to interrupt`，或最近 1.5 秒有输出 → 运行中；
+2. 屏幕底部出现插件声明的确认文字（`[screen] approval`）→ 等你确认；
+3. 出现插件声明的忙碌文字（`[screen] busy`），或最近 1.5 秒有输出 → 运行中；
 4. 否则 → 等待输入。
 
 ## 扩展点
@@ -89,10 +91,10 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
   拆分后退出应用不会结束 Agent，手机端也能连接。`duolo-app/src/view.rs` 的快照格式就是以后的协议基础。
 - **网页端**：`app/` 的界面只依赖 `lib/api.ts` 这一层，换成 WebSocket 实现即可复用。
 - **手机端**：iOS 和 Android 各用原生语言写，在 `mobile/`，见 [mobile.md](mobile.md)。
-- **hooks 和会话日志**：在 `duolo-pty::detect` 之上增加结构化来源（Claude hooks、`~/.claude/projects/*.jsonl`、
-  `~/.codex/sessions/*.jsonl`），启发式规则保留为兜底。
-- **新的 Agent CLI**：在配置里加 `[agents.<name>]` 即可，无需改代码。
-- **语音引擎**：替换 `voice.command`；整理模型替换 `voice.organizer`。
+- **对话和工具调用**：`duolo-agent` 的 `Watch` 在后台线程跟着 Agent 自己写的会话记录，引擎只取结果；
+  画面识别保留为兜底。以后可以再加 Claude hooks 这样的结构化来源。
+- **新的 Agent CLI**：写一个插件，见 [agents.md](agents.md)。
+- **语音引擎**：替换 `voice.command`；整理的命令默认用装了的 Agent（插件的 `[quick]`），可以换成 `voice.organizer`。
 - **多端协议**：`duolo-core` 的模型类型只增不改，作为以后守护进程与客户端协议的基础。
 
 ## 多语言
@@ -101,8 +103,32 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 ## 后台审阅和内置语音
 
-- 审阅：`duolo-engine/src/review.rs` 在任务的 worktree 里运行 `review_command`（默认 `codex exec --sandbox read-only`），
-  结论保存在 `Task.review`，界面一键交给写代码的 Agent。
+- 审阅：`duolo-engine/src/review.rs` 先用 `duolo_git::snapshot` 把任务现在的样子（包括没提交的改动和新文件）
+  检出到临时副本 `~/.duolo/review/<开始时间>-<任务>-<序号>`：一个 `git clone --shared`（对象借用原仓库，
+  分支、配置是自己的，去掉了远程，不跑钩子），再把从分出来的提交开始的改动写进副本里的 `DUOLO_REVIEW.md`
+  （`duolo_git::changes_report`），审阅者不用自己运行 git。然后在副本里运行审阅 Agent 的命令（插件的 `[review]`），
+  结束后删掉副本；没删掉的下次启动时清理。
+  只读靠审阅命令本身（只给读文件的工具或系统沙箱，关掉 MCP 和云端连接，见 agents.md），副本再兜一层：
+  在里面改文件、删分支都碰不到原仓库；审阅期间写代码的 Agent 继续改也不影响。
+  结论里的副本路径换回任务的 worktree，保存在 `Task.review`，界面一键交给写代码的 Agent。
+  10 万个文件的仓库，检出副本要 8 秒左右（审阅本身要一两分钟）。
+- 换 Agent：`duolo-engine/src/switch.rs`。换写代码的：原来的记进 `Task.retired`（事件里的编号还对得上），
+  连同离开时的事件编号和代码快照（`AgentSpec.left`，`duolo_git::snapshot_commit`，不拿着引擎的锁做）；
+  新的 `AgentSpec` 用新编号、带着交接说明（`AgentSpec.prompt`：需求、最近 20 条对话、看 `git diff` 的提示）。
+  一天之内换回原来的那种 Agent 时接回它原来的会话，恢复后先发 `AgentSpec.resume_note`（这期间的对话、对照快照看改动）；
+  接不回来就带着交接说明重新开始。换审阅的只改 `Task.reviewer`。
+- 换人只改状态，谁跑着 Agent 谁负责执行：`Engine::adopt`（每次读到新状态都会走）发现这个进程里跑着的 Agent
+  已经不在任务里了，就停掉它，没发出去的消息交给接手的。所以命令行（`duolo switch`）、手机都能换；
+  接手的由打开任务的界面启动（手机发来的命令直接启动）。
+- Agent 升级后还能用的整体做法见 [agent-compat.md](agent-compat.md)。
+- 钩子：`--settings` 交给 Agent 一份设置文件，钩子命令是 Duolo 自己的程序（`__hook`，`duolo-core/src/hook.rs`），
+  事件写成 `~/.duolo/hooks/<任务>-<Agent>/` 里的文件，引擎（`live.rs` 的 `poll_hooks`）读了就删。
+- Agent 的状态：先看它自己报告的（OSC 7501，`duolo-pty/src/status.rs` 回答询问、读报告），
+  没报告过的（不支持，或者还停在启动时的对话框上）再看画面上的字（插件的 `[screen]`）。
+  启动前替用户信任任务的目录（插件的 `[trust]`，`duolo-agent/src/trust.rs`）、关掉升级提示（`always_args`、`env`），
+  启动时的对话框基本不会出现。测试里 Agent 的家目录换成临时目录（`DUOLO_AGENT_HOME`），不会改到真的配置文件。
+- 会话编号：存在 `AgentSpec.session`，恢复时用插件的 `resume_session_args`。插件有 `session_id_args` 的（Claude Code），
+  新开会话时由 Duolo 定好编号；没有的（Codex）从会话记录里认，同一个目录里别的 Agent 已经认领的会话不会认成它的。
 - 语音：内置识别程序输出 `~ 临时结果` / `^ 音量` / `= 最终结果` 行，`duolo-voice::Recorder` 读取，
   结束录音时 macOS / Linux 发 SIGINT，Windows 往标准输入写一行 `stop`。
   - macOS：`duolo-app/dictate/main.swift`（Speech 框架），`build.rs` 编译后作为 externalBin 打进应用；
@@ -127,7 +153,7 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 - **来源**：Agent 自己写的会话记录（Claude Code 的 `~/.claude/projects/…/*.jsonl`、Codex 的 `~/.codex/sessions/…`），
   变成"你说的话 / Agent 的回复 / 工具调用"；终端画面变成状态和"等你选"的提示（问题、说明、选项）；
-  引擎自己记任务建好、改名、关闭、审阅、改动统计。见 `duolo-engine/src/live.rs`、`transcript.rs`、`prompt.rs`。
+  引擎自己记任务建好、改名、关闭、审阅、改动统计。见 `duolo-engine/src/live.rs`、`prompt.rs` 和 `duolo-agent/src/transcript/`。
 - **编号**：每个任务从 1 递增，存在 `~/.duolo/events/<任务编号>.jsonl`。断线重连的客户端说"我有到第几条"，
   用 `events_since` 补齐。事件里只有数据（文件路径、命令、状态码），不放句子，客户端按自己的语言显示。
 - **状态**要稳定 1.5 秒才记（Agent 界面重绘时会在"运行中 / 空闲"间来回跳）；"等你确认"和"退出"马上记。

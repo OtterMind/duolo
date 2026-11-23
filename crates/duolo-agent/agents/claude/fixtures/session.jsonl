@@ -1,0 +1,7 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"{now}"}
+{"type":"user","entrypoint":"cli","timestamp":"2000-01-01T00:00:00Z","message":{"role":"user","content":"from before this launch"}}
+{"type":"user","entrypoint":"cli","isMeta":true,"timestamp":"{now}","message":{"role":"user","content":"meta"}}
+{"type":"user","entrypoint":"cli","timestamp":"{now}","message":{"role":"user","content":"<system-reminder>x</system-reminder>"}}
+{"type":"user","entrypoint":"cli","timestamp":"{now}","message":{"role":"user","content":"Export orders"}}
+{"type":"assistant","entrypoint":"cli","timestamp":"{now}","message":{"role":"assistant","content":[{"type":"thinking","thinking":"…"},{"type":"text","text":"On it."},{"type":"tool_use","name":"Edit","input":{"file_path":"src/orders.ts"}}]}}
+{"type":"assistant","entrypoint":"cli","isSidechain":true,"timestamp":"{now}","message":{"role":"assistant","content":[{"type":"text","text":"subagent"}]}}

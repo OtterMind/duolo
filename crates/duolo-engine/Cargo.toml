@@ -11,10 +11,13 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+duolo-agent.workspace = true
 duolo-core.workspace = true
 duolo-git.workspace = true
 duolo-pty.workspace = true
 serde_json.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+toml.workspace = true

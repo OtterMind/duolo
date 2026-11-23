@@ -101,12 +101,19 @@ impl From<std::io::Error> for Error {
 }
 
 fn main() {
+    // Agent 运行钩子时用的就是这个程序（见 duolo_core::hook）：写下事件就退出，什么界面都不开。
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == duolo_core::hook::HOOK_ARG) {
+        return duolo_core::hook::run();
+    }
     #[cfg(unix)]
     shell_env::load();
-    let engine = match Paths::discover().and_then(Engine::open) {
+    let mut engine = match Paths::discover().and_then(Engine::open) {
         Ok(engine) => engine,
         Err(err) => return cannot_start(&err),
     };
+    if let Ok(exe) = std::env::current_exe() {
+        engine.set_hook_program(exe);
+    }
     let state = AppState {
         engine: Mutex::new(engine),
         recorder: Mutex::new(None),
@@ -168,6 +175,7 @@ fn main() {
             commands::take_open_request,
             commands::add_project,
             commands::create_task,
+            commands::agent_plugins,
             commands::agent_defaults,
             commands::task_events,
             commands::execute,
@@ -185,10 +193,13 @@ fn main() {
             commands::close_task,
             commands::start_agent,
             commands::start_reviewer,
+            commands::switch_writer,
+            commands::set_reviewer,
             commands::start_review,
             commands::cancel_review,
             commands::attach,
             commands::write,
+            commands::newline,
             commands::send_text,
             commands::resize,
             commands::diff_stat,

@@ -96,9 +96,9 @@ impl App {
         let env = Arc::new(Mutex::new(None));
         {
             let env = Arc::clone(&env);
-            let config = engine.config().clone();
+            let (config, agents) = (engine.config().clone(), engine.agents().clone());
             thread::spawn(move || {
-                let checks = check_environment(&config);
+                let checks = check_environment(&config, &agents);
                 *env.lock().unwrap_or_else(|p| p.into_inner()) = Some(checks);
             });
         }
@@ -471,7 +471,8 @@ impl App {
         let cfg = self.engine.config().voice.clone();
         if self.voice.recording_elapsed().is_some() {
             let ctx = self.organize_context();
-            self.voice.stop(&cfg, ctx);
+            let organizer = self.engine.organizer().filter(|_| cfg.organize);
+            self.voice.stop(organizer, Duration::from_secs(cfg.organize_timeout_secs), ctx);
             return;
         }
         if !cfg.is_configured() {
@@ -497,8 +498,7 @@ impl App {
     /// 确认语音文字：写进 Agent 的输入行，`submit` 为真时同时回车发送。
     pub fn commit_voice(&mut self, key: AgentKey, submit: bool) {
         let Some(text) = self.voice.take_pending() else { return };
-        let Some(session) = self.engine.session_mut(key) else { return };
-        let result = session.paste(&text).and_then(|()| if submit { session.write(b"\r") } else { Ok(()) });
+        let result = if submit { self.engine.submit(key, &text) } else { self.engine.paste(key, &text, false) };
         if let Err(err) = result {
             self.error(duolo_core::error::describe(&err));
         }

@@ -66,6 +66,22 @@ pub enum EventKind {
         detail: String,
         options: Vec<String>,
     },
+    /// Agent 请求授权（来自它的钩子）：用什么工具、对什么（文件路径、命令）。
+    Approval {
+        agent: u32,
+        tool: String,
+        target: String,
+    },
+    /// 换了写代码的 Agent：`from` 换下来，`to`（`kind` 插件）接手。
+    WriterChanged {
+        from: u32,
+        to: u32,
+        kind: String,
+    },
+    /// 换了审阅的 Agent（插件 id）。
+    ReviewerChanged {
+        reviewer: String,
+    },
     /// 后台审阅开始。
     ReviewStarted {
         reviewer: String,
@@ -124,6 +140,16 @@ pub enum Command {
     },
     StartReview {
         task: TaskId,
+    },
+    /// 换写代码的 Agent（插件 id），新的马上启动。
+    SwitchWriter {
+        task: TaskId,
+        agent: String,
+    },
+    /// 换审阅的 Agent（插件 id）。
+    SetReviewer {
+        task: TaskId,
+        agent: String,
     },
     CloseTask {
         task: TaskId,

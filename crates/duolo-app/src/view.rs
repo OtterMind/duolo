@@ -1,7 +1,7 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
 use duolo_core::{AgentRole, State, Task, Verdict};
-use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine};
+use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine, Plugin};
 use serde::Serialize;
 
 /// 侧边栏和首页需要的全部状态。后台定时生成，内容变化时推送给界面。
@@ -42,6 +42,8 @@ pub struct TaskView {
     /// 正在后台审阅时的开始时间（Unix 秒）。
     pub reviewing_since: Option<u64>,
     pub review: Option<ReviewView>,
+    /// 换回来时能接着原来会话的 Agent（插件 id）。
+    pub resumable: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -107,13 +109,39 @@ impl From<AgentStatus> for Status {
     }
 }
 
+/// 一种 Agent 的名字和图标。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginView {
+    pub id: String,
+    pub name: String,
+    /// 单色 SVG，界面当作遮罩用；没有时显示首字母。
+    pub icon: Option<String>,
+    /// 图标的颜色，没有时跟随文字颜色。
+    pub color: Option<String>,
+    /// 能不能用来审阅。
+    pub reviews: bool,
+}
+
+impl From<&Plugin> for PluginView {
+    fn from(plugin: &Plugin) -> Self {
+        Self {
+            id: plugin.id().into(),
+            name: plugin.name().into(),
+            icon: plugin.icon().map(Into::into),
+            color: plugin.icon_color().map(Into::into),
+            reviews: plugin.review().is_some(),
+        }
+    }
+}
+
 /// 环境检查结果。文案由界面按 `kind` 翻译。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckView {
     /// `git`、`agent` 或 `voice`。
     pub kind: &'static str,
-    /// Agent 的种类（`claude`、`codex`），其他检查为空。
+    /// Agent 的种类，其他检查为空。
     pub agent: String,
     /// 没安装时的安装命令（Agent 才有）。
     pub install: String,
@@ -121,6 +149,8 @@ pub struct CheckView {
     pub ok: bool,
     pub command: String,
     pub version: String,
+    /// 装的版本太旧时，最低要求的版本。
+    pub minimum: String,
 }
 
 impl From<Check> for CheckView {
@@ -138,6 +168,7 @@ impl From<Check> for CheckView {
             ok: check.ok,
             command: check.command,
             version: check.version,
+            minimum: check.minimum,
         }
     }
 }
@@ -185,7 +216,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
         .map(|agent| AgentView {
             id: agent.id,
             kind: agent.kind.0.clone(),
-            name: agent.kind.display_name(),
+            name: engine.agents().name(&agent.kind),
             role: match agent.role {
                 AgentRole::Writer => Role::Writer,
                 AgentRole::Reviewer => Role::Reviewer,
@@ -206,7 +237,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
         agents,
         reviewer: {
             let kind = engine.reviewer_of(task.id).unwrap_or_else(|_| engine.config().reviewer.clone());
-            ReviewerView { name: kind.display_name(), kind: kind.0 }
+            ReviewerView { name: engine.agents().name(&kind), kind: kind.0 }
         },
         repo: task
             .repo
@@ -215,6 +246,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             .map(|rel| rel.display().to_string())
             .unwrap_or_default(),
         reviewing_since: engine.review_started_at(task.id),
+        resumable: engine.resumable_writers(task.id).into_iter().map(|kind| kind.0).collect(),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,

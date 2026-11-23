@@ -1,0 +1,6 @@
+{"timestamp":"{now}","type":"session_meta","payload":{"id":"0199a213-81c0-7800-8aa1-bbab2f1a1c2b","cwd":"{worktree}","source":"cli"}}
+{"timestamp":"2000-01-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"from before this launch"}]}}
+{"timestamp":"{now}","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions"}]}}
+{"timestamp":"{now}","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Export orders"}]}}
+{"timestamp":"{now}","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"On it."}]}}
+{"timestamp":"{now}","type":"response_item","payload":{"type":"function_call","name":"Edit","arguments":"{\"path\":\"src/orders.ts\"}"}}

@@ -69,6 +69,8 @@ pub enum UserError {
     StateReset { path: String },
     #[error("{path} is not valid, so defaults are used: {detail}")]
     ConfigInvalid { path: String, detail: String },
+    #[error("the agent plugin {path} is not valid and was skipped: {detail}")]
+    AgentPluginInvalid { path: String, detail: String },
     #[error("Duolo cannot start: {detail}")]
     CannotStart { detail: String },
 }
@@ -106,6 +108,7 @@ impl UserError {
             Self::StateRestored { .. } => "stateRestored",
             Self::StateReset { .. } => "stateReset",
             Self::ConfigInvalid { .. } => "configInvalid",
+            Self::AgentPluginInvalid { .. } => "agentPluginInvalid",
             Self::CannotStart { .. } => "cannotStart",
         }
     }
@@ -146,7 +149,7 @@ impl UserError {
             Self::SaveChangesFailed { detail } | Self::CannotStart { detail } => {
                 params.insert("detail", detail.clone());
             }
-            Self::ConfigInvalid { path, detail } => {
+            Self::ConfigInvalid { path, detail } | Self::AgentPluginInvalid { path, detail } => {
                 params.insert("path", path.clone());
                 params.insert("detail", detail.clone());
             }
@@ -208,6 +211,7 @@ mod tests {
             UserError::StateRestored { path: "/x".into() },
             UserError::StateReset { path: "/x".into() },
             UserError::ConfigInvalid { path: "/x".into(), detail: "d".into() },
+            UserError::AgentPluginInvalid { path: "/x".into(), detail: "d".into() },
             UserError::CannotStart { detail: "d".into() },
         ];
         for err in all {

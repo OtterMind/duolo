@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
-  Copy,
   Folder,
   FolderGit2,
   FolderPlus,
@@ -29,7 +28,10 @@ import {
   type AgentOption,
 } from "../lib/agents";
 import type { Voice, VoiceTarget } from "../lib/voice";
+import { useModalFocus } from "../lib/modal";
+import { pluginName } from "../lib/plugins";
 import { AgentIcon } from "./AgentIcon";
+import { AgentMenu, CopyCommand, Popover } from "./AgentMenu";
 import { Waveform } from "./VoiceBar";
 import { TALK_KEY } from "../lib/platform";
 
@@ -91,7 +93,7 @@ export function NewTaskPanel(props: Props) {
   const agents = agentOptions(env);
   const noAgent = noAgentInstalled(env);
 
-  useEffect(() => input.current?.focus(), []);
+  useModalFocus(input);
   const refocus = () => {
     setOpen(null);
     input.current?.focus();
@@ -155,7 +157,9 @@ export function NewTaskPanel(props: Props) {
       className="scrim panel-scrim"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) => {
-        if (e.key === "Escape" && !open && !branch.editing && voice.phase.kind === "idle") onClose();
+        if (e.key !== "Escape") return;
+        if (open) setOpen(null);
+        else if (!branch.editing && voice.phase.kind === "idle") onClose();
       }}
     >
       <div className="new-task" role="dialog" aria-label={t("sidebar.newTask")}>
@@ -164,7 +168,7 @@ export function NewTaskPanel(props: Props) {
           className="new-task-input"
           rows={2}
           value={prompt}
-          placeholder={t("newTask.placeholder", { agent: nameOf(agents, choice.writer) })}
+          placeholder={t("newTask.placeholder", { agent: pluginName(choice.writer) })}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -288,7 +292,7 @@ export function NewTaskPanel(props: Props) {
             <div className="dropdown-anchor">
               <button
                 className={`chip ${open === "writer" ? "is-open" : ""}`}
-                title={t("newTask.writer", { agent: nameOf(agents, choice.writer) })}
+                title={t("newTask.writer", { agent: pluginName(choice.writer) })}
                 onClick={() => setOpen(open === "writer" ? null : "writer")}
               >
                 <AgentIcon kind={choice.writer} size={13} />
@@ -311,7 +315,7 @@ export function NewTaskPanel(props: Props) {
             <div className="dropdown-anchor">
               <button
                 className={`chip ${open === "reviewer" ? "is-open" : ""}`}
-                title={t("newTask.reviewer", { agent: nameOf(agents, choice.reviewer) })}
+                title={t("newTask.reviewer", { agent: pluginName(choice.reviewer) })}
                 onClick={() => setOpen(open === "reviewer" ? null : "reviewer")}
               >
                 <AgentIcon kind={choice.reviewer} size={13} />
@@ -319,7 +323,7 @@ export function NewTaskPanel(props: Props) {
               {open === "reviewer" && (
                 <AgentMenu
                   title={t("newTask.reviewerTitle")}
-                  agents={agents}
+                  agents={agents.filter((a) => a.reviews)}
                   selected={choice.reviewer}
                   onPick={(id) => {
                     pickedAgents.current = true;
@@ -492,10 +496,6 @@ function BranchField({ branch }: { branch: BranchNameState }) {
     </button>
   );
 }
-
-/** Agent 的显示名；环境检查还没结果时用种类名首字母大写。 */
-const nameOf = (agents: AgentOption[], id: string) =>
-  agents.find((a) => a.id === id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1);
 
 /** 选项目：已添加的项目，最下面是"添加项目…"。 */
 function ProjectMenu({
@@ -694,48 +694,6 @@ function BranchMenu({
   );
 }
 
-/** 选谁写或谁审：列出配置里的所有 Agent，没装的不能选，给出安装命令。 */
-function AgentMenu({
-  title,
-  agents,
-  selected,
-  onPick,
-  onClose,
-}: {
-  title: string;
-  agents: AgentOption[];
-  selected: string;
-  onPick(id: string): void;
-  onClose(): void;
-}) {
-  const t = useT();
-  return (
-    <Popover onClose={onClose}>
-      <div className="menu-title">{title}</div>
-      <div className="menu-list">
-        {agents.map((a) =>
-          a.installed ? (
-            <button key={a.id} className="menu-item" onClick={() => onPick(a.id)}>
-              <AgentIcon kind={a.id} size={14} />
-              <span>{a.name}</span>
-              <span className="grow" />
-              {a.id === selected && <Check size={13} strokeWidth={2} />}
-            </button>
-          ) : (
-            <div key={a.id} className="menu-item is-disabled" title={t("newTask.notInstalled")}>
-              <AgentIcon kind={a.id} size={14} />
-              <span>{a.name}</span>
-              <span className="meta">{t("newTask.notInstalled")}</span>
-              <span className="grow" />
-              {a.install && <CopyCommand command={a.install} />}
-            </div>
-          ),
-        )}
-      </div>
-    </Popover>
-  );
-}
-
 /** 本机一个 Agent 都没装：说明要装什么，给出可以复制的安装命令。 */
 function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck(): void }) {
   const t = useT();
@@ -761,43 +719,3 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
   );
 }
 
-function CopyCommand({ command }: { command: string }) {
-  const t = useT();
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      className="icon-btn"
-      title={copied ? t("newTask.copied") : t("newTask.copyInstall", { command })}
-      onClick={(e) => {
-        e.stopPropagation();
-        void navigator.clipboard.writeText(command).then(() => setCopied(true));
-      }}
-    >
-      {copied ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.75} />}
-    </button>
-  );
-}
-
-/** 挂在按钮下面的下拉框，点别处或按 Esc 关闭。 */
-function Popover({ children, onClose }: { children: React.ReactNode; onClose(): void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const close = (e: MouseEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
-    window.addEventListener("mousedown", close, true);
-    return () => window.removeEventListener("mousedown", close, true);
-  }, [onClose]);
-  return (
-    <div
-      ref={ref}
-      className="menu dropdown"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      {children}
-    </div>
-  );
-}

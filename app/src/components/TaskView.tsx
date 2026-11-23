@@ -4,11 +4,14 @@ import { Ellipsis, GitBranch, X } from "lucide-react";
 import { useT } from "../i18n";
 
 import { api, type Agent, type Diff, type Task } from "../lib/api";
+import type { AgentOption } from "../lib/agents";
 import { elapsed, isLive, writerOf } from "../lib/format";
 import * as terminals from "../lib/terminals";
 import type { Voice } from "../lib/voice";
 import { StatusIcon } from "./StatusIcon";
 import { AgentIcon } from "./AgentIcon";
+import { AgentList, Popover } from "./AgentMenu";
+import type { ConfirmSpec } from "./Confirm";
 import { Markdown } from "./Markdown";
 import { VoiceBar } from "./VoiceBar";
 import { isMac, kbd } from "../lib/platform";
@@ -19,18 +22,23 @@ interface Props {
   reviewOpen: boolean;
   /** 这个任务的审阅 Agent 本机装了没有。 */
   reviewerInstalled: boolean;
+  /** 可以换成的 Agent。 */
+  agents: AgentOption[];
   onReviewOpenChange(open: boolean): void;
+  onConfirm(spec: ConfirmSpec): void;
   onClose(): void;
   onError(err: unknown): void;
 }
 
 /** 任务页：顶部一行任务信息和审阅入口，下面就是写代码的 Agent 自己的命令行。 */
-export function TaskView({ task, voice, reviewOpen, reviewerInstalled, onReviewOpenChange, onClose, onError }: Props) {
+export function TaskView(props: Props) {
+  const { task, voice, reviewOpen, reviewerInstalled, agents, onReviewOpenChange, onClose, onError } = props;
   const t = useT();
   const agent = writerOf(task) ?? task.agents[0];
   const ref = { task: task.id, agent: agent.id };
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
+  const [agentMenu, setAgentMenu] = useState(false);
   const focusTerminal = () => terminals.terminalFor(ref).term.focus();
 
   const startReview = () => {
@@ -48,7 +56,25 @@ export function TaskView({ task, voice, reviewOpen, reviewerInstalled, onReviewO
   return (
     <div className="task">
       <header className="topbar" data-tauri-drag-region>
-        <AgentIcon kind={agent.kind} title={agent.name} />
+        <div className="dropdown-anchor">
+          <button
+            className={`icon-btn agent-switch ${agentMenu ? "is-open" : ""}`}
+            title={t("task.agents", { writer: agent.name, reviewer: task.reviewer.name })}
+            onClick={() => setAgentMenu((m) => !m)}
+          >
+            <AgentIcon kind={agent.kind} />
+          </button>
+          {agentMenu && (
+            <SwitchMenu
+              task={task}
+              writer={agent}
+              agents={agents}
+              onConfirm={props.onConfirm}
+              onClose={() => setAgentMenu(false)}
+              onError={onError}
+            />
+          )}
+        </div>
         <span className={`topbar-title ellipsis ${task.untitled ? "untitled" : ""}`} title={task.prompt} data-tauri-drag-region>
           {task.untitled ? t("task.untitled") : task.title}
         </span>
@@ -110,6 +136,54 @@ export function TaskView({ task, voice, reviewOpen, reviewerInstalled, onReviewO
         )}
       </div>
     </div>
+  );
+}
+
+/** 换谁写、谁审。换写代码的要先确认：原来的会停下，新的接着做。 */
+function SwitchMenu({
+  task,
+  writer,
+  agents,
+  onConfirm,
+  onClose,
+  onError,
+}: {
+  task: Task;
+  writer: Agent;
+  agents: AgentOption[];
+  onConfirm(spec: ConfirmSpec): void;
+  onClose(): void;
+  onError(err: unknown): void;
+}) {
+  const t = useT();
+  const pickWriter = (id: string) => {
+    onClose();
+    if (id === writer.kind) return;
+    const to = agents.find((a) => a.id === id)?.name ?? id;
+    onConfirm({
+      title: t("task.switchWriterTitle", { agent: to }),
+      body: t(task.resumable.includes(id) ? "task.switchBackBody" : "task.switchWriterBody", { from: writer.name, to }),
+      action: t("task.switchWriterAction"),
+      run: async () => {
+        await api.switchWriter(task.id, id);
+      },
+    });
+  };
+  const pickReviewer = (id: string) => {
+    onClose();
+    if (id !== task.reviewer.kind) api.setReviewer(task.id, id).catch(onError);
+  };
+  return (
+    <Popover onClose={onClose}>
+      <AgentList title={t("newTask.writerTitle")} agents={agents} selected={writer.kind} onPick={pickWriter} />
+      <div className="menu-sep" />
+      <AgentList
+        title={t("newTask.reviewerTitle")}
+        agents={agents.filter((a) => a.reviews)}
+        selected={task.reviewer.kind}
+        onPick={pickReviewer}
+      />
+    </Popover>
   );
 }
 

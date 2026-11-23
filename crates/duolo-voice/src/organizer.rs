@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use duolo_core::VoiceConfig;
+use duolo_core::process::OneShot;
 
 use crate::process::run;
 
@@ -36,10 +36,10 @@ Rewrite it as one instruction that can be sent to the coding agent directly:\n\
     )
 }
 
-/// 整理口述内容。失败或超时由调用方决定是否退回原话。
-pub fn organize(cfg: &VoiceConfig, raw: &str, ctx: &OrganizeContext) -> Result<String> {
+/// 用 `command` 整理口述内容。失败或超时由调用方决定是否退回原话。
+pub fn organize(command: &OneShot, timeout: Duration, raw: &str, ctx: &OrganizeContext) -> Result<String> {
     let prompt = organize_prompt(raw, ctx);
-    let out = run(&cfg.organizer, Some(&prompt), Duration::from_secs(cfg.organize_timeout_secs))?;
+    let out = run(command, Some(&prompt), timeout)?;
     let cleaned = out.trim().trim_matches(['"', '“', '”']).trim().to_string();
     Ok(if cleaned.is_empty() { raw.to_string() } else { cleaned })
 }
@@ -58,10 +58,9 @@ mod tests {
 
     #[test]
     fn uses_organizer_output() {
-        let cfg = VoiceConfig {
-            organizer: vec!["sh".into(), "-c".into(), "echo '\"Export CSV\"'".into(), "sh".into()],
-            ..VoiceConfig::default()
-        };
-        assert_eq!(organize(&cfg, "um export CSV", &OrganizeContext::default()).unwrap(), "Export CSV");
+        let argv = ["sh", "-c", "echo '\"Export CSV\"'", "sh"].map(String::from).to_vec();
+        let timeout = Duration::from_secs(5);
+        let out = organize(&argv.into(), timeout, "um export CSV", &OrganizeContext::default()).unwrap();
+        assert_eq!(out, "Export CSV");
     }
 }

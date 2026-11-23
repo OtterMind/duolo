@@ -1,13 +1,14 @@
 //! `duolo` 命令行入口。
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{i18n, t, tf, Paths, ProjectId, Settings};
-use duolo_engine::{check_environment, Engine};
+use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings, TaskId};
+use duolo_engine::{check_environment, Engine, TaskOptions};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -37,17 +38,33 @@ enum Cmd {
         prompt: Vec<String>,
         #[arg(short, long)]
         project: Option<String>,
+        #[arg(short, long)]
+        writer: Option<String>,
+        #[arg(short, long)]
+        reviewer: Option<String>,
+    },
+    Switch {
+        task: u64,
+        #[arg(short, long)]
+        writer: Option<String>,
+        #[arg(short, long)]
+        reviewer: Option<String>,
     },
     Ls,
     Doctor,
 }
 
 fn main() -> ExitCode {
+    // Agent 运行钩子时用的就是这个程序（见 duolo_core::hook）：写下事件就退出。
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == duolo_core::hook::HOOK_ARG) {
+        duolo_core::hook::run();
+        return ExitCode::SUCCESS;
+    }
     // 命令行和终端界面跟随用户在 Duolo 里选的语言，没选过时跟随系统语言。
     if let Ok(paths) = Paths::discover() {
         i18n::apply_preference(&Settings::load(&paths.settings_file()).unwrap_or_default().language);
     }
-    let parsed = localized_command().try_get_matches().and_then(|m| Cli::from_arg_matches(&m));
+    let parsed = localized_command().try_get_matches_from(args()).and_then(|m| Cli::from_arg_matches(&m));
     let cli = match parsed {
         Ok(cli) => cli,
         Err(err) => exit_with(err),
@@ -55,10 +72,33 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("duolo: {}", duolo_core::error::describe(&err));
+            match err.downcast_ref::<Plain>() {
+                Some(Plain(message)) => eprintln!("duolo: {message}"),
+                None => eprintln!("duolo: {}", duolo_core::error::describe(&err)),
+            }
             ExitCode::FAILURE
         }
     }
+}
+
+/// 已经翻译好、原样给用户看的错误（不是程序出了问题）。
+#[derive(Debug)]
+struct Plain(String);
+
+impl std::fmt::Display for Plain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Plain {}
+
+/// 命令行参数。需求可以是列表（`duolo new "- …"`），前面加个空格，不让 clap 当成选项。
+fn args() -> impl Iterator<Item = OsString> {
+    std::env::args_os().map(|arg| match arg.to_str() {
+        Some(text) if text.starts_with("- ") => format!(" {text}").into(),
+        _ => arg,
+    })
 }
 
 /// 命令行参数有误：clap 自己的报错只有英文，这里换成当前语言。帮助和版本照常输出。
@@ -100,6 +140,14 @@ fn localized_command() -> clap::Command {
             c.about(t("cli.help.new"))
                 .mut_arg("prompt", |a| a.help(t("cli.help.prompt")))
                 .mut_arg("project", |a| a.help(t("cli.help.project")))
+                .mut_arg("writer", |a| a.help(t("cli.help.writer")))
+                .mut_arg("reviewer", |a| a.help(t("cli.help.reviewer")))
+        })
+        .mut_subcommand("switch", |c| {
+            c.about(t("cli.help.switch"))
+                .mut_arg("task", |a| a.help(t("cli.help.task")))
+                .mut_arg("writer", |a| a.help(t("cli.help.switchWriter")))
+                .mut_arg("reviewer", |a| a.help(t("cli.help.switchReviewer")))
         })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
@@ -127,6 +175,15 @@ fn localize_chrome(mut cmd: clap::Command) -> clap::Command {
     cmd
 }
 
+/// 终端界面用的引擎：Agent 的钩子交给这个程序（`duolo __hook`）。
+fn engine_with_hooks(paths: Paths) -> Result<Engine> {
+    let mut engine = Engine::open(paths)?;
+    if let Ok(exe) = std::env::current_exe() {
+        engine.set_hook_program(exe);
+    }
+    Ok(engine)
+}
+
 /// 打开引擎，启动时发现的问题写到 stderr。
 fn open_engine(paths: Paths) -> Result<Engine> {
     let mut engine = Engine::open(paths)?;
@@ -146,32 +203,51 @@ fn run(cli: Cli) -> Result<()> {
                 return Ok(());
             }
             eprintln!("{}", t("cli.appNotFound"));
-            duolo_tui::run(Engine::open(paths)?, &dir)
+            duolo_tui::run(engine_with_hooks(paths)?, &dir)
         }
-        Some(Cmd::Tui { path }) => duolo_tui::run(Engine::open(paths)?, &path.unwrap_or(cwd)),
+        Some(Cmd::Tui { path }) => duolo_tui::run(engine_with_hooks(paths)?, &path.unwrap_or(cwd)),
         Some(Cmd::Add { path }) => {
             let mut engine = open_engine(paths)?;
             let id = engine.add_project(&path)?;
             println!("{}", tf("cli.projectAdded", &[("id", &id)]));
             Ok(())
         }
-        Some(Cmd::New { prompt, project }) => {
+        Some(Cmd::New { prompt, project, writer, reviewer }) => {
             let mut engine = open_engine(paths)?;
             let project = match project {
                 Some(id) => {
                     let id = ProjectId(id);
                     if engine.state().project(&id).is_none() {
-                        bail!("{}", tf("cli.noSuchProject", &[("id", &id)]));
+                        bail!(Plain(tf("cli.noSuchProject", &[("id", &id)])));
                     }
                     id
                 }
                 None => engine.add_project(&cwd)?,
             };
-            let id = engine.create_task(&project, &prompt.join(" "))?;
+            let opts =
+                TaskOptions { writer: writer.map(AgentKind), reviewer: reviewer.map(AgentKind), ..Default::default() };
+            let id = engine.create_task_with(&project, &prompt.join(" "), &opts)?;
             let task = engine.state().task(id).expect("task was just created");
             println!("{}", tf("cli.taskCreated", &[("id", &id), ("title", &task.title)]));
             println!("  {}", tf("cli.taskBranch", &[("branch", &task.branch)]));
             println!("  {}", t("cli.taskHint"));
+            Ok(())
+        }
+        Some(Cmd::Switch { task, writer, reviewer }) => {
+            if writer.is_none() && reviewer.is_none() {
+                bail!(Plain(t("cli.switchWhat")));
+            }
+            let mut engine = open_engine(paths)?;
+            let id = TaskId(task);
+            // 只改状态：Agent 在桌面应用里跑的话，由它停掉原来的、在打开任务时启动新的。
+            if let Some(kind) = writer.map(AgentKind) {
+                engine.switch_writer(id, kind.clone())?;
+                println!("{}", tf("cli.writerSwitched", &[("id", &id), ("agent", &engine.agents().name(&kind))]));
+            }
+            if let Some(kind) = reviewer.map(AgentKind) {
+                engine.set_reviewer(id, kind.clone())?;
+                println!("{}", tf("cli.reviewerSwitched", &[("id", &id), ("agent", &engine.agents().name(&kind))]));
+            }
             Ok(())
         }
         Some(Cmd::Ls) => {
@@ -185,7 +261,7 @@ fn run(cli: Cli) -> Result<()> {
                 println!("{}  {}", project.id, project.root.display());
                 for task in state.tasks_of(&project.id) {
                     let agents: Vec<String> =
-                        task.agents.iter().map(|a| a.role.label(&a.kind.display_name())).collect();
+                        task.agents.iter().map(|a| a.role.label(&engine.agents().name(&a.kind))).collect();
                     println!(
                         "  #{:<4} {:<30} {:<8} {}  {}",
                         task.id.0,
@@ -245,13 +321,13 @@ fn installed_app() -> Option<std::path::PathBuf> {
 
 fn doctor(paths: &Paths) -> Result<()> {
     let engine = open_engine(paths.clone())?;
-    let config = engine.config();
+    let (config, agents) = (engine.config(), engine.agents());
     println!("{}{}", pad(&t("cli.doctor.data"), 12), paths.root().display());
-    for check in check_environment(config) {
+    for check in check_environment(config, agents) {
         println!("{} {}{}", if check.ok { "✓" } else { "✕" }, pad(&check.name, 10), check.detail);
     }
-    println!("{}{}", pad(&t("cli.doctor.writer"), 12), config.writer.display_name());
-    println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), config.reviewer.display_name());
+    println!("{}{}", pad(&t("cli.doctor.writer"), 12), agents.name(&config.writer));
+    println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), agents.name(&config.reviewer));
     if !config.voice.is_configured() {
         println!("{}", tf("cli.doctor.voiceHint", &[("path", &paths.config_file().display())]));
     }

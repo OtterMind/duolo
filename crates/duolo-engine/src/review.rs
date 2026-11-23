@@ -53,12 +53,14 @@ impl ReviewJob {
         copy: PathBuf,
         fork: String,
     ) -> Result<Self> {
-        let mut review = Prompted::new(command, Some(prompt)).ok_or(UserError::ReviewNotConfigured)?;
+        if command.argv.is_empty() {
+            return Err(UserError::ReviewNotConfigured.into());
+        }
         // 先说找不到命令，免得白做一份副本。
         if process::find(command.program()).is_none() {
             return Err(UserError::CommandNotFound { program: command.program().into() }.into());
         }
-        review.cmd.current_dir(&copy).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let (command, prompt) = (command.clone(), prompt.to_string());
         let running = Arc::new(Mutex::new(None));
         let cancelled = Arc::new(AtomicBool::new(false));
         let result = Arc::new(Mutex::new(None));
@@ -70,7 +72,12 @@ impl ReviewJob {
         };
         thread::Builder::new().name("duolo-review".into()).spawn(move || {
             let outcome = match prepare(&worktree, &copy, &fork) {
-                Ok(()) => run(review, &running, &cancelled).map(|out| own_paths(out, &copy, &worktree)),
+                Ok(()) => {
+                    // 要先问它开着哪些功能（见 FeatureGate），所以也在这里做。
+                    let mut review = Prompted::new(&command, Some(&prompt)).expect("argv is not empty");
+                    review.cmd.current_dir(&copy).stdout(Stdio::piped()).stderr(Stdio::piped());
+                    run(review, &running, &cancelled).map(|out| own_paths(out, &copy, &worktree))
+                }
                 Err(err) => Err(tf("review.copyFailed", &[("detail", &format!("{err:#}"))])),
             };
             // 删不掉的下次启动时再删（remove_leftovers）。

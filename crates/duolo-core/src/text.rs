@@ -73,6 +73,21 @@ pub fn clean_branch_name(raw: &str) -> Option<String> {
 
 const BRANCH_MAX_CHARS: usize = 50;
 
+/// `2.1.311`、`v0.169.1`、`1.2.3-beta.1` 的数字部分；不像版本号时为 None。
+pub fn parse_version(text: &str) -> Option<Vec<u64>> {
+    let core = text.trim().trim_start_matches('v').split(['-', '+']).next()?;
+    let parts: Option<Vec<u64>> = core.split('.').map(|p| p.parse().ok()).collect();
+    parts.filter(|p| !p.is_empty())
+}
+
+/// `version` 比 `minimum` 旧。读不懂的版本号不算旧（照样让用）。
+pub fn is_older(version: &str, minimum: &str) -> bool {
+    match (parse_version(version), parse_version(minimum)) {
+        (Some(v), Some(m)) => v < m,
+        _ => false,
+    }
+}
+
 pub fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
@@ -90,6 +105,15 @@ pub fn format_elapsed(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn versions() {
+        assert!(is_older("0.135.9", "0.136.0") && !is_older("0.169.1", "0.136.0"));
+        assert!(is_older("2.1.9", "2.1.10"), "按数字比，不按字符串");
+        assert!(!is_older("v2.1.311", "2.1.311") && !is_older("2.1.311-beta.1", "2.1.300"));
+        assert!(!is_older("unknown", "1.0.0"), "读不懂的不拦");
+        assert_eq!(parse_version("1.x"), None);
+    }
 
     #[test]
     fn titles() {

@@ -8,6 +8,7 @@ mod manifest;
 mod plugin;
 mod registry;
 mod transcript;
+mod trust;
 
 pub use manifest::{Keys, Manifest, PromptVia, Screen};
 pub use plugin::{Launch, Plugin, Start};

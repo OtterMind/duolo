@@ -48,6 +48,69 @@ pub struct OneShot {
     pub stdin_args: Vec<String>,
     /// 不传给它的环境变量。
     pub env_remove: Vec<String>,
+    /// 运行前关掉不在允许名单里的功能（见 [`FeatureGate`]）。
+    pub features: Option<FeatureGate>,
+}
+
+/// 只留下允许的功能：运行前先问程序开着哪些功能，不在 `allow` 里的都用 `disable` 关掉。
+/// 程序以后新加的功能（例如连到云端的工具）也就默认关着，不用每次升级都补名单。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FeatureGate {
+    /// 列出功能的参数（跟在程序后面）。输出每行 `<功能名> … <true|false>`，最后一列是开没开。
+    pub list: Vec<String>,
+    pub allow: Vec<String>,
+    /// 关掉一个功能的参数，`{feature}` 换成功能名。
+    pub disable: Vec<String>,
+}
+
+impl FeatureGate {
+    /// 要关掉的功能的参数。列不出来时为空（还有命令本身写死的限制）。
+    pub fn disable_args(&self, program: &str) -> Vec<String> {
+        enabled_features(program, &self.list)
+            .into_iter()
+            .filter(|name| !self.allow.contains(name))
+            .flat_map(|name| self.disable.iter().map(move |arg| arg.replace("{feature}", &name)))
+            .collect()
+    }
+}
+
+/// 程序开着的功能，按程序文件和修改时间记住（程序自己升级后重新问）。
+fn enabled_features(program: &str, list: &[String]) -> Vec<String> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    /// 按（程序的真实路径，修改时间）记住的结果。
+    type Cache = Mutex<HashMap<(PathBuf, Option<std::time::SystemTime>), Vec<String>>>;
+    static CACHE: OnceLock<Cache> = OnceLock::new();
+    let path = resolve(program);
+    let real = std::fs::canonicalize(&path).unwrap_or(path);
+    let key = (real.clone(), std::fs::metadata(&real).and_then(|m| m.modified()).ok());
+    let cache = CACHE.get_or_init(Mutex::default);
+    if let Some(found) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&key) {
+        return found.clone();
+    }
+    let mut cmd = command(program);
+    cmd.args(list).stdin(Stdio::null()).stderr(Stdio::null());
+    let Ok(output) = cmd.output() else { return Vec::new() };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    let found = parse_enabled(&String::from_utf8_lossy(&output.stdout));
+    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(key, found.clone());
+    found
+}
+
+/// `<功能名> … <true|false>` 的行里开着的功能名。
+fn parse_enabled(listing: &str) -> Vec<String> {
+    let name_ok =
+        |name: &str| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    listing
+        .lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let name = words.next()?;
+            (words.last() == Some("true") && name_ok(name)).then(|| name.to_string())
+        })
+        .collect()
 }
 
 impl From<Vec<String>> for OneShot {
@@ -93,6 +156,9 @@ impl Prompted {
     fn build(one: &OneShot, prompt: Option<&str>, batch: bool) -> Self {
         let mut cmd = command(one.program());
         cmd.args(one.argv.iter().skip(1));
+        if let Some(gate) = &one.features {
+            cmd.args(gate.disable_args(one.program()));
+        }
         for key in &one.env_remove {
             cmd.env_remove(key);
         }
@@ -218,6 +284,32 @@ mod tests {
         let line = batch_command_line(OsStr::new(r"C:\npm\codex.cmd"), &["resume".into(), r#"50% "done" \"#.into()]);
         assert_eq!(line.as_deref(), Some(r#""C:\npm\codex.cmd" "resume" "50% ""done"" \\""#));
         assert_eq!(batch_command_line(OsStr::new("a.cmd"), &["two\nlines".into()]), None);
+    }
+
+    #[test]
+    fn only_allowed_features_stay_on() {
+        let listing = "apps                 stable             true\nshell_tool  stable  true\n\
+                       removed_one          removed            false\nName Stage Enabled\n";
+        assert_eq!(parse_enabled(listing), ["apps", "shell_tool"]);
+        // 假程序：`features list` 时列出功能，其他时候打印收到的参数。
+        let dir = tempfile::tempdir().unwrap();
+        let prog = dir.path().join("agent.sh");
+        std::fs::write(&prog, "if [ \"$1\" = features ]; then printf 'apps x true\\nshell_tool x true\\nold x false\\n'; else echo \"$*\"; fi\n").unwrap();
+        let gate = FeatureGate {
+            list: vec![prog.display().to_string(), "features".into(), "list".into()],
+            allow: vec!["shell_tool".into()],
+            disable: vec!["-c".into(), "features.{feature}=false".into()],
+        };
+        let one = OneShot {
+            argv: vec!["sh".into(), "-c".into(), "echo \"$*\"".into(), "sh".into(), "exec".into()],
+            features: Some(gate),
+            ..Default::default()
+        };
+        let mut prompted = Prompted::build(&one, Some("go"), false);
+        prompted.cmd.stdout(Stdio::piped());
+        let (child, _tree) = prompted.spawn().unwrap();
+        let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap();
+        assert_eq!(out.trim(), "exec -c features.apps=false go", "新功能默认关掉，允许的留着");
     }
 
     #[test]

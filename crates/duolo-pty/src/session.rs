@@ -11,6 +11,7 @@ use duolo_core::proctree::{Members, ProcessTree};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
 use crate::detect::{classify, AgentState, Rules};
+use crate::status::{Message, Reported, Scanner, QUERY_REPLY};
 
 /// 保留的回滚行数。
 const SCROLLBACK_LINES: usize = 5_000;
@@ -130,6 +131,8 @@ impl Activity {
 /// 一个运行中的 Agent CLI。
 pub struct Session {
     terminal: Arc<Mutex<vt100::Parser>>,
+    /// 程序自己报告的状态（OSC 7501）；还没报告过时为 None。
+    reported: Arc<Mutex<Option<Reported>>>,
     tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
     /// 要写给 Agent 的内容，由写线程写（见 [`spawn_writer`]）。
@@ -195,6 +198,7 @@ impl Session {
         let terminal = Arc::new(Mutex::new(vt100::Parser::new(spec.size.rows, spec.size.cols, SCROLLBACK_LINES)));
         let activity = Arc::new(Activity { origin: Instant::now(), last_output_ms: AtomicU64::new(0) });
         let tap = Arc::new(Mutex::new(Tap::default()));
+        let reported = Arc::new(Mutex::new(None));
         let reader = pair.master.try_clone_reader().context("cannot read from the pseudo terminal")?;
         let writer = pair.master.take_writer().context("cannot write to the pseudo terminal")?;
         let writer = spawn_writer(writer);
@@ -204,11 +208,13 @@ impl Session {
             Arc::clone(&terminal),
             Arc::clone(&tap),
             Arc::clone(&activity),
+            Arc::clone(&reported),
             spec.on_output,
         );
 
         Ok(Self {
             terminal,
+            reported,
             tap,
             activity,
             writer,
@@ -306,10 +312,22 @@ impl Session {
         self.exit
     }
 
-    /// 根据退出状态、最近输出和屏幕底部内容判断 Agent 正在做什么。
+    /// 程序自己报告的状态（OSC 7501）。没报告过（不支持，或者还停在启动时的对话框上）时为 None。
+    pub fn reported(&self) -> Option<Reported> {
+        *self.reported.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Agent 正在做什么：它自己报告过就以报告为准；否则根据最近输出和屏幕底部内容判断。
     pub fn state(&mut self) -> AgentState {
         if let Some(exit) = self.poll_exit() {
             return AgentState::Exited(exit);
+        }
+        if let Some(reported) = self.reported() {
+            return match reported {
+                Reported::Working => AgentState::Running,
+                Reported::Blocked => AgentState::NeedsInput,
+                Reported::Idle | Reported::Done | Reported::Error => AgentState::Idle,
+            };
         }
         let tail = self.with_screen(|screen| tail_text(screen, DETECT_TAIL_LINES));
         classify(&self.rules, &tail, self.activity.quiet_for())
@@ -318,6 +336,9 @@ impl Session {
     /// 画面上有内容、而且已经可以接收粘贴了。Claude Code、Codex 准备好输入框时会打开括号粘贴模式；
     /// 不支持这个模式的 Agent 只看画面是不是空的。
     pub fn is_ready_for_input(&self) -> bool {
+        if let Some(reported) = self.reported() {
+            return matches!(reported, Reported::Idle | Reported::Done | Reported::Error);
+        }
         let (bracketed, blank) = self.with_screen(|s| (s.bracketed_paste(), s.contents().trim().is_empty()));
         !blank && (bracketed || self.started.elapsed() >= PLAIN_READY_AFTER)
     }
@@ -427,6 +448,7 @@ fn spawn_reader(
     terminal: Arc<Mutex<vt100::Parser>>,
     tap: Arc<Mutex<Tap>>,
     activity: Arc<Activity>,
+    reported: Arc<Mutex<Option<Reported>>>,
     on_output: Option<OutputHook>,
 ) {
     thread::Builder::new()
@@ -436,6 +458,7 @@ fn spawn_reader(
             // Windows 的伪终端（ConPTY）一启动先问光标在哪，得到回答之前什么都不输出。没有界面订阅的任务没人回答，
             // 所以由我们回答，也不再交给界面，免得它又回答一次、变成发给 Agent 的输入。
             let mut asks_cursor = cfg!(windows);
+            let mut status = Scanner::default();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
@@ -446,6 +469,15 @@ fn spawn_reader(
                                 asks_cursor = false;
                                 let _ = writer.send(b"\x1b[1;1R".to_vec());
                                 bytes = std::borrow::Cow::Owned(rest);
+                            }
+                        }
+                        for message in status.scan(&bytes) {
+                            match message {
+                                // 回答了它才会报告；界面上的终端不认识这个询问，不会再答一次。
+                                Message::Query => {
+                                    let _ = writer.send(QUERY_REPLY.to_vec());
+                                }
+                                Message::Report(state) => *reported.lock().unwrap_or_else(|p| p.into_inner()) = state,
                             }
                         }
                         let mut parser = terminal.lock().unwrap_or_else(|p| p.into_inner());
@@ -508,6 +540,33 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
         }
         panic!("timed out");
+    }
+
+    /// 程序问"支持 OSC 7501 吗"，回答之后它报告的状态说了算，画面上写什么都不管。
+    #[cfg(unix)]
+    #[test]
+    fn reported_status_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let reply = dir.path().join("reply");
+        // 画面上一直显示"1. Yes"（按画面规则是在等确认），报告的却是正在工作，然后才是在等确认。
+        let script = format!(
+            "stty raw -echo; printf '1. Yes\\033]7501;?\\033\\\\'; head -c 9 > {reply}; \
+             printf '\\033]7501;state=working:app=t\\033\\\\'; sleep 1; \
+             printf '\\033]7501;state=blocked:kind=permission\\033\\\\'; sleep 1; \
+             printf '\\033]7501;state=idle\\007'; sleep 5",
+            reply = reply.display()
+        );
+        let mut spec = spec("sh", &["-c", &script]);
+        spec.rules = Rules { approval: vec!["1. yes".into()], busy: Vec::new() };
+        let mut session = Session::spawn(spec).unwrap();
+        wait_until(|| session.reported() == Some(Reported::Working));
+        assert_eq!(std::fs::read(&reply).unwrap(), b"\x1b]7501;?:", "回答了它的询问");
+        assert_eq!(session.state(), AgentState::Running);
+        assert!(!session.is_ready_for_input());
+        wait_until(|| session.state() == AgentState::NeedsInput);
+        wait_until(|| session.state() == AgentState::Idle);
+        assert!(session.is_ready_for_input());
+        session.stop();
     }
 
     #[test]

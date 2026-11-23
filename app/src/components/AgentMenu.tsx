@@ -52,7 +52,7 @@ export function AgentList({
             <div key={a.id} className="menu-item is-disabled" title={t("newTask.notInstalled")}>
               <AgentIcon kind={a.id} size={14} />
               <span>{a.name}</span>
-              <span className="meta">{t("newTask.notInstalled")}</span>
+              <span className="meta">{a.tooOld ? t("newTask.tooOld", a.tooOld) : t("newTask.notInstalled")}</span>
               <span className="grow" />
               {a.install && <CopyCommand command={a.install} />}
             </div>

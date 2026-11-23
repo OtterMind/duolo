@@ -1,10 +1,13 @@
 //! 一个可以用的 Agent：声明加上用户在 config.toml 里的修改。
 
-use duolo_core::process::{self, OneShot};
+use duolo_core::process::{self, FeatureGate, OneShot};
 use duolo_core::{AgentKind, AgentOverride, AgentRole};
 
-use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, SESSION};
+use std::path::Path;
+
+use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, SESSION};
 use crate::transcript::{self, Home, Sessions, Watch};
+use crate::trust;
 
 #[derive(Debug, Clone)]
 pub struct Plugin {
@@ -33,6 +36,8 @@ pub struct Launch {
     pub args: Vec<String>,
     /// 要等它准备好之后再粘贴过去的第一句话。
     pub paste: Option<String>,
+    /// 要设置的环境变量。
+    pub env: Vec<(String, String)>,
 }
 
 impl Plugin {
@@ -81,6 +86,11 @@ impl Plugin {
         &self.manifest.command
     }
 
+    /// 最低能用的版本，见 [`Manifest::minimum_version`]。
+    pub fn minimum_version(&self) -> Option<&str> {
+        self.manifest.minimum_version.as_deref()
+    }
+
     /// 没安装时提示用户运行的命令。
     pub fn install(&self) -> &str {
         self.manifest.install.command()
@@ -117,6 +127,11 @@ impl Plugin {
         !self.manifest.start.session_id_args.is_empty()
     }
 
+    /// 指定会话编号的那个选项（例如 `--session-id`），用来认出它不认得这个选项的报错。
+    pub fn session_id_option(&self) -> Option<&str> {
+        self.manifest.start.session_id_args.iter().find(|a| a.starts_with('-')).map(String::as_str)
+    }
+
     /// 本机找得到它的命令（不保证能运行）。
     pub fn is_installed(&self) -> bool {
         process::find(self.command()).is_some()
@@ -130,7 +145,9 @@ impl Plugin {
 
     fn launch_as(&self, start: Start<'_>, batch: bool) -> Launch {
         let spec = &self.manifest.start;
+        // 放在 `args` 后面：用户在 config.toml 里换成的命令（例如包了一层的脚本）先拿到自己的参数。
         let mut args = spec.args.clone();
+        args.extend(spec.always_args.iter().cloned());
         let mut paste = None;
         if start.role == AgentRole::Reviewer {
             args.extend(spec.review_args.iter().cloned());
@@ -154,7 +171,8 @@ impl Plugin {
                 }
             }
         }
-        Launch { program: self.command().to_string(), args, paste }
+        let env = spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        Launch { program: self.command().to_string(), args, paste, env }
     }
 
     /// 后台审阅的命令；不支持审阅时为 None。
@@ -173,7 +191,44 @@ impl Plugin {
     fn headless(&self, spec: &HeadlessSpec) -> OneShot {
         let mut argv = vec![self.command().to_string()];
         argv.extend(spec.args.iter().cloned());
-        OneShot { argv, separator: spec.separator.clone(), stdin_args: spec.stdin_args.clone(), env_remove: Vec::new() }
+        let features = spec.features.as_ref().map(|f| FeatureGate {
+            list: f.list.clone(),
+            allow: f.allow.clone(),
+            disable: f.disable.clone(),
+        });
+        OneShot {
+            argv,
+            separator: spec.separator.clone(),
+            stdin_args: spec.stdin_args.clone(),
+            env_remove: Vec::new(),
+            features,
+        }
+    }
+
+    /// 启动前替用户记下信任任务的目录（`repo` 是任务所在的主仓库），免得它先停在"信任这个文件夹吗"上。
+    /// 没声明时什么也不做；写不了时它照样会问，不影响启动。
+    pub fn trust(&self, home: &Home, worktree: &Path, repo: &Path) -> anyhow::Result<()> {
+        let Some((spec, store)) = self.trust_store() else { return Ok(()) };
+        let dir = match spec.scope {
+            TrustScope::Worktree => worktree,
+            TrustScope::Repo => repo,
+        };
+        let file = home.config_file(&spec.file, spec.env.as_deref(), spec.env_file.as_deref());
+        store.grant(&file, &trust::real_path(dir))
+    }
+
+    /// 任务关掉后，删掉为它的目录记下的信任。
+    pub fn forget_trust(&self, home: &Home, worktree: &Path) -> anyhow::Result<()> {
+        let Some((spec, store)) = self.trust_store().filter(|(spec, _)| spec.scope == TrustScope::Worktree) else {
+            return Ok(());
+        };
+        let file = home.config_file(&spec.file, spec.env.as_deref(), spec.env_file.as_deref());
+        store.revoke(&file, &trust::real_path(worktree))
+    }
+
+    fn trust_store(&self) -> Option<(&TrustSpec, &'static dyn trust::Store)> {
+        let spec = self.manifest.trust.as_ref()?;
+        Some((spec, trust::store(&spec.format)?))
     }
 
     /// 开始跟着它在 `worktree` 里的会话记录；读不了它的记录时为 None。
@@ -210,7 +265,10 @@ mod tests {
     #[test]
     fn prompt_can_be_pasted_instead() {
         let pasted = plugin("prompt = \"paste\"\nargs = [\"-v\"]").launch_as(write("a\nb"), false);
-        assert_eq!(pasted, Launch { program: "x".into(), args: vec!["-v".into()], paste: Some("a\nb".into()) });
+        assert_eq!(
+            pasted,
+            Launch { program: "x".into(), args: vec!["-v".into()], paste: Some("a\nb".into()), env: Vec::new() }
+        );
         // 批处理文件带不了换行，不管声明怎么写。
         for start in ["separator = \"--\"", "prompt = \"flag\"\nprompt_flag = \"--prompt=\""] {
             let batch = plugin(start).launch_as(write("a\nb"), true);
@@ -246,6 +304,15 @@ mod tests {
         assert!(p.assigns_session() && !plugin("").assigns_session());
         let off = p.with(&AgentOverride { session_id_args: Some(Vec::new()), ..Default::default() });
         assert_eq!(off.launch_as(start, false).args, ["--", "- fix"], "config.toml 里可以关掉");
+    }
+
+    #[test]
+    fn some_args_cannot_be_replaced() {
+        let p = plugin("always_args = [\"--quiet\"]\nargs = [\"-v\"]");
+        let start = Start { role: AgentRole::Writer, resume: false, session: None, prompt: None };
+        assert_eq!(p.launch_as(start, false).args, ["-v", "--quiet"]);
+        let changed = p.with(&AgentOverride { args: Some(vec!["--model".into(), "x".into()]), ..Default::default() });
+        assert_eq!(changed.launch_as(start, false).args, ["--model", "x", "--quiet"], "config.toml 的 args 换不掉它");
     }
 
     #[test]

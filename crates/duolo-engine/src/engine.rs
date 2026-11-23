@@ -171,6 +171,10 @@ pub struct Engine {
     next_session_id: u64,
     /// 以"恢复会话"方式启动、还在观察期内的 Agent。
     pub(crate) resuming: HashSet<AgentKey>,
+    /// 由 Duolo 定了会话编号、还在观察期内的 Agent。
+    assigning: HashSet<AgentKey>,
+    /// 这次运行里发现不认得"指定会话编号"选项的 Agent（版本太旧，或者以后改了名字），之后不再给它定编号。
+    no_session_ids: HashSet<AgentKind>,
     reviews: HashMap<TaskId, ReviewJob>,
     /// 审阅结论使用的语言（英文名），跟随界面语言。
     reply_language: String,
@@ -243,6 +247,8 @@ impl Engine {
             session_ids: HashMap::new(),
             next_session_id: 1,
             resuming: HashSet::new(),
+            assigning: HashSet::new(),
+            no_session_ids: HashSet::new(),
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
             pane: Size::new(24, 80),
@@ -610,6 +616,12 @@ impl Engine {
     pub fn finish_close(&mut self, id: TaskId, result: Result<Closed>) -> Result<Closed> {
         self.closing.remove(&id);
         let closed = result?;
+        // 任务的目录没了，替它记下的信任也删掉（每种 Agent 都试一下：中途可能换过人）。
+        if let Some(task) = self.state.task(id) {
+            for plugin in self.agents.iter() {
+                let _ = plugin.forget_trust(&self.live.home, &task.worktree);
+            }
+        }
         self.update(|state| {
             state.tasks.retain(|t| t.id != id);
             Ok(())
@@ -763,6 +775,35 @@ impl Engine {
                 None => {}
             }
         }
+        // 定了会话编号却马上出错退出、而且说的是那个选项：它不认得，不再给它定编号，重新开始。
+        let keys: Vec<AgentKey> = self.assigning.iter().copied().collect();
+        for key in keys {
+            let Some(session) = self.sessions.get_mut(&key) else {
+                self.assigning.remove(&key);
+                continue;
+            };
+            match session.poll_exit() {
+                Some(exit) if !exit.success => {
+                    self.assigning.remove(&key);
+                    let Ok(plugin) = self.plugin_of(key) else { continue };
+                    let option = plugin.session_id_option().unwrap_or_default().to_string();
+                    let said =
+                        self.sessions.get(&key).map(|s| s.with_screen(|screen| screen.contents())).unwrap_or_default();
+                    if !option.is_empty() && said.contains(&option) {
+                        let kind = plugin.kind();
+                        self.no_session_ids.insert(kind);
+                        retry.push(key);
+                    }
+                }
+                Some(_) => {
+                    self.assigning.remove(&key);
+                }
+                None if session.started().elapsed() >= RESUME_GRACE => {
+                    self.assigning.remove(&key);
+                }
+                None => {}
+            }
+        }
         retry.retain(|&key| self.spawn(key, true).is_ok());
         retry
     }
@@ -790,8 +831,12 @@ impl Engine {
         self.check_open(key.task)?;
         let resumed = !fresh && self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
         // 新开会话时能定编号的，由 Duolo 定：一开始就知道它的会话记录是哪个，不用猜。
-        let assigned = (!resumed && self.plugin_of(key)?.assigns_session()).then(|| uuid::Uuid::new_v4().to_string());
+        let kind = self.state.task(key.task).and_then(|t| t.agent(key.agent)).map(|a| a.kind.clone());
+        let can_assign =
+            self.plugin_of(key)?.assigns_session() && !kind.is_some_and(|k| self.no_session_ids.contains(&k));
+        let assigned = (!resumed && can_assign).then(|| uuid::Uuid::new_v4().to_string());
         let (spec, paste_later) = self.session_spec(key, fresh, assigned.as_deref())?;
+        self.trust_folder(key);
         let session = Session::spawn(spec)?;
         self.sessions.insert(key, session);
         if !resumed {
@@ -809,6 +854,11 @@ impl Engine {
             self.resuming.insert(key);
         } else {
             self.resuming.remove(&key);
+        }
+        if assigned.is_some() {
+            self.assigning.insert(key);
+        } else {
+            self.assigning.remove(&key);
         }
         // 换回来的 Agent 接回了原来的会话：准备好之后先告诉它这期间发生了什么。重新开始的话交接说明里都有了。
         let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent));
@@ -945,13 +995,22 @@ impl Engine {
             program: launch.program,
             args: launch.args,
             cwd: task.worktree.clone(),
-            env: vec![("DUOLO_TASK_ID".into(), task.id.to_string())],
+            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())].into_iter().chain(launch.env).collect(),
             env_remove: self.agents.env_remove(),
             size: self.pane,
             rules: Rules { approval: screen.approval.clone(), busy: screen.busy.clone() },
             on_output: self.on_output.clone(),
         };
         Ok((spec, launch.paste))
+    }
+
+    /// 启动前替用户信任任务的目录，Agent 就不会先停在"信任这个文件夹吗"上。用户添加项目就是信任它。
+    /// 记不下来时它照样会问，不影响启动。
+    fn trust_folder(&self, key: AgentKey) {
+        let (Some(task), Ok(plugin)) = (self.state.task(key.task), self.plugin_of(key)) else { return };
+        let project = self.state.project(&task.project).map(|p| p.root.clone());
+        let Some(repo) = task.repo.clone().or(project) else { return };
+        let _ = plugin.trust(&self.live.home, &task.worktree, &repo);
     }
 
     /// 任务里某个 Agent 的插件。

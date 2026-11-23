@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use duolo_agent::Registry;
 use duolo_core::process::{output_within, OneShot, Prompted};
+use duolo_core::text::is_older;
 use duolo_core::{t, tf, AgentKind, Config};
 
 /// `--version` 最长等多久。
@@ -36,6 +37,8 @@ pub struct Check {
     pub detail: String,
     /// 没安装时的安装命令（Agent 才有）。
     pub install: String,
+    /// 装的版本太旧时，最低要求的版本；不旧时为空。
+    pub minimum: String,
 }
 
 /// 检查 git、每一种 Agent（默认的写代码和审阅 Agent 排在前面）、语音。
@@ -58,6 +61,7 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
         ok: config.voice.is_configured(),
         command: config.voice.command.first().cloned().unwrap_or_default(),
         version: String::new(),
+        minimum: String::new(),
         detail: if config.voice.is_configured() { t("env.configured") } else { t("env.notConfigured") },
     });
     checks
@@ -65,11 +69,21 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
 
 fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
     match agents.get(kind) {
-        Ok(plugin) => Check {
-            agent: kind.0.clone(),
-            install: plugin.install().to_string(),
-            ..command_check(CheckKind::Agent, plugin.name(), plugin.command())
-        },
+        Ok(plugin) => {
+            let check = command_check(CheckKind::Agent, plugin.name(), plugin.command());
+            let too_old = plugin.minimum_version().filter(|min| check.ok && is_older(&check.version, min));
+            Check {
+                agent: kind.0.clone(),
+                install: plugin.install().to_string(),
+                ok: check.ok && too_old.is_none(),
+                detail: match too_old {
+                    Some(min) => tf("env.tooOld", &[("version", &check.version), ("minimum", &min)]),
+                    None => check.detail.clone(),
+                },
+                minimum: too_old.unwrap_or_default().to_string(),
+                ..check
+            }
+        }
         Err(_) => Check {
             kind: CheckKind::Agent,
             agent: kind.0.clone(),
@@ -79,6 +93,7 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
             version: String::new(),
             detail: t("env.notInConfig"),
             install: String::new(),
+            minimum: String::new(),
         },
     }
 }
@@ -97,6 +112,7 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
         command: command.program().into(),
         version: String::new(),
         detail: tf("env.missing", &[("command", &command.program())]),
+        minimum: String::new(),
     };
     let Some(prompted) = Prompted::new(&command, None) else { return base };
     match output_within(prompted, timeout) {

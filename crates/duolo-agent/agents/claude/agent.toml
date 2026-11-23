@@ -16,6 +16,16 @@ resume_session_args = ["--resume", "{session}"]
 session_id_args = ["--session-id", "{session}"]
 # 在终端里审阅时用计划模式：只看不改，要改文件得先让用户同意。
 review_args = ["--permission-mode", "plan"]
+# 不在启动时自己升级（升级由用户决定，也免得升级到一半换了界面）。
+env = { DISABLE_AUTOUPDATER = "1" }
+
+# 第一次在一个文件夹里启动时问的"信任这个文件夹吗"：按文件夹的真实路径记在 .claude.json 里，子文件夹不继承。
+[trust]
+format = "claude"
+file = ".claude.json"
+env = "CLAUDE_CONFIG_DIR"
+env_file = ".claude.json"
+scope = "worktree"
 
 # 只读：只给读文件的工具。`--restricted` 不读用户和项目的设置（那里可能放开了命令和写文件），
 # `--strict-mcp-config` 不接 MCP 服务（它们的工具可能会改东西）。改动由 Duolo 写进 DUOLO_REVIEW.md，不用运行 git。

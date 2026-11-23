@@ -3,49 +3,55 @@ schema = 1
 id = "codex"
 name = "Codex"
 command = "codex"
+# 更旧的版本少了 Duolo 要用的东西（和 Orca 的下限一样）。
+minimum_version = "0.136.0"
 
 [install]
 default = "npm install -g @openai/codex"
 
 [start]
+# 启动时的"有新版本"对话框：在那里按回车会选"现在升级"，装完就退出。
+always_args = ["-c", "check_for_update_on_startup=false"]
 prompt = "argument"
 separator = "--"
 resume_args = ["resume", "--last"]
 resume_session_args = ["resume", "{session}"]
 review_args = ["--sandbox", "read-only"]
 
-# 只读沙箱由系统强制（macOS、Linux）。沙箱管不到的也关掉：MCP 服务、联网搜索，以及连到云端应用、插件、
-# 浏览器、生成图片、钩子的功能（它们的工具能改云端的东西）。功能名用 `-c features.<名>=false`：
-# 不认识的名字会被忽略，`--disable` 遇到不认识的会报错。
+# 只读沙箱由系统强制（macOS、Linux）。沙箱管不到的也关掉：MCP 服务、联网搜索；
+# 功能只留下运行只读命令要用的，其余开着的一律关掉（连到云端应用、插件、浏览器、钩子……），以后新加的功能也默认关着。
+# Codex 升级后审阅读不了文件时，看看运行命令是不是换了功能名，补进 allow。
 [review]
 args = [
   "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never", "--ephemeral",
   "-c", "mcp_servers={}",
   "-c", "web_search=disabled",
-  "-c", "features.apps=false",
-  "-c", "features.plugins=false",
-  "-c", "features.remote_plugin=false",
-  "-c", "features.browser_use=false",
-  "-c", "features.browser_use_external=false",
-  "-c", "features.computer_use=false",
-  "-c", "features.image_generation=false",
-  "-c", "features.hooks=false",
-  "-c", "features.goals=false",
-  "-c", "features.tool_suggest=false",
+  "-c", "check_for_update_on_startup=false",
 ]
 separator = "--"
 
+[review.features]
+list = ["features", "list"]
+allow = [
+  "shell_tool", "unified_exec", "unified_exec_tty", "shell_snapshot",
+  "code_mode_host", "code_mode_host_grpc", "code_mode_host_output_truncation", "code_mode_interrupt",
+]
+disable = ["-c", "features.{feature}=false"]
+
+# 起分支名、整理口述：只要它回一句话，什么工具都不用。
 [quick]
 args = [
   "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never",
   "--ephemeral", "-c", "model_reasoning_effort=low",
   "-c", "mcp_servers={}",
   "-c", "web_search=disabled",
-  "-c", "features.apps=false",
-  "-c", "features.plugins=false",
-  "-c", "features.hooks=false",
+  "-c", "check_for_update_on_startup=false",
 ]
 separator = "--"
+
+[quick.features]
+list = ["features", "list"]
+disable = ["-c", "features.{feature}=false"]
 
 [screen]
 # 信任目录、是否升级这样的对话框，底部写着 "enter continue"（旧版是 "Press enter to continue"）。
@@ -64,3 +70,11 @@ newline = "\u001B\r"
 format = "codex"
 home = ".codex"
 home_env = "CODEX_HOME"
+
+# 信任是按仓库记的：在 worktree 里启动时，记的是主仓库（"Trusting will apply to the repository root"）。
+[trust]
+format = "codex"
+file = ".codex/config.toml"
+env = "CODEX_HOME"
+env_file = "config.toml"
+scope = "repo"

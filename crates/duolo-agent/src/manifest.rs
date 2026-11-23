@@ -27,6 +27,9 @@ pub struct Manifest {
     /// 图标的颜色；没有时跟随文字颜色。
     #[serde(default)]
     pub icon_color: Option<String>,
+    /// 最低能用的版本（`--version` 打印的）。更旧的不能选，环境检查里提示升级；读不出版本时照样用。
+    #[serde(default)]
+    pub minimum_version: Option<String>,
     #[serde(default)]
     pub install: Install,
     #[serde(default)]
@@ -43,6 +46,8 @@ pub struct Manifest {
     pub keys: Keys,
     #[serde(default)]
     pub transcript: Option<TranscriptSpec>,
+    #[serde(default)]
+    pub trust: Option<TrustSpec>,
     #[serde(default)]
     pub env: EnvSpec,
 }
@@ -88,8 +93,10 @@ pub enum PromptVia {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct StartSpec {
-    /// 每次启动都带上的参数。
+    /// 每次启动都带上的参数。config.toml 里的 `args` 会换掉它们。
     pub args: Vec<String>,
+    /// 每次启动都带上、config.toml 换不掉的参数：关掉启动时的升级提示这类，换掉了会出问题的。
+    pub always_args: Vec<String>,
     pub prompt: PromptVia,
     /// `prompt = "flag"` 时的参数，和第一句话拼成一个参数。
     pub prompt_flag: String,
@@ -104,6 +111,8 @@ pub struct StartSpec {
     pub session_id_args: Vec<String>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
     pub review_args: Vec<String>,
+    /// 启动时设置的环境变量，例如关掉启动时的升级提示（在那个界面按回车会选"现在升级"）。
+    pub env: std::collections::BTreeMap<String, String>,
 }
 
 /// 运行一次就退出的命令。
@@ -115,6 +124,20 @@ pub struct HeadlessSpec {
     pub separator: Option<String>,
     /// 提示词改从标准输入给时追加的参数（Windows 的批处理文件带不了换行）。
     pub stdin_args: Vec<String>,
+    /// 只留下允许的功能，其余开着的都关掉。程序以后新加的功能也就默认关着。
+    pub features: Option<FeaturesSpec>,
+}
+
+/// 见 `duolo_core::process::FeatureGate`。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeaturesSpec {
+    /// 列出功能的参数，跟在命令后面。输出每行 `<功能名> … <true|false>`。
+    pub list: Vec<String>,
+    #[serde(default)]
+    pub allow: Vec<String>,
+    /// 关掉一个功能的参数，`{feature}` 换成功能名。
+    pub disable: Vec<String>,
 }
 
 /// 怎么从画面认出它的状态，统一按小写比较。
@@ -170,6 +193,30 @@ pub struct TranscriptSpec {
     pub home_env: Option<String>,
 }
 
+/// 它把"信任这个文件夹"记在哪里，Duolo 启动它之前替用户记下（见 `trust` 模块）。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustSpec {
+    /// 用哪段代码写，见 `trust` 模块。
+    pub format: String,
+    /// 配置文件，相对用户的家目录。
+    pub file: String,
+    /// 设置了这个环境变量时，配置文件是它下面的 `env_file`。
+    #[serde(default)]
+    pub env: Option<String>,
+    #[serde(default)]
+    pub env_file: Option<String>,
+    /// 信任哪个目录：`worktree` 是任务的目录（关任务时删掉这一项），`repo` 是主仓库。
+    pub scope: TrustScope,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TrustScope {
+    Worktree,
+    Repo,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EnvSpec {
@@ -199,6 +246,7 @@ impl Manifest {
             name: duolo_core::AgentKind(id.into()).fallback_name(),
             command: id.into(),
             icon_color: None,
+            minimum_version: None,
             install: Install::default(),
             start: StartSpec::default(),
             review: None,
@@ -206,6 +254,7 @@ impl Manifest {
             screen: Screen::default(),
             keys: Keys::default(),
             transcript: None,
+            trust: None,
             env: EnvSpec::default(),
         }
     }
@@ -222,6 +271,24 @@ impl Manifest {
             [("resume_session_args", &self.start.resume_session_args), ("session_id_args", &self.start.session_id_args)]
         {
             ensure!(args.is_empty() || args.iter().any(|a| a.contains(SESSION)), "{name} must contain {SESSION}");
+        }
+        for features in [&self.review, &self.quick].into_iter().flatten().filter_map(|h| h.features.as_ref()) {
+            ensure!(!features.list.is_empty(), "features.list is empty");
+            ensure!(
+                features.disable.iter().any(|a| a.contains("{feature}")),
+                "features.disable must contain {{feature}}"
+            );
+        }
+        if let Some(minimum) = &self.minimum_version {
+            ensure!(duolo_core::text::parse_version(minimum).is_some(), "minimum_version must look like 1.2.3");
+        }
+        if let Some(trust) = &self.trust {
+            ensure!(crate::trust::store(&trust.format).is_some(), "unknown trust format {:?}", trust.format);
+            let inside = |file: &str| {
+                !file.is_empty() && Path::new(file).components().all(|c| matches!(c, Component::Normal(_)))
+            };
+            ensure!(inside(&trust.file), "trust file must be a path inside the home directory");
+            ensure!(trust.env_file.as_deref().is_none_or(inside), "trust env_file must be a relative path");
         }
         if let Some(color) = &self.icon_color {
             let hex = color.strip_prefix('#').unwrap_or_default();

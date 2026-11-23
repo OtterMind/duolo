@@ -73,6 +73,8 @@ export interface Check {
   ok: boolean;
   command: string;
   version: string;
+  /** 装的版本太旧时，最低要求的版本。 */
+  minimum: string;
 }
 
 /** 一种 Agent 的名字和图标。 */

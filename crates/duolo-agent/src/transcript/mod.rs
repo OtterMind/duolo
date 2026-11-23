@@ -61,6 +61,17 @@ pub enum Home {
 }
 
 impl Home {
+    /// Agent 的一个配置文件：设置了 `env` 时是它下面的 `env_file`，否则是家目录下的 `file`。
+    pub(crate) fn config_file(&self, file: &str, env: Option<&str>, env_file: Option<&str>) -> PathBuf {
+        match self {
+            Self::User => match env.and_then(std::env::var_os).filter(|dir| !dir.is_empty()) {
+                Some(dir) => PathBuf::from(dir).join(env_file.unwrap_or(file)),
+                None => duolo_core::process::home_dir().join(file),
+            },
+            Self::At(home) => home.join(file),
+        }
+    }
+
     pub(crate) fn data_dir(&self, default: &str, env: Option<&str>) -> PathBuf {
         match self {
             Self::User => env

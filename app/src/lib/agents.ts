@@ -14,6 +14,8 @@ export interface AgentOption {
   reviews: boolean;
   /** 安装命令，没装时显示给用户。 */
   install: string;
+  /** 装了但太旧时：装的版本和最低要求。 */
+  tooOld: { version: string; minimum: string } | null;
 }
 
 export interface AgentChoice {
@@ -32,6 +34,7 @@ export function agentOptions(env: Check[] | null): AgentOption[] {
       installed: c.ok,
       reviews: pluginOf(c.agent)?.reviews ?? true,
       install: c.install,
+      tooOld: c.minimum ? { version: c.version, minimum: c.minimum } : null,
     }));
 }
 

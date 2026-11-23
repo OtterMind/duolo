@@ -37,8 +37,20 @@ pub(crate) struct LiveState {
     pub(crate) pending: HashMap<AgentKey, Vec<String>>,
     /// 这次启动之后已经画出过输入框的 Agent。
     settled: HashSet<AgentKey>,
-    /// 去哪里找 Agent 的会话记录。
-    home: Home,
+    /// Agent 的家目录：去哪里找它的会话记录、配置文件。
+    pub(crate) home: Home,
+}
+
+/// 环境变量 `DUOLO_AGENT_HOME` 指定的目录，没设置时是用户的家目录。
+/// 测试时默认用一个不存在的目录：启动 Agent 会替用户改它的配置文件（信任目录），不能改到真的上面。
+fn agent_home() -> Home {
+    match std::env::var_os("DUOLO_AGENT_HOME").filter(|dir| !dir.is_empty()) {
+        Some(dir) => Home::At(dir.into()),
+        None if cfg!(test) => {
+            Home::At(std::env::temp_dir().join(format!("duolo-test-agent-home-{}", std::process::id())))
+        }
+        None => Home::User,
+    }
 }
 
 impl LiveState {
@@ -53,7 +65,7 @@ impl LiveState {
             diff: HashMap::new(),
             pending: HashMap::new(),
             settled: HashSet::new(),
-            home: Home::User,
+            home: agent_home(),
         }
     }
 }
@@ -92,7 +104,7 @@ impl Engine {
         };
     }
 
-    /// 读 Agent 会话记录的时候用哪个家目录（测试里换成临时目录）。
+    /// Agent 的家目录：读会话记录、改配置文件都在这里（测试里换成临时目录）。
     pub fn set_agent_home(&mut self, home: PathBuf) {
         self.live.home = Home::At(home);
     }
@@ -244,12 +256,15 @@ impl Engine {
 
     // ---- 发消息 ----
 
-    /// 画面上已经有准备好的输入框，而且没有在等用户选什么（第一次启动时选主题、确认信任目录……）。
+    /// 可以发消息了：它报告自己空闲；不报告状态的 Agent 看画面上有没有准备好的输入框、
+    /// 有没有在等用户选什么（第一次启动时选主题、确认信任目录……）。
     pub(crate) fn can_take_message(&self, key: AgentKey) -> bool {
         let Ok(plugin) = self.plugin_of(key) else { return false };
         let choosing = &plugin.screen().choosing;
+        // 它自己报告状态的话以报告为准；否则看画面上有没有在等用户选的列表。
         self.sessions.get(&key).is_some_and(|s| {
-            s.is_ready_for_input() && !s.with_screen(|screen| is_choosing(&screen.contents(), choosing))
+            s.is_ready_for_input()
+                && (s.reported().is_some() || !s.with_screen(|screen| is_choosing(&screen.contents(), choosing)))
         })
     }
 
@@ -515,6 +530,31 @@ mod tests {
         assert_eq!(screen(&engine, key).matches("and Excel").count(), 1, "{}", screen(&engine, key));
     }
 
+    /// 报告状态的 Agent：报告在等用户时不发消息，报告空闲后再发；画面上写什么都不看。
+    #[cfg(unix)]
+    #[test]
+    fn message_waits_for_a_reported_idle() {
+        let script = "stty raw -echo; printf '\\033[?2004h> \\033]7501;?\\033\\\\'; head -c 9 >/dev/null; \
+                      printf '\\033]7501;state=blocked:kind=permission\\033\\\\'; sleep 2; \
+                      printf '\\033]7501;state=idle\\033\\\\'; exec perl -e '$|=1; while (sysread(STDIN,$c,1)) { print \"got:$c\" if $c =~ /\\w/ }'";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while engine.agent_status(key) != AgentStatus::NeedsInput {
+            assert!(Instant::now() < deadline, "没认出它在等用户");
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(20));
+        }
+        engine.submit(key, "hi").unwrap();
+        thread::sleep(Duration::from_millis(500));
+        engine.poll_events();
+        assert!(!screen(&engine, key).contains("got:"), "在等用户时不能发：{}", screen(&engine, key));
+        wait_screen(&mut engine, key, "got:hgot:i");
+        engine.shutdown();
+    }
+
     #[test]
     fn first_message_of_a_blank_task_is_sent_once() {
         let (_dir, mut engine, project) = engine(SLOW_START);
@@ -665,6 +705,27 @@ mod tests {
         engine.close_task(task).unwrap();
     }
 
+    /// 启动前替用户信任任务的目录，关任务时删掉；用户的别的设置不动。
+    #[test]
+    fn trusts_the_task_folder_while_it_exists() {
+        let (dir, mut engine, project) = engine("cat");
+        let home = dir.path().join("user-home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join(".claude.json"), r#"{"numStartups": 1}"#).unwrap();
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let worktree = engine.state().task(task).unwrap().worktree.canonicalize().unwrap();
+        let read = || {
+            serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(home.join(".claude.json")).unwrap())
+                .unwrap()
+        };
+        assert_eq!(read()["projects"][worktree.display().to_string()]["hasTrustDialogAccepted"], true);
+        assert_eq!(read()["numStartups"], 1);
+        engine.close_task(task).unwrap();
+        assert!(read()["projects"].get(worktree.display().to_string()).is_none(), "任务关了，信任也删掉");
+    }
+
     /// 能定会话编号的：启动时就定好、记下，下次按它恢复；重新开始时换一个新的。
     #[test]
     fn assigned_session_is_resumed() {
@@ -678,6 +739,33 @@ mod tests {
         engine.stop_agent(key);
         engine.start_agent(key).unwrap();
         wait_screen(&mut engine, key, &format!("args:--resume {id}"));
+        engine.shutdown();
+    }
+
+    /// 不认得"指定会话编号"选项的版本：马上出错退出，就不再给它定编号，重新开始。
+    #[test]
+    fn agent_without_session_ids_is_restarted_without() {
+        let script = "case \"$*\" in *--session-id*) echo \"error: unknown option '--session-id'\"; exit 1;; esac; \
+                      echo \"args:$*\"; cat";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut retried = Vec::new();
+        while retried.is_empty() {
+            assert!(Instant::now() < deadline, "没有重新开始");
+            retried = engine.retry_failed_resumes();
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(retried, [key]);
+        wait_screen(&mut engine, key, "args:-- Export orders");
+        assert!(engine.state().task(task).unwrap().agents[0].session.is_none(), "编号等从会话记录里认");
+        // 同一种 Agent 的下一个任务也不再定编号。
+        let other = engine.create_task(&project, "Next").unwrap();
+        let next = engine.writer_key(other).unwrap();
+        engine.start_agent(next).unwrap();
+        wait_screen(&mut engine, next, "args:-- Next");
         engine.shutdown();
     }
 

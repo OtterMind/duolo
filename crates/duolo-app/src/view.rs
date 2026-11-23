@@ -149,6 +149,8 @@ pub struct CheckView {
     pub ok: bool,
     pub command: String,
     pub version: String,
+    /// 装的版本太旧时，最低要求的版本。
+    pub minimum: String,
 }
 
 impl From<Check> for CheckView {
@@ -166,6 +168,7 @@ impl From<Check> for CheckView {
             ok: check.ok,
             command: check.command,
             version: check.version,
+            minimum: check.minimum,
         }
     }
 }

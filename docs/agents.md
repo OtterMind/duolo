@@ -22,13 +22,16 @@ id = "toy"                 # a-z、0-9、-、_，保存在任务里，定了就�
 name = "Toy"               # 界面上显示的名字，不翻译
 command = "toy"            # 可执行文件
 icon_color = "#d97757"     # 图标颜色，可省略（跟随文字颜色）
+minimum_version = "1.2.0"  # 最低能用的版本（`--version` 打印的）。更旧的不能选，环境检查里提示升级；读不出版本时照样用
 
 [install]                  # 没安装时给用户复制的命令
 default = "npm install -g toy"
 windows = "winget install toy"   # 还可以有 macos、linux
 
 [start]                    # 在终端里启动
-args = []                  # 每次都带上
+args = []                  # 每次都带上；config.toml 的 args 会换掉它们
+always_args = []           # 每次都带上、换不掉：关掉启动时的升级提示这类
+env = { TOY_NO_UPDATE = "1" }    # 启动时设置的环境变量（同上，例如关掉自动升级）
 prompt = "argument"        # 第一句话怎么给：argument（最后一个参数）、flag、paste（准备好后粘贴）
 prompt_flag = "--prompt="  # prompt = "flag" 时，和第一句话拼成一个参数
 separator = "--"           # 放在第一句话前面。不写时，以 - 开头的第一句话前面会加一个空格
@@ -43,10 +46,15 @@ args = ["-p"]
 separator = "--"
 stdin_args = []            # 提示词改从标准输入给时追加（Windows 的 .cmd 带不了换行）
 
+[review.features]          # 只留下允许的功能：先运行 `toy features list`，开着的、不在 allow 里的都关掉
+list = ["features", "list"]      # 输出每行 `<功能名> … <true|false>`
+allow = ["shell"]
+disable = ["-c", "features.{feature}=false"]
+
 [quick]                    # 起分支名、整理口述这样的小事，要快；字段和 [review] 一样
 args = ["-p", "--model", "small"]
 
-[screen]                   # 从画面认状态，全部小写
+[screen]                   # 从画面认状态，全部小写。它自己报告状态（OSC 7501）以后就不看这些了
 approval = ["1. yes"]      # 画面底部出现：等你确认
 busy = ["esc to interrupt"]      # 画面底部出现：正在工作
 choosing = ["enter to confirm"]  # 出现：停在要选的列表上，不能发消息（有光标的编号列表不用写）
@@ -59,6 +67,13 @@ newline = "\u001B\r"       # 输入框里换行（⇧↵）
 format = "claude"          # 用哪段代码读，见 crates/duolo-agent/src/transcript/
 home = ".toy"              # 数据目录，相对家目录
 home_env = "TOY_HOME"      # 设置了这个环境变量时用它
+
+[trust]                    # 它把"信任这个文件夹"记在哪里，Duolo 启动它之前替用户记下
+format = "claude"          # 用哪段代码写，见 crates/duolo-agent/src/trust.rs
+file = ".toy.json"         # 配置文件，相对家目录
+env = "TOY_HOME"           # 设置了这个环境变量时，配置文件是它下面的 env_file
+env_file = "config.json"
+scope = "worktree"         # worktree：任务的目录（关任务时删掉这一项）；repo：主仓库（留着）
 
 [env]
 remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变量
@@ -88,7 +103,13 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
 - **后台运行不要留会话**，也不要被当成写代码的会话：还不知道会话编号时，恢复会话和对话记录都按目录找最近的一个。
   能用 `session_id_args` 定编号的一定要写，同一个目录里有两个同种 Agent 时就不会认错。
 - **会话记录里的路径**可能是解析过链接的真实路径（macOS 上 `/var` → `/private/var`），Duolo 两个都找。
-- **对话框的默认选项可能有危险**（例如"现在升级"）。`approval` 和 `choosing` 写全了，Duolo 才不会在这时发消息、替用户按回车。
+- **不要认对话框，让它别出现**：信任文件夹写进 `[trust]`，启动时的升级提示用 `always_args` / `env` 关掉。
+  对话框的默认选项可能有危险（Codex 的升级框按回车就是"现在升级"）；实在避免不了的，`approval` 和 `choosing` 写全，
+  Duolo 才不会在这时发消息、替用户按回车。
+- **状态尽量让它自己报告**（OSC 7501，Program Status Protocol）：Duolo 会回答它的询问，收到报告以后状态以报告为准，
+  画面上的字（`[screen]`）只在它不报告、或者还没开始报告（启动时的对话框）时用。程序改了界面也不受影响。
+- **升级后先看能不能用**：`cargo test -p duolo-engine real_commands -- --ignored` 用真实的 CLI 试一遍参数；
+  不认得 `session_id_args` 的版本，Duolo 发现后会改为不定编号重新开始。
 
 ## 现在还做不到的
 

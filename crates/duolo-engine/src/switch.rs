@@ -164,16 +164,18 @@ mod tests {
         (dir, engine, project)
     }
 
+    /// 等文件写完（有内容，而且一会儿不再变）。
     fn read_when_written(path: &Path) -> String {
         let deadline = Instant::now() + Duration::from_secs(5);
+        let mut last = String::new();
         loop {
-            if let Ok(text) = std::fs::read_to_string(path) {
-                if !text.is_empty() {
-                    return text;
-                }
+            let text = std::fs::read_to_string(path).unwrap_or_default();
+            if !text.is_empty() && text == last {
+                return text;
             }
+            last = text;
             assert!(Instant::now() < deadline, "{} was not written", path.display());
-            std::thread::sleep(Duration::from_millis(20));
+            std::thread::sleep(Duration::from_millis(200));
         }
     }
 

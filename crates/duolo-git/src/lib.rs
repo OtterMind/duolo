@@ -230,11 +230,29 @@ pub fn snapshot(worktree: &Path, dest: &Path) -> Result<()> {
 /// 删掉 [`snapshot`] 建的 worktree 和它的登记。里面被改过、多了文件也照样删。
 pub fn remove_snapshot(dest: &Path) -> Result<()> {
     let dest_str = dest.to_str().context("snapshot path is not valid UTF-8")?;
-    if is_worktree(dest) && git(dest, &["worktree", "remove", "--force", dest_str]).is_ok() {
+    // 先记下主仓库在哪里：目录删了就问不到了。
+    let common = is_worktree(dest)
+        .then(|| git(dest, &["rev-parse", "--git-common-dir"]).ok())
+        .flatten()
+        .map(|dir| dest.join(dir));
+    if common.is_some() && git(dest, &["worktree", "remove", "--force", dest_str]).is_ok() {
         return Ok(());
     }
-    // 登记已经坏了：只删目录，登记由 git 自己以后清理（`git worktree prune`）。
-    match std::fs::remove_dir_all(dest) {
+    // Windows 上刚结束的进程可能还占着文件，等一会儿再试。
+    let mut removed = std::fs::remove_dir_all(dest);
+    for _ in 0..10 {
+        match &removed {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                removed = std::fs::remove_dir_all(dest);
+            }
+            _ => break,
+        }
+    }
+    if let Some(common) = common {
+        let _ = git(&common, &["worktree", "prune"]);
+    }
+    match removed {
         Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err.into()),
         _ => Ok(()),
     }

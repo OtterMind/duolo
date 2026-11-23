@@ -597,8 +597,10 @@ mod tests {
 
         let copy = dir.path().join("snap/1-review");
         snapshot(&wt, &copy).unwrap();
-        assert_eq!(std::fs::read_to_string(copy.join("a.txt")).unwrap(), "changed\n");
-        assert_eq!(std::fs::read_to_string(copy.join("新文件.txt")).unwrap(), "new\n");
+        // Windows 上 git 检出时可能把换行换成 CRLF（core.autocrlf）。
+        let read = |path: &Path| std::fs::read_to_string(path).unwrap().replace("\r\n", "\n");
+        assert_eq!(read(&copy.join("a.txt")), "changed\n");
+        assert_eq!(read(&copy.join("新文件.txt")), "new\n");
         assert!(copy.join("staged.txt").exists() && !copy.join("debug.log").exists());
         assert!(!copy.join("hook-ran").exists());
         let diff = git(&copy, &["diff", "--name-only", &before.1]).unwrap();
@@ -612,7 +614,7 @@ mod tests {
         remove_snapshot(&copy).unwrap();
         assert!(!copy.exists());
         assert!(!git(&repo, &["worktree", "list"]).unwrap().contains("1-review"));
-        assert_eq!(std::fs::read_to_string(wt.join("a.txt")).unwrap(), "changed\n");
+        assert_eq!(read(&wt.join("a.txt")), "changed\n");
         remove_snapshot(&copy).unwrap();
     }
 

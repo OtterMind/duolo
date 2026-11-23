@@ -231,7 +231,7 @@ impl Reader {
         }
         let mut found: Vec<(SystemTime, PathBuf)> =
             paths.into_iter().filter_map(|p| modified(&p).filter(|m| *m >= self.since_time).map(|m| (m, p))).collect();
-        found.sort_by(|a, b| b.0.cmp(&a.0));
+        found.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
         let others = self.others.lock().unwrap_or_else(|p| p.into_inner()).clone();
         found.into_iter().map(|(_, p)| (self.format.session_id(&p).filter(|id| is_session_id(id)), p)).find_map(
             |(id, p)| match &id {

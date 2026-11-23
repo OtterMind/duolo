@@ -131,6 +131,16 @@ pub enum Command {
     StartReview {
         task: TaskId,
     },
+    /// 换写代码的 Agent（插件 id），新的马上启动。
+    SwitchWriter {
+        task: TaskId,
+        agent: String,
+    },
+    /// 换审阅的 Agent（插件 id）。
+    SetReviewer {
+        task: TaskId,
+        agent: String,
+    },
     CloseTask {
         task: TaskId,
     },

@@ -96,12 +96,30 @@ pub struct AgentSpec {
     /// 第一次启动时交给它的话；没有时用任务的需求。中途接手的 Agent 用它拿到交接说明。
     #[serde(default)]
     pub prompt: Option<String>,
+    /// 中途被换下来的时候：之后换回它时，告诉它这期间发生了什么。
+    #[serde(default)]
+    pub left: Option<Departure>,
+    /// 下次恢复会话后先发给它的话（换回来时，这期间发生了什么）。
+    #[serde(default)]
+    pub resume_note: Option<String>,
 }
 
 impl AgentSpec {
     pub fn new(id: u32, kind: AgentKind, role: AgentRole) -> Self {
-        Self { id, kind, role, launched: false, session: None, prompt: None }
+        Self { id, kind, role, launched: false, session: None, prompt: None, left: None, resume_note: None }
     }
+}
+
+/// Agent 中途被换下来的时候。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Departure {
+    /// Unix 秒。
+    pub at: u64,
+    /// 当时任务事件的最后一条（之后的对话是它不知道的）。
+    pub seq: u64,
+    /// 当时代码的样子（包括没提交的改动），见 `duolo_git::snapshot_commit`；没记下来时为 None。
+    #[serde(default)]
+    pub commit: Option<String>,
 }
 
 /// 一个任务：一段需求、一个独立的 worktree，以及在里面工作的若干 Agent。

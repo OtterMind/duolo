@@ -125,7 +125,8 @@ export type RemoteCommand =
   | ({ type: "create_task"; project: string; prompt: string } & NewTaskOptions)
   | { type: "send_message"; task: number; text: string }
   | { type: "answer"; task: number; option: number }
-  | { type: "interrupt" | "start_review" | "close_task"; task: number };
+  | { type: "interrupt" | "start_review" | "close_task"; task: number }
+  | { type: "switch_writer" | "set_reviewer"; task: number; agent: string };
 
 export interface CommandResult {
   ok: boolean;

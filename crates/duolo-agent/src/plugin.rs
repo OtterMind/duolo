@@ -20,7 +20,8 @@ pub struct Start<'a> {
     pub role: AgentRole,
     /// 恢复上一次会话；这时不带 `prompt`。
     pub resume: bool,
-    /// 要恢复的会话编号；不知道时恢复这个目录里最近的一次。
+    /// 恢复时：要恢复的会话编号，不知道时恢复这个目录里最近的一次。
+    /// 新开时：Duolo 给它定的会话编号（见 [`Plugin::assigns_session`]）。
     pub session: Option<&'a str>,
     pub prompt: Option<&'a str>,
 }
@@ -55,6 +56,7 @@ impl Plugin {
             None if changes.resume_args.is_some() => self.manifest.start.resume_session_args.clear(),
             None => {}
         }
+        set(&mut self.manifest.start.session_id_args, &changes.session_id_args);
         set(&mut self.manifest.start.review_args, &changes.review_args);
         if let Some(install) = &changes.install {
             self.manifest.install = crate::manifest::Install { default: install.clone(), ..Default::default() };
@@ -105,6 +107,16 @@ impl Plugin {
         &self.manifest.env.remove
     }
 
+    /// 能按编号接回某一次会话。
+    pub fn resumes_session(&self) -> bool {
+        !self.manifest.start.resume_session_args.is_empty()
+    }
+
+    /// 新开会话时可以由 Duolo 指定会话编号。
+    pub fn assigns_session(&self) -> bool {
+        !self.manifest.start.session_id_args.is_empty()
+    }
+
     /// 本机找得到它的命令（不保证能运行）。
     pub fn is_installed(&self) -> bool {
         process::find(self.command()).is_some()
@@ -128,12 +140,18 @@ impl Plugin {
                 Some(id) => args.extend(spec.resume_session_args.iter().map(|a| a.replace(SESSION, id))),
                 None => args.extend(spec.resume_args.iter().cloned()),
             }
-        } else if let Some(prompt) = start.prompt {
-            match spec.prompt {
-                _ if batch => paste = Some(prompt.to_string()),
-                PromptVia::Paste => paste = Some(prompt.to_string()),
-                PromptVia::Flag => args.push(format!("{}{prompt}", spec.prompt_flag)),
-                PromptVia::Argument => args.extend(process::prompt_args(spec.separator.as_deref(), prompt)),
+        } else {
+            if let Some(id) = start.session.filter(|_| self.assigns_session()) {
+                args.extend(spec.session_id_args.iter().map(|a| a.replace(SESSION, id)));
+            }
+            match (start.prompt, spec.prompt) {
+                (None, _) => {}
+                (Some(prompt), _) if batch => paste = Some(prompt.to_string()),
+                (Some(prompt), PromptVia::Paste) => paste = Some(prompt.to_string()),
+                (Some(prompt), PromptVia::Flag) => args.push(format!("{}{prompt}", spec.prompt_flag)),
+                (Some(prompt), PromptVia::Argument) => {
+                    args.extend(process::prompt_args(spec.separator.as_deref(), prompt))
+                }
             }
         }
         Launch { program: self.command().to_string(), args, paste }
@@ -218,6 +236,16 @@ mod tests {
         // config.toml 里只改了 resume_args：按编号的不再用插件的。
         let changed = p.with(&AgentOverride { resume_args: Some(vec!["--last".into()]), ..Default::default() });
         assert_eq!(changed.launch_as(start(Some("ab-12")), false).args, ["--last"]);
+    }
+
+    #[test]
+    fn fresh_start_can_take_our_session_id() {
+        let p = plugin("separator = \"--\"\nsession_id_args = [\"--session-id\", \"{session}\"]");
+        let start = Start { role: AgentRole::Writer, resume: false, session: Some("u-1"), prompt: Some("- fix") };
+        assert_eq!(p.launch_as(start, false).args, ["--session-id", "u-1", "--", "- fix"]);
+        assert!(p.assigns_session() && !plugin("").assigns_session());
+        let off = p.with(&AgentOverride { session_id_args: Some(Vec::new()), ..Default::default() });
+        assert_eq!(off.launch_as(start, false).args, ["--", "- fix"], "config.toml 里可以关掉");
     }
 
     #[test]

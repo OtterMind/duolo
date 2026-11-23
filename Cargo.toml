@@ -35,6 +35,7 @@ unicode-width = "0.2"
 libc = "0.2"
 windows-sys = "0.61"
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

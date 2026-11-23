@@ -14,6 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use duolo_core::config::REVIEW_FILE;
 use duolo_core::process::{self, OneShot, Prompted};
 use duolo_core::proctree::ProcessTree;
 use duolo_core::{t, tf, UserError};
@@ -44,7 +45,14 @@ pub(crate) struct ReviewJob {
 
 impl ReviewJob {
     /// 在后台把 `worktree` 检出到 `copy`，在那里运行审阅命令，结束后删掉 `copy`。
-    pub(crate) fn spawn(command: &OneShot, prompt: &str, worktree: PathBuf, copy: PathBuf) -> Result<Self> {
+    /// `fork` 是任务从基准分支分出来的提交，副本里写一份从它开始的改动给审阅者看。
+    pub(crate) fn spawn(
+        command: &OneShot,
+        prompt: &str,
+        worktree: PathBuf,
+        copy: PathBuf,
+        fork: String,
+    ) -> Result<Self> {
         let mut review = Prompted::new(command, Some(prompt)).ok_or(UserError::ReviewNotConfigured)?;
         // 先说找不到命令，免得白做一份副本。
         if process::find(command.program()).is_none() {
@@ -61,7 +69,7 @@ impl ReviewJob {
             result: Arc::clone(&result),
         };
         thread::Builder::new().name("duolo-review".into()).spawn(move || {
-            let outcome = match duolo_git::snapshot(&worktree, &copy) {
+            let outcome = match prepare(&worktree, &copy, &fork) {
                 Ok(()) => run(review, &running, &cancelled).map(|out| own_paths(out, &copy, &worktree)),
                 Err(err) => Err(tf("review.copyFailed", &[("detail", &format!("{err:#}"))])),
             };
@@ -102,6 +110,17 @@ impl Drop for ReviewJob {
     fn drop(&mut self) {
         self.cancel();
     }
+}
+
+/// 把任务现在的样子检出到副本，写好给审阅者看的改动。
+fn prepare(worktree: &Path, copy: &Path, fork: &str) -> Result<()> {
+    let commit = duolo_git::snapshot(worktree, copy)?;
+    std::fs::write(copy.join(REVIEW_FILE), duolo_git::changes_report(worktree, fork, &commit)?)?;
+    // 不让它出现在副本的 `git status` 里，免得审阅者把它当成改动。
+    let exclude = copy.join(".git/info/exclude");
+    std::fs::create_dir_all(exclude.parent().unwrap_or(copy))?;
+    std::fs::write(exclude, format!("/{REVIEW_FILE}\n"))?;
+    Ok(())
 }
 
 /// 在准备好的副本里运行审阅命令，等它结束，返回结论或错误说明。

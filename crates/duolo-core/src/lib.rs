@@ -19,7 +19,9 @@ pub use config::{AgentOverride, Config, VoiceConfig};
 pub use error::UserError;
 pub use event::{Command, CommandResult, EventKind, Speaker, TaskEvent};
 pub use i18n::{t, tf};
-pub use model::{AgentKey, AgentKind, AgentRole, AgentSpec, Project, ProjectId, Review, State, Task, TaskId, Verdict};
+pub use model::{
+    AgentKey, AgentKind, AgentRole, AgentSpec, Departure, Project, ProjectId, Review, State, Task, TaskId, Verdict,
+};
 pub use paths::Paths;
 pub use settings::Settings;
 pub use store::{Loaded, Stamp, Store};

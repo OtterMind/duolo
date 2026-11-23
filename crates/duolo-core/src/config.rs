@@ -47,17 +47,28 @@ impl Default for Config {
 const DEFAULT_WRITER: &str = "claude";
 const DEFAULT_REVIEWER: &str = "codex";
 
-/// 默认的审阅提示词。`{base}` 换成基准分支，`{commit}` 换成从它分出来的那个提交，`{language}` 换成界面语言（英文名，例如 `Japanese`）。
+/// 默认的审阅提示词。`{base}` 换成基准分支，`{commit}` 换成从它分出来的那个提交，`{language}` 换成界面语言（英文名，例如 `Japanese`），
+/// `{changes}` 换成去哪里看改动（[`CHANGES_IN_FILE`] 或 [`CHANGES_IN_GIT`]）。
 pub const DEFAULT_REVIEW_PROMPT: &str =
-    "Review every change made in this git worktree since it branched off {base} at commit {commit}. \
-Run `git diff {commit}` for committed and uncommitted changes, and `git status --short --untracked-files=all` to find \
-new files that are not in git yet (lines starting with `??`), then read those files in full. \
+    "Review every change made in this task since it branched off {base} at commit {commit}. {changes} \
 Commits made on {base} after that point are not part of this work. \
 You are a read-only reviewer: do not modify any files.\n\
 Write your review in {language}.\n\
 On the first line, write `[PASS]` if nothing must be fixed, or `[ISSUES n]` where n is the number of critical issues, \
 followed by a one-sentence summary, e.g. \"[ISSUES 2] 2 critical issues, 3 suggestions\" or \"[PASS] No issues found\".\n\
 Then list issues grouped as Critical / Suggestion / Style. For each, give the file and line number and how to fix it.";
+
+/// 后台审阅时，Duolo 把改动写进副本里的这个文件（审阅者不一定能运行命令）。
+pub const REVIEW_FILE: &str = "DUOLO_REVIEW.md";
+
+/// 后台审阅：改动在 [`REVIEW_FILE`] 里。
+pub const CHANGES_IN_FILE: &str = "The commits, the changed files and the full diff are in the file DUOLO_REVIEW.md \
+in the current folder: read it first, then read the changed files where you need more context.";
+
+/// 在终端里审阅：自己用 git 看。
+pub const CHANGES_IN_GIT: &str = "Run `git diff {commit}` for committed and uncommitted changes, and \
+`git status --short --untracked-files=all` to find new files that are not in git yet (lines starting with `??`), \
+then read those files in full.";
 
 /// 没有指定界面语言时，审阅结论使用的语言。
 pub const DEFAULT_REPLY_LANGUAGE: &str = "English";
@@ -72,9 +83,19 @@ impl Config {
         }
     }
 
-    /// 填好基准分支、分出来的提交和回答语言的审阅提示词。
-    pub fn review_prompt_for(&self, base: &str, commit: &str, language: &str) -> String {
-        self.review_prompt.replace("{base}", base).replace("{commit}", commit).replace("{language}", language)
+    /// 填好基准分支、分出来的提交、去哪里看改动和回答语言的审阅提示词。
+    /// 自己写的提示词里没有 `{changes}` 时，把它加在最后：审阅者得知道改动在哪里。
+    pub fn review_prompt_for(&self, base: &str, commit: &str, language: &str, changes: &str) -> String {
+        let prompt = if self.review_prompt.contains("{changes}") {
+            self.review_prompt.clone()
+        } else {
+            format!("{}\n{{changes}}", self.review_prompt)
+        };
+        prompt
+            .replace("{changes}", changes)
+            .replace("{base}", base)
+            .replace("{commit}", commit)
+            .replace("{language}", language)
     }
 }
 
@@ -90,6 +111,8 @@ pub struct AgentOverride {
     pub resume_args: Option<Vec<String>>,
     /// 按编号恢复某一次会话的参数，`{session}` 换成会话编号，例如 `["--resume", "{session}"]`。
     pub resume_session_args: Option<Vec<String>>,
+    /// 新开会话时指定会话编号的参数，`{session}` 换成 Duolo 生成的 UUID，例如 `["--session-id", "{session}"]`。
+    pub session_id_args: Option<Vec<String>>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
     pub review_args: Option<Vec<String>>,
     /// 后台审阅用的整条命令：在任务的 worktree 里只读运行，提示词作为最后一个参数，结论从 stdout 读取。
@@ -151,10 +174,18 @@ mod tests {
     #[test]
     fn review_prompt_mentions_base() {
         let cfg = Config::default();
-        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese");
+        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese", CHANGES_IN_GIT);
         assert!(prompt.contains("branched off main at commit abc123"));
         assert!(prompt.contains("git diff abc123"));
         assert!(prompt.contains("Write your review in Japanese."));
+        let prompt = cfg.review_prompt_for("main", "abc123", "Japanese", CHANGES_IN_FILE);
+        assert!(prompt.contains(REVIEW_FILE) && !prompt.contains("git diff"));
+        // 自己写的提示词没提改动在哪里：补在最后。
+        let custom = Config { review_prompt: "Be strict about {base}.".into(), ..Config::default() };
+        assert_eq!(
+            custom.review_prompt_for("main", "c1", "English", CHANGES_IN_GIT).lines().last().unwrap(),
+            CHANGES_IN_GIT.replace("{commit}", "c1").lines().last().unwrap()
+        );
     }
 
     #[test]

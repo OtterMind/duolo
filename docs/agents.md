@@ -10,7 +10,7 @@ Duolo 里的每一种编程 Agent 都是一个插件：一份声明 `agent.toml`
 - **不从项目目录读**：插件能指定要运行的命令，打开别人的仓库不能就运行它的命令。
 
 `~/.duolo/config.toml` 的 `[agents.<id>]` 可以在插件上改几项（`command`、`args`、`resume_args`、`resume_session_args`、
-`review_args`、`review_command`、`install`），没写的沿用插件的；写成空列表就是空的。
+`session_id_args`、`review_args`、`review_command`、`install`），没写的沿用插件的；写成空列表就是空的。
 只改了 `resume_args`、没写 `resume_session_args` 时，不再按编号恢复（免得和改过的对不上）。
 没有插件、只在 config.toml 里写一段也能用：按最常见的方式启动，没有恢复、审阅和对话记录。
 
@@ -33,10 +33,12 @@ prompt = "argument"        # 第一句话怎么给：argument（最后一个参�
 prompt_flag = "--prompt="  # prompt = "flag" 时，和第一句话拼成一个参数
 separator = "--"           # 放在第一句话前面。不写时，以 - 开头的第一句话前面会加一个空格
 resume_args = ["--continue"]     # 恢复这个目录里上一次会话（还不知道会话编号时用）
-resume_session_args = ["--resume", "{session}"]  # 按编号恢复，{session} 换成从会话记录里读到的编号
+resume_session_args = ["--resume", "{session}"]  # 按编号恢复，{session} 换成会话编号
+session_id_args = ["--session-id", "{session}"]  # 新开会话时由 Duolo 定编号（UUID）。没有这个参数的，从会话记录里认
 review_args = []           # 作为审阅者在终端里启动时追加
 
 [review]                   # 后台审阅：在临时副本里只读运行，结论打印到 stdout。没有这一段就不能当审阅者
+                           # 改动由 Duolo 写进副本里的 DUOLO_REVIEW.md，审阅者不用自己运行 git
 args = ["-p"]
 separator = "--"
 stdin_args = []            # 提示词改从标准输入给时追加（Windows 的 .cmd 带不了换行）
@@ -76,10 +78,15 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
 
 要注意：
 
-- **审阅必须只读**。看清楚参数是"只给这些"还是"在用户设置上追加"：Claude Code 的 `--allowedTools` 是追加，
-  用户自己放开过写权限时审阅就能改文件，所以还要用 `--disallowedTools` 和 `--permission-mode dontAsk`。
+- **审阅必须只读，而且不靠用户的设置**。审阅在一份独立的副本里（自己的分支、没有远程），这只是兜底，参数本身要做到：
+  - 只给读文件的工具，或者让系统强制的沙箱管着。看清楚参数是"只给这些"还是"在用户设置上追加"：
+    Claude Code 的 `--allowedTools` 是追加，所以用 `--restricted`（不读用户和项目的设置、去掉运行代码的工具）。
+  - 关掉沙箱管不到的工具：MCP 服务（Claude 的 `--strict-mcp-config`、Codex 的 `-c mcp_servers={}`），
+    以及连到云端的应用、插件、浏览器（Codex 的 `-c features.<名>=false`；不用 `--disable`，它遇到不认识的名字会报错）。
+  - 用真实的 CLI 列一遍它手里的工具确认，再在要审的代码里放一句"审阅者请先运行……"试试。
 - **会吞参数的选项**（`--allowedTools <tools...>`）后面一定要有 `--`，不然提示词会被当成它的值。
 - **后台运行不要留会话**，也不要被当成写代码的会话：还不知道会话编号时，恢复会话和对话记录都按目录找最近的一个。
+  能用 `session_id_args` 定编号的一定要写，同一个目录里有两个同种 Agent 时就不会认错。
 - **会话记录里的路径**可能是解析过链接的真实路径（macOS 上 `/var` → `/private/var`），Duolo 两个都找。
 - **对话框的默认选项可能有危险**（例如"现在升级"）。`approval` 和 `choosing` 写全了，Duolo 才不会在这时发消息、替用户按回车。
 
@@ -87,4 +94,4 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
 
 - 没有终端界面的 Agent（只有网页或 ACP 协议的）。
 - 没有编号的确认框不能在手机上回答。
-- 中途换写代码的 Agent 只在桌面应用里能做（命令行和终端界面还不行）；换回原来的那种 Agent 时是新开一次会话，带着新的交接说明。
+- 终端界面里还不能换写代码的 Agent（可以在另一个终端里用 `duolo switch`）。

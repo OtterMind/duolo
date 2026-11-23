@@ -34,7 +34,7 @@ pub(crate) struct LiveState {
     prompt: HashMap<AgentKey, String>,
     diff: HashMap<TaskId, duolo_git::DiffStat>,
     /// Agent 还没准备好时收到的消息，准备好后再发。
-    pending: HashMap<AgentKey, Vec<String>>,
+    pub(crate) pending: HashMap<AgentKey, Vec<String>>,
     /// 这次启动之后已经画出过输入框的 Agent。
     settled: HashSet<AgentKey>,
     /// 去哪里找 Agent 的会话记录。
@@ -158,9 +158,16 @@ impl Engine {
             Ok(())
         });
         let tasks: HashSet<TaskId> = found.iter().map(|(key, _)| key.task).collect();
-        for (key, watch) in &self.live.watchers {
-            let Some(task) = self.state.task(key.task).filter(|t| tasks.contains(&t.id)) else { continue };
-            let others = task.agents.iter().chain(&task.retired).filter(|a| a.id != key.agent);
+        for task in tasks {
+            self.share_sessions(task);
+        }
+    }
+
+    /// 告诉任务里每个 Agent 的会话记录：别的 Agent 的会话是哪些，不要认成自己的。
+    pub(crate) fn share_sessions(&self, task: TaskId) {
+        let Some(t) = self.state.task(task) else { return };
+        for (key, watch) in self.live.watchers.iter().filter(|(key, _)| key.task == task) {
+            let others = t.agents.iter().chain(&t.retired).filter(|a| a.id != key.agent);
             watch.set_others(others.filter_map(|a| a.session.clone()).collect());
         }
     }
@@ -338,13 +345,13 @@ impl Engine {
     }
 
     /// 换下来的 Agent：不再跟着它，没发出去的消息交给 `successor`。
-    pub(crate) fn hand_over(&mut self, key: AgentKey, successor: AgentKey) {
+    pub(crate) fn hand_over(&mut self, key: AgentKey, successor: Option<AgentKey>) {
         self.live.watchers.remove(&key);
         self.live.status.remove(&key);
         self.live.settling.remove(&key);
         self.live.prompt.remove(&key);
         self.live.settled.remove(&key);
-        if let Some(queued) = self.live.pending.remove(&key) {
+        if let (Some(queued), Some(successor)) = (self.live.pending.remove(&key), successor) {
             self.live.pending.entry(successor).or_default().extend(queued);
         }
     }
@@ -378,6 +385,11 @@ mod tests {
 
     /// 一个仓库，写代码的 Agent 是 `script`（sh 脚本）。
     fn engine(script: &str) -> (tempfile::TempDir, Engine, ProjectId) {
+        engine_with(script, "")
+    }
+
+    /// `extra` 追加在 `[agents.claude]` 后面，例如关掉由 Duolo 定会话编号。
+    fn engine_with(script: &str, extra: &str) -> (tempfile::TempDir, Engine, ProjectId) {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("shop");
         std::fs::create_dir(&repo).unwrap();
@@ -385,7 +397,7 @@ mod tests {
         git(&repo, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"]);
         let home = dir.path().join("home");
         std::fs::create_dir(&home).unwrap();
-        let config = format!("[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\n");
+        let config = format!("[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\n{extra}");
         std::fs::write(home.join("config.toml"), config).unwrap();
         let mut engine = Engine::open(Paths::at(&home)).unwrap();
         engine.set_agent_home(dir.path().join("user-home"));
@@ -651,10 +663,26 @@ mod tests {
         engine.close_task(task).unwrap();
     }
 
-    /// 读到会话编号后记下来，下次按编号恢复（同一个目录里可能还有别的 Agent 的会话）。
+    /// 能定会话编号的：启动时就定好、记下，下次按它恢复；重新开始时换一个新的。
+    #[test]
+    fn assigned_session_is_resumed() {
+        let (_dir, mut engine, project) = engine("echo \"args:$*\"; cat");
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        let id = engine.state().task(task).unwrap().agents[0].session.clone().expect("启动时就定好了");
+        assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+        wait_screen(&mut engine, key, &format!("args:--session-id {id} -- Export orders"));
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, &format!("args:--resume {id}"));
+        engine.shutdown();
+    }
+
+    /// 不能定编号的：读到会话编号后记下来，下次按编号恢复。
     #[test]
     fn resumes_the_session_it_read() {
-        let (dir, mut engine, project) = engine("echo \"args:$*\"; cat");
+        let (dir, mut engine, project) = engine_with("echo \"args:$*\"; cat", "session_id_args = []\n");
         let task = engine.create_task(&project, "Export orders").unwrap();
         let key = engine.writer_key(task).unwrap();
         engine.start_agent(key).unwrap();
@@ -683,7 +711,8 @@ mod tests {
     /// 同一个 worktree 里两个同种的 Agent（终端里审阅的那个后启动）：各认各的会话。
     #[test]
     fn agents_in_one_folder_keep_their_own_sessions() {
-        let (dir, mut engine, project) = engine("cat");
+        // 不能定编号、只能从会话记录里认的 Agent。
+        let (dir, mut engine, project) = engine_with("cat", "session_id_args = []\n");
         let claude = duolo_core::AgentKind("claude".into());
         let opts = crate::TaskOptions { writer: Some(claude.clone()), reviewer: Some(claude), ..Default::default() };
         let task = engine.create_task_with(&project, "Export orders", &opts).unwrap();

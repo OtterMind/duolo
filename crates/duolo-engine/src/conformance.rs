@@ -84,6 +84,12 @@ fn prompt_arrives_whole_and_is_never_an_option() {
         assert_ne!(resumed.args, blank.args, "{} 不能恢复会话", p.id());
         let by_id = p.launch(Start { role: AgentRole::Writer, resume: true, session: Some(SESSION), prompt: None });
         assert!(by_id.args.iter().any(|a| a.contains(SESSION)), "{} 不能按编号恢复会话", p.id());
+        if p.assigns_session() {
+            let start = Start { role: AgentRole::Writer, resume: false, session: Some(SESSION), prompt: Some("- x") };
+            let launch = p.launch(start);
+            let at = launch.args.iter().position(|a| a.contains(SESSION)).expect("定好的会话编号要交给它");
+            assert!(launch.paste.is_some() || at < launch.args.len() - 1, "{}：编号要在提示词前面", p.id());
+        }
     }
 }
 

@@ -32,8 +32,8 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 - **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
 - **The real CLIs.** The main pane is Claude Code or Codex itself. Duolo doesn't change how they behave.
 - **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
-- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews read-only in a temporary copy, so nothing it does can touch your work. One click sends the findings to Claude.
-- **Switch agents mid-task.** Click the agent icon in the task's top bar to change who writes or who reviews. The new writer continues in the same folder: it gets the request and the recent conversation, and looks at the current changes first.
+- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews in a temporary copy with only read-only tools: Claude can only read files, and Codex runs in its read-only sandbox with connectors and plugins turned off. Nothing it does can touch your work. One click sends the findings to Claude.
+- **Switch agents mid-task.** Click the agent icon in the task's top bar to change who writes or who reviews. The new writer continues in the same folder: it gets the request and the recent conversation, and looks at the current changes first. Switch back within a day and the earlier agent picks up its own conversation, told what happened while it was away. From the command line: `duolo switch <task> --writer codex`.
 - **Projects.** A project is a folder: one git repository, or a folder holding several. Add one (`⌘O`) by opening a folder, creating one, cloning from GitHub, or picking a repository found on your computer. You can also drop a folder on the window. New folders and clones go to `~/DuoloProjects`.
 - **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
 - **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
@@ -71,6 +71,7 @@ cd ~/code/shop
 duolo                                              # open Duolo with this repository
 duolo new "Export orders as CSV, filter by date"   # create a task without opening the app
 duolo ls                                           # list tasks
+duolo switch 3 --writer codex                      # let Codex take over task 3
 duolo tui                                          # terminal UI, handy over SSH
 ```
 

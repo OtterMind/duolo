@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings};
+use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings, TaskId};
 use duolo_engine::{check_environment, Engine, TaskOptions};
 
 #[derive(Debug, Parser)]
@@ -43,6 +43,13 @@ enum Cmd {
         #[arg(short, long)]
         reviewer: Option<String>,
     },
+    Switch {
+        task: u64,
+        #[arg(short, long)]
+        writer: Option<String>,
+        #[arg(short, long)]
+        reviewer: Option<String>,
+    },
     Ls,
     Doctor,
 }
@@ -60,11 +67,26 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("duolo: {}", duolo_core::error::describe(&err));
+            match err.downcast_ref::<Plain>() {
+                Some(Plain(message)) => eprintln!("duolo: {message}"),
+                None => eprintln!("duolo: {}", duolo_core::error::describe(&err)),
+            }
             ExitCode::FAILURE
         }
     }
 }
+
+/// 已经翻译好、原样给用户看的错误（不是程序出了问题）。
+#[derive(Debug)]
+struct Plain(String);
+
+impl std::fmt::Display for Plain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Plain {}
 
 /// 命令行参数。需求可以是列表（`duolo new "- …"`），前面加个空格，不让 clap 当成选项。
 fn args() -> impl Iterator<Item = OsString> {
@@ -115,6 +137,12 @@ fn localized_command() -> clap::Command {
                 .mut_arg("project", |a| a.help(t("cli.help.project")))
                 .mut_arg("writer", |a| a.help(t("cli.help.writer")))
                 .mut_arg("reviewer", |a| a.help(t("cli.help.reviewer")))
+        })
+        .mut_subcommand("switch", |c| {
+            c.about(t("cli.help.switch"))
+                .mut_arg("task", |a| a.help(t("cli.help.task")))
+                .mut_arg("writer", |a| a.help(t("cli.help.switchWriter")))
+                .mut_arg("reviewer", |a| a.help(t("cli.help.switchReviewer")))
         })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
@@ -176,7 +204,7 @@ fn run(cli: Cli) -> Result<()> {
                 Some(id) => {
                     let id = ProjectId(id);
                     if engine.state().project(&id).is_none() {
-                        bail!("{}", tf("cli.noSuchProject", &[("id", &id)]));
+                        bail!(Plain(tf("cli.noSuchProject", &[("id", &id)])));
                     }
                     id
                 }
@@ -189,6 +217,23 @@ fn run(cli: Cli) -> Result<()> {
             println!("{}", tf("cli.taskCreated", &[("id", &id), ("title", &task.title)]));
             println!("  {}", tf("cli.taskBranch", &[("branch", &task.branch)]));
             println!("  {}", t("cli.taskHint"));
+            Ok(())
+        }
+        Some(Cmd::Switch { task, writer, reviewer }) => {
+            if writer.is_none() && reviewer.is_none() {
+                bail!(Plain(t("cli.switchWhat")));
+            }
+            let mut engine = open_engine(paths)?;
+            let id = TaskId(task);
+            // 只改状态：Agent 在桌面应用里跑的话，由它停掉原来的、在打开任务时启动新的。
+            if let Some(kind) = writer.map(AgentKind) {
+                engine.switch_writer(id, kind.clone())?;
+                println!("{}", tf("cli.writerSwitched", &[("id", &id), ("agent", &engine.agents().name(&kind))]));
+            }
+            if let Some(kind) = reviewer.map(AgentKind) {
+                engine.set_reviewer(id, kind.clone())?;
+                println!("{}", tf("cli.reviewerSwitched", &[("id", &id), ("agent", &engine.agents().name(&kind))]));
+            }
             Ok(())
         }
         Some(Cmd::Ls) => {

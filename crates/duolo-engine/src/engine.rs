@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use duolo_agent::{Plugin, Registry, Start};
+use duolo_core::config::{CHANGES_IN_FILE, CHANGES_IN_GIT};
 use duolo_core::process::OneShot;
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
@@ -318,6 +319,7 @@ impl Engine {
     }
 
     /// 换成新的状态，已经不在的任务的进程和缓存一并清掉。
+    /// 状态是准的：别的进程（命令行、手机）换下了这里正在跑的 Agent，就在这里停掉它，没发出去的消息交给接手的。
     fn adopt(&mut self, state: State, stamp: Option<Stamp>) {
         let old = std::mem::replace(&mut self.state, state);
         self.stamp = stamp;
@@ -326,6 +328,19 @@ impl Engine {
             self.reviews.remove(&id);
             self.diffs.remove(id);
             self.forget_task(id);
+        }
+        let gone: Vec<AgentKey> = self
+            .sessions
+            .keys()
+            .filter(|key| self.state.task(key.task).is_some_and(|t| t.agent(key.agent).is_none()))
+            .copied()
+            .collect();
+        for key in gone {
+            self.sessions.remove(&key);
+            self.resuming.remove(&key);
+            self.session_ids.remove(&key);
+            let successor = self.writer_key(key.task).ok();
+            self.hand_over(key, successor);
         }
     }
 
@@ -635,14 +650,15 @@ impl Engine {
         self.check_open(id)?;
         let reviewer = self.reviewer_of(id)?;
         let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
-        let prompt = self.review_prompt(task);
+        let fork = self.fork_of(task);
+        let prompt = self.config.review_prompt_for(&task.base, &fork, &self.reply_language, CHANGES_IN_FILE);
         // config.toml 里写了 review_command 时用它，否则用审阅 Agent 自己的只读审阅命令。
         let command = match &self.config.review_command {
             custom if !custom.is_empty() => self.agents.clean(custom.clone().into()),
             _ => self.agents.review(&reviewer)?,
         };
         let copy = crate::review::copy_dir(&self.paths.reviews(), id.0);
-        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone(), copy)?;
+        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone(), copy, fork)?;
         self.reviews.insert(id, job);
         self.record(id, EventKind::ReviewStarted { reviewer: reviewer.0 });
         Ok(())
@@ -764,16 +780,18 @@ impl Engine {
         Ok(())
     }
 
-    pub(crate) fn review_prompt(&self, task: &Task) -> String {
-        let commit = duolo_git::fork_point(&task.worktree, &task.base).unwrap_or_else(|_| task.base.clone());
-        self.config.review_prompt_for(&task.base, &commit, &self.reply_language)
+    /// 任务从基准分支分出来的提交（算不出来时用基准分支的名字）。
+    pub(crate) fn fork_of(&self, task: &Task) -> String {
+        duolo_git::fork_point(&task.worktree, &task.base).unwrap_or_else(|_| task.base.clone())
     }
 
     /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
     fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
         self.check_open(key.task)?;
-        let (spec, paste_later) = self.session_spec(key, fresh)?;
         let resumed = !fresh && self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
+        // 新开会话时能定编号的，由 Duolo 定：一开始就知道它的会话记录是哪个，不用猜。
+        let assigned = (!resumed && self.plugin_of(key)?.assigns_session()).then(|| uuid::Uuid::new_v4().to_string());
+        let (spec, paste_later) = self.session_spec(key, fresh, assigned.as_deref())?;
         let session = Session::spawn(spec)?;
         self.sessions.insert(key, session);
         if !resumed {
@@ -785,7 +803,6 @@ impl Engine {
             self.queue_message(key, text);
         }
         self.unsettle(key);
-        self.watch_transcript(key, resumed);
         self.session_ids.insert(key, self.next_session_id);
         self.next_session_id += 1;
         if resumed {
@@ -793,22 +810,33 @@ impl Engine {
         } else {
             self.resuming.remove(&key);
         }
-        // 重新开始的不再是以前那次会话，编号等读到新的会话记录再记。
+        // 换回来的 Agent 接回了原来的会话：准备好之后先告诉它这期间发生了什么。重新开始的话交接说明里都有了。
+        let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent));
+        if let Some(note) = spec.and_then(|a| a.resume_note.clone()).filter(|_| resumed) {
+            self.queue_message(key, note);
+        }
+        // 重新开始的不再是以前那次会话：记下定好的编号，定不了的等读到新的会话记录再记。
         let stale = self
             .state
             .task(key.task)
             .and_then(|t| t.agent(key.agent))
-            .is_some_and(|a| !a.launched || (!resumed && a.session.is_some()));
+            .is_some_and(|a| !a.launched || (!resumed && a.session != assigned) || a.resume_note.is_some());
         if stale {
             self.update(|state| {
                 if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
                     agent.launched = true;
+                    agent.resume_note = None;
                     if !resumed {
-                        agent.session = None;
+                        agent.session.clone_from(&assigned);
                     }
                 }
                 Ok(())
             })?;
+        }
+        // 定好编号的新会话要从头读，不能当成恢复的（恢复的会跳过已有的内容）。
+        self.watch_transcript(key, resumed);
+        if assigned.is_some() {
+            self.share_sessions(key.task);
         }
         Ok(())
     }
@@ -887,7 +915,13 @@ impl Engine {
     }
 
     /// 启动 Agent 的命令。第二项是要等 Agent 准备好后再粘贴过去的第一句话（见下面的说明），一般是 None。
-    fn session_spec(&self, key: AgentKey, fresh: bool) -> Result<(SessionSpec, Option<String>)> {
+    /// `assigned` 是新开会话时 Duolo 给它定的会话编号。
+    fn session_spec(
+        &self,
+        key: AgentKey,
+        fresh: bool,
+        assigned: Option<&str>,
+    ) -> Result<(SessionSpec, Option<String>)> {
         let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
         let agent = task.agent(key.agent).context("agent not found")?;
         let plugin = self.agents.get(&agent.kind)?;
@@ -896,9 +930,15 @@ impl Engine {
             _ if resume => None,
             _ if agent.prompt.is_some() => agent.prompt.clone(),
             AgentRole::Writer => Some(task.prompt.clone()).filter(|p| !p.is_empty()),
-            AgentRole::Reviewer => Some(self.review_prompt(task)),
+            AgentRole::Reviewer => Some(self.config.review_prompt_for(
+                &task.base,
+                &self.fork_of(task),
+                &self.reply_language,
+                CHANGES_IN_GIT,
+            )),
         };
-        let start = Start { role: agent.role, resume, session: agent.session.as_deref(), prompt: prompt.as_deref() };
+        let session = if resume { agent.session.as_deref() } else { assigned };
+        let start = Start { role: agent.role, resume, session, prompt: prompt.as_deref() };
         let launch = plugin.launch(start);
         let screen = plugin.screen();
         let spec = SessionSpec {
@@ -1292,7 +1332,9 @@ mod tests {
         std::fs::write(worktree.join("orders.csv"), "id;total\n").unwrap();
         drop(engine);
         let home = dir.path().join("home");
-        let script = "cat orders.csv && echo scribbled > orders.csv && touch junk && pwd";
+        // 改动写在 DUOLO_REVIEW.md 里，它不算副本里的改动。
+        let script = "grep -q '+id;total' DUOLO_REVIEW.md && test -z \"$(git status --porcelain)\" && \
+                      cat orders.csv && echo scribbled > orders.csv && touch junk && pwd";
         std::fs::write(home.join("config.toml"), format!("review_command = [\"sh\", \"-c\", {script:?}]\n")).unwrap();
         let mut engine = Engine::open(Paths::at(&home)).unwrap();
         engine.start_review(id).unwrap();

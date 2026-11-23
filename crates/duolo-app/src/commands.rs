@@ -287,8 +287,10 @@ pub async fn start_reviewer(state: State<'_, AppState>, task: u64) -> Res<u32> {
 
 /// 换写代码的 Agent：原来的停下，`kind` 在同一个 worktree 里接着做。返回接手的 Agent。
 #[tauri::command]
-pub async fn switch_writer(state: State<'_, AppState>, task: u64, kind: String) -> Res<u32> {
-    Ok(state.engine().switch_writer(TaskId(task), AgentKind(kind))?.agent)
+pub async fn switch_writer(app: AppHandle, task: u64, kind: String) -> Res<u32> {
+    blocking(app, move |state| ops::switch_writer(&state.engine, TaskId(task), AgentKind(kind)))
+        .await
+        .map(|key| key.agent)
 }
 
 /// 换审阅的 Agent，下一次审阅起生效。

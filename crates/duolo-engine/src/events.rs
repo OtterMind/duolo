@@ -40,6 +40,14 @@ impl EventLog {
         Ok(event)
     }
 
+    /// 最后一条事件的编号，还没有事件时为 0。
+    pub fn last_seq(&mut self, task: TaskId) -> u64 {
+        if let Some(next) = self.next_seq.get(&task) {
+            return next - 1;
+        }
+        self.read(task).ok().and_then(|events| events.last().map(|e| e.seq)).unwrap_or(0)
+    }
+
     /// 第 `after` 条之后的事件（`after` 为 0 时是全部）。
     pub fn since(&self, task: TaskId, after: u64) -> Result<Vec<TaskEvent>> {
         Ok(self.read(task)?.into_iter().filter(|e| e.seq > after).collect())

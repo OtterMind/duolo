@@ -13,25 +13,27 @@ prompt = "argument"
 separator = "--"
 resume_args = ["--continue"]
 resume_session_args = ["--resume", "{session}"]
+session_id_args = ["--session-id", "{session}"]
 # 在终端里审阅时用计划模式：只看不改，要改文件得先让用户同意。
 review_args = ["--permission-mode", "plan"]
 
-# 只读：只有读文件和运行命令的工具，命令只放行看 git 改动的，其他的一律拒绝，不会停下来问。
-# `--allowedTools` 是在用户自己的设置上追加，所以还要用 `--disallowedTools` 拦住写文件的工具。
-# 这两个参数都会吞掉后面的参数，提示词前面必须有 `--`。
+# 只读：只给读文件的工具。`--restricted` 不读用户和项目的设置（那里可能放开了命令和写文件），
+# `--strict-mcp-config` 不接 MCP 服务（它们的工具可能会改东西）。改动由 Duolo 写进 DUOLO_REVIEW.md，不用运行 git。
+# `--tools` 之类会吞掉后面的参数，提示词前面必须有 `--`。
 [review]
 args = [
   "-p",
+  "--restricted",
+  "--strict-mcp-config",
   "--no-session-persistence",
   "--permission-mode", "dontAsk",
-  "--tools", "Read,Grep,Glob,Bash",
-  "--disallowedTools", "Edit,Write,NotebookEdit",
-  "--allowedTools", "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)",
+  "--tools", "Read,Grep,Glob",
+  "--allowedTools", "Read,Grep,Glob",
 ]
 separator = "--"
 
 [quick]
-args = ["-p", "--no-session-persistence", "--model", "haiku"]
+args = ["-p", "--no-session-persistence", "--strict-mcp-config", "--model", "haiku"]
 separator = "--"
 
 [screen]

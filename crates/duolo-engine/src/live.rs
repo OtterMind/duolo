@@ -537,7 +537,7 @@ mod tests {
     fn batch_file_agent_gets_a_multi_line_prompt() {
         let (dir, mut engine, project) = engine("cat");
         let agent = dir.path().join("agent.sh");
-        std::fs::write(&agent, "sleep 1; echo \"args:$#\"; while read -r line; do echo \"got:$line\"; done\n").unwrap();
+        std::fs::write(&agent, "sleep 1; echo \"args:$*\"; while read -r line; do echo \"got:$line\"; done\n").unwrap();
         let script = dir.path().join("claude.cmd");
         std::fs::write(&script, "@sh \"%~dp0agent.sh\" %*\r\n").unwrap();
         let config = format!("[agents.claude]\ncommand = {:?}\n", script.display().to_string());
@@ -547,7 +547,9 @@ mod tests {
         let task = engine.create_task(&project, "Export orders\nas CSV & \"Excel\" 100%").unwrap();
         let key = engine.writer_key(task).unwrap();
         engine.start_agent(key).unwrap();
-        wait_screen(&mut engine, key, "args:0");
+        // 参数里只有 Duolo 定的会话编号，需求等它准备好后粘贴。
+        let id = engine.state().task(task).unwrap().agents[0].session.clone().unwrap();
+        wait_screen(&mut engine, key, &format!("args:--session-id {id}\n"));
         wait_screen(&mut engine, key, "got:Export orders");
         wait_screen(&mut engine, key, "got:as CSV & \"Excel\" 100%");
         engine.close_task(task).unwrap();

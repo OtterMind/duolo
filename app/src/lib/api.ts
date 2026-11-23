@@ -33,6 +33,8 @@ export interface Task {
   /** 正在后台审阅时的开始时间（Unix 秒）。 */
   reviewingSince: number | null;
   review: Review | null;
+  /** 换回来时能接着原来会话的 Agent。 */
+  resumable: string[];
 }
 
 export interface Review {

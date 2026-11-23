@@ -54,6 +54,7 @@
   "task.agents": "{writer} schreibt, {reviewer} prüft. Klicken zum Ändern",
   "task.switchWriterTitle": "Zu {agent} wechseln?",
   "task.switchWriterBody": "{from} wird gestoppt und {to} arbeitet im selben Ordner weiter. {to} erhält die Anforderung und den letzten Verlauf und sieht sich zuerst die aktuellen Änderungen an.",
+  "task.switchBackBody": "{from} wird gestoppt und {to} setzt sein früheres Gespräch in dieser Aufgabe fort. {to} erfährt, was in der Zwischenzeit gesagt und geändert wurde.",
   "task.switchWriterAction": "Wechseln",
   "review.button": "Review",
   "review.buttonTitle": "{agent} prüft die Änderungen dieser Aufgabe im Hintergrund, nur lesend (⌘⇧R)",

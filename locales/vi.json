@@ -54,6 +54,7 @@
   "task.agents": "{writer} viết, {reviewer} review. Nhấn để đổi",
   "task.switchWriterTitle": "Chuyển sang {agent}?",
   "task.switchWriterBody": "{from} sẽ dừng và {to} sẽ tiếp tục trong cùng thư mục. {to} nhận yêu cầu và cuộc trò chuyện gần đây, rồi xem các thay đổi hiện tại trước.",
+  "task.switchBackBody": "{from} sẽ dừng và {to} tiếp tục cuộc trò chuyện trước đó của nó trong tác vụ này. {to} được cho biết những gì đã được nói và thay đổi trong lúc vắng mặt.",
   "task.switchWriterAction": "Chuyển",
   "review.button": "Xem xét",
   "review.buttonTitle": "Để {agent} xem xét thay đổi của tác vụ này ở chế độ chỉ đọc, chạy nền (⌘⇧R)",

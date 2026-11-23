@@ -54,6 +54,7 @@
   "task.agents": "{writer} yazıyor, {reviewer} inceliyor. Değiştirmek için tıklayın",
   "task.switchWriterTitle": "{agent} ajanına geçilsin mi?",
   "task.switchWriterBody": "{from} durdurulacak ve {to} aynı klasörde devam edecek. {to} isteği ve son konuşmayı alır, önce mevcut değişikliklere bakar.",
+  "task.switchBackBody": "{from} durdurulacak ve {to} bu görevdeki önceki konuşmasına devam edecek. {to} yokken söylenenler ve yapılan değişiklikler kendisine iletilir.",
   "task.switchWriterAction": "Geç",
   "review.button": "İncele",
   "review.buttonTitle": "{agent} bu görevin değişikliklerini arka planda, salt okunur olarak inceler (⌘⇧R)",

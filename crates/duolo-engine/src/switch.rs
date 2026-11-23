@@ -100,6 +100,18 @@ impl Engine {
         Ok(key)
     }
 
+    /// 现在换过去能接回原来会话的 Agent（界面据此说明换过去会怎样）。
+    pub fn resumable_writers(&self, id: TaskId) -> Vec<AgentKind> {
+        let Some(task) = self.state.task(id) else { return Vec::new() };
+        let mut kinds: Vec<AgentKind> = Vec::new();
+        for kind in task.retired.iter().map(|a| &a.kind) {
+            if !kinds.contains(kind) && self.revivable(task, kind).is_some() {
+                kinds.push(kind.clone());
+            }
+        }
+        kinds
+    }
+
     /// 可以接回原来会话的、换下来的同一种 Agent：最近一次换下来的，一天以内，记得会话编号，插件能按编号恢复。
     fn revivable<'a>(&self, task: &'a Task, kind: &AgentKind) -> Option<&'a AgentSpec> {
         let plugin = self.agents().get(kind).ok()?;
@@ -306,6 +318,7 @@ mod tests {
         std::fs::remove_file(worktree.join("started-claude")).unwrap();
 
         let codex = engine.switch_writer(id, AgentKind("codex".into())).unwrap();
+        assert_eq!(engine.resumable_writers(id), [AgentKind("claude".into())], "界面据此说明会接回原来的会话");
         let left = engine.state().task(id).unwrap().retired[0].left.clone().unwrap();
         assert!(left.commit.is_some());
         engine.record(

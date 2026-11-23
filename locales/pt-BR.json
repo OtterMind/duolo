@@ -54,6 +54,7 @@
   "task.agents": "{writer} escreve, {reviewer} revisa. Clique para trocar",
   "task.switchWriterTitle": "Trocar para {agent}?",
   "task.switchWriterBody": "{from} vai parar e {to} continuará na mesma pasta. {to} recebe o pedido e a conversa recente, e primeiro examina as alterações atuais.",
+  "task.switchBackBody": "{from} vai parar e {to} retomará a conversa anterior nesta tarefa. {to} fica sabendo o que foi dito e alterado enquanto esteve fora.",
   "task.switchWriterAction": "Trocar",
   "review.button": "Revisar",
   "review.buttonTitle": "O {agent} revisa as alterações desta tarefa em segundo plano, somente leitura (⌘⇧R)",

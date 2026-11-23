@@ -54,6 +54,7 @@
   "task.agents": "{writer} écrit, {reviewer} relit. Cliquez pour changer",
   "task.switchWriterTitle": "Passer à {agent} ?",
   "task.switchWriterBody": "{from} va s'arrêter et {to} continuera dans le même dossier. {to} reçoit la demande et la conversation récente, et examine d'abord les modifications actuelles.",
+  "task.switchBackBody": "{from} va s'arrêter et {to} reprendra sa conversation précédente dans cette tâche. {to} est informé de ce qui a été dit et modifié pendant son absence.",
   "task.switchWriterAction": "Changer",
   "review.button": "Relire",
   "review.buttonTitle": "{agent} relit les modifications de cette tâche en arrière-plan, en lecture seule (⌘⇧R)",

@@ -42,6 +42,8 @@ pub struct TaskView {
     /// 正在后台审阅时的开始时间（Unix 秒）。
     pub reviewing_since: Option<u64>,
     pub review: Option<ReviewView>,
+    /// 换回来时能接着原来会话的 Agent（插件 id）。
+    pub resumable: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -241,6 +243,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             .map(|rel| rel.display().to_string())
             .unwrap_or_default(),
         reviewing_since: engine.review_started_at(task.id),
+        resumable: engine.resumable_writers(task.id).into_iter().map(|kind| kind.0).collect(),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,

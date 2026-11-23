@@ -54,6 +54,7 @@
   "task.agents": "{writer} 写，{reviewer} 审。点击更换",
   "task.switchWriterTitle": "换成 {agent}？",
   "task.switchWriterBody": "{from} 会停下，由 {to} 在同一个文件夹里接着做。{to} 会拿到需求和最近的对话，并先看一遍现在的改动。",
+  "task.switchBackBody": "{from} 会停下，{to} 接着它在这个任务里原来的会话。{to} 会被告知这期间的对话和改动。",
   "task.switchWriterAction": "更换",
   "review.button": "审阅",
   "review.buttonTitle": "让 {agent} 在后台只读审阅这个任务的改动（⌘⇧R）",

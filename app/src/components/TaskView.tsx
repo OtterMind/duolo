@@ -162,7 +162,7 @@ function SwitchMenu({
     const to = agents.find((a) => a.id === id)?.name ?? id;
     onConfirm({
       title: t("task.switchWriterTitle", { agent: to }),
-      body: t("task.switchWriterBody", { from: writer.name, to }),
+      body: t(task.resumable.includes(id) ? "task.switchBackBody" : "task.switchWriterBody", { from: writer.name, to }),
       action: t("task.switchWriterAction"),
       run: async () => {
         await api.switchWriter(task.id, id);

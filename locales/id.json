@@ -54,6 +54,7 @@
   "task.agents": "{writer} menulis, {reviewer} mereview. Klik untuk mengganti",
   "task.switchWriterTitle": "Beralih ke {agent}?",
   "task.switchWriterBody": "{from} akan berhenti dan {to} melanjutkan di folder yang sama. {to} menerima permintaan dan percakapan terbaru, lalu melihat perubahan saat ini terlebih dahulu.",
+  "task.switchBackBody": "{from} akan berhenti dan {to} melanjutkan percakapan sebelumnya di tugas ini. {to} diberi tahu apa yang dibicarakan dan diubah selama ia tidak ada.",
   "task.switchWriterAction": "Beralih",
   "review.button": "Tinjau",
   "review.buttonTitle": "{agent} meninjau perubahan tugas ini di latar belakang, hanya baca (⌘⇧R)",

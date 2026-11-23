@@ -54,6 +54,7 @@
   "task.agents": "{writer} scrive, {reviewer} revisiona. Fai clic per cambiare",
   "task.switchWriterTitle": "Passare a {agent}?",
   "task.switchWriterBody": "{from} si fermerà e {to} continuerà nella stessa cartella. {to} riceve la richiesta e la conversazione recente, e per prima cosa esamina le modifiche attuali.",
+  "task.switchBackBody": "{from} si fermerà e {to} riprenderà la sua conversazione precedente in questa attività. {to} viene informato di cosa è stato detto e cambiato nel frattempo.",
   "task.switchWriterAction": "Cambia",
   "review.button": "Revisiona",
   "review.buttonTitle": "{agent} revisiona le modifiche di questa attività in background, in sola lettura (⌘⇧R)",

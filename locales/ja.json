@@ -54,6 +54,7 @@
   "task.agents": "{writer} が書き、{reviewer} がレビュー。クリックで変更",
   "task.switchWriterTitle": "{agent} に切り替えますか？",
   "task.switchWriterBody": "{from} は停止し、{to} が同じフォルダーで作業を続けます。{to} には要件と最近の会話が渡され、まず現在の変更を確認します。",
+  "task.switchBackBody": "{from} は停止し、{to} がこのタスクでの以前の会話を再開します。{to} には不在の間の会話と変更が伝えられます。",
   "task.switchWriterAction": "切り替える",
   "review.button": "レビュー",
   "review.buttonTitle": "このタスクの変更を {agent} にバックグラウンドで読み取り専用レビューさせる（⌘⇧R）",

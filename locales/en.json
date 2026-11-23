@@ -54,6 +54,7 @@
   "task.agents": "{writer} writes, {reviewer} reviews. Click to change",
   "task.switchWriterTitle": "Switch to {agent}?",
   "task.switchWriterBody": "{from} will stop and {to} will continue in the same folder. {to} gets the requirement and the recent conversation, and looks at the current changes first.",
+  "task.switchBackBody": "{from} will stop and {to} will pick up its earlier conversation in this task. {to} is told what was said and changed while it was away.",
   "task.switchWriterAction": "Switch",
   "review.button": "Review",
   "review.buttonTitle": "Let {agent} review this task's changes in the background, read-only (⌘⇧R)",

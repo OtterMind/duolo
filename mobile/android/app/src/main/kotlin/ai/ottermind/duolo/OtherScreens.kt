@@ -279,7 +279,7 @@ fun Menu(open: Boolean, close: () -> Unit, addComputer: () -> Unit, settings: ()
                 .statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                MenuHeading(t("mobile.menu.repos"))
+                MenuHeading(t("mobile.menu.projects"))
                 model.overview?.projects.orEmpty().forEach { project ->
                     val rows = model.rowsIn(project.id)
                     val waiting = rows.count { it.group == TaskRow.Group.Attention }
@@ -289,7 +289,7 @@ fun Menu(open: Boolean, close: () -> Unit, addComputer: () -> Unit, settings: ()
                         active > 0 -> t("mobile.menu.active", "count" to active) to palette.write
                         else -> null
                     }
-                    MenuItem(R.drawable.ic_repo, project.name, note, project.id == model.currentProject?.id) {
+                    MenuItem(R.drawable.ic_file_directory, project.name, note, project.id == model.currentProject?.id) {
                         model.choose(project.id)
                         close()
                     }

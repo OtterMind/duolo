@@ -32,12 +32,12 @@ struct MenuView: View {
         return VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    heading(t("mobile.menu.repos"))
+                    heading(t("mobile.menu.projects"))
                     ForEach(model.overview?.projects ?? []) { project in
                         let rows = model.rows(in: project.id)
                         let waiting = rows.filter { $0.group == .attention }.count
                         let active = rows.filter { $0.group == .active }.count
-                        item("repo", project.name, selected: project.id == model.currentProject?.id) {
+                        item("file-directory", project.name, selected: project.id == model.currentProject?.id) {
                             if waiting > 0 {
                                 note(t("sidebar.needsYou", ["count": "\(waiting)"]), Palette.wait)
                             } else if active > 0 {

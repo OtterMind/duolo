@@ -1,6 +1,6 @@
 import Foundation
 
-/// 列表上的一行。规则和 Android 一致，样例在 mobile/contract/behavior.json。
+/// 列表上的一行。状态由电脑算好，这里只决定第二行写什么和怎么排；规则和 Android 一致，样例在 mobile/contract/behavior.json。
 public struct TaskRow: Hashable, Sendable, Identifiable {
     public enum Group: String, Sendable, CaseIterable {
         case attention, active, done
@@ -12,6 +12,40 @@ public struct TaskRow: Hashable, Sendable, Identifiable {
         case needsYou, issues(Int), reviewFailed, crashed
         case writing, reviewing
         case passed, reviewed, written, ended, notStarted
+
+        /// 电脑发来的状态码（`TaskState`）；不认识的（更新版本的电脑）当作未启动。
+        public init(code: String, issues: Int) {
+            switch code {
+            case "needs_you": self = .needsYou
+            case "issues": self = .issues(issues)
+            case "review_failed": self = .reviewFailed
+            case "crashed": self = .crashed
+            case "writing": self = .writing
+            case "reviewing": self = .reviewing
+            case "passed": self = .passed
+            case "reviewed": self = .reviewed
+            case "written": self = .written
+            case "ended": self = .ended
+            default: self = .notStarted
+            }
+        }
+
+        /// 状态码，文案是 `state.<code>`。
+        public var code: String {
+            switch self {
+            case .needsYou: "needs_you"
+            case .issues: "issues"
+            case .reviewFailed: "review_failed"
+            case .crashed: "crashed"
+            case .writing: "writing"
+            case .reviewing: "reviewing"
+            case .passed: "passed"
+            case .reviewed: "reviewed"
+            case .written: "written"
+            case .ended: "ended"
+            case .notStarted: "not_started"
+            }
+        }
 
         public var group: Group {
             switch self {
@@ -41,7 +75,7 @@ public struct TaskRow: Hashable, Sendable, Identifiable {
 
     public init(_ task: TaskOverview) {
         self.task = task
-        state = Self.state(task)
+        state = State(code: task.state, issues: task.review?.issues ?? 0)
         let source: String
         switch state {
         case .needsYou:
@@ -57,27 +91,6 @@ public struct TaskRow: Hashable, Sendable, Identifiable {
             source = task.last
         }
         detail = Excerpt.first(source)
-    }
-
-    static func state(_ task: TaskOverview) -> State {
-        if task.status == "needs_input" { return .needsYou }
-        if task.reviewingSince != nil { return .reviewing }
-        if task.status == "running" { return .writing }
-        if task.status == "failed" { return .crashed }
-        // 审阅之后又接着做了：以前的结论不算数。
-        if let review = task.review, !(task.status == "idle" && task.since > review.finishedAt) {
-            if !review.ok { return .reviewFailed }
-            switch review.verdict {
-            case "issues": return .issues(review.issues)
-            case "pass": return .passed
-            default: return .reviewed
-            }
-        }
-        switch task.status {
-        case "idle": return .written
-        case "exited": return .ended
-        default: return .notStarted
-        }
     }
 
     public static func rows(_ tasks: [TaskOverview]) -> [TaskRow] {

@@ -31,8 +31,9 @@ val WireJson = Json {
     explicitNulls = true
 }
 
+/** `color` 是图标的颜色（插件的 `icon_color`，`#rrggbb`）；没有时用文字的颜色。 */
 @Serializable
-data class AgentOption(val kind: String, val name: String)
+data class AgentOption(val kind: String, val name: String, val color: String? = null)
 
 @Serializable
 data class ProjectOverview(val id: String, val name: String, val branch: String = "", val branches: List<String> = emptyList())
@@ -55,6 +56,10 @@ data class TaskOverview(
     val untitled: Boolean = false,
     val branch: String = "",
     val status: String,
+    /** 列表上显示的状态，电脑按 crates/duolo-core/src/wire.rs 的 `TaskState` 算好；不认识的当作未启动。 */
+    val state: String = "not_started",
+    /** 改的是项目里的哪个仓库；项目本身就是仓库时为空。 */
+    val repo: String = "",
     val writer: AgentOption,
     val reviewer: AgentOption,
     val updatedAt: Long,

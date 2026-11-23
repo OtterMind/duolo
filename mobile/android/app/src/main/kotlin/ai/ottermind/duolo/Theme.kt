@@ -1,5 +1,6 @@
 package ai.ottermind.duolo
 
+import ai.ottermind.duolo.core.AgentOption
 import ai.ottermind.duolo.core.Localizer
 import ai.ottermind.duolo.core.TaskRow
 import android.icu.text.DisplayContext
@@ -163,25 +164,50 @@ fun BigButton(text: String, modifier: Modifier = Modifier, primary: Boolean = tr
     Alignment.Center,
 ) { Label(text, weight = FontWeight.Medium, color = if (primary) palette.onGreen else palette.text, align = TextAlign.Center) }
 
+/** `#rrggbb`，读不出来时为空。 */
+fun hexColor(hex: String?): Color? =
+    hex?.takeIf { it.length == 7 && it.startsWith("#") }?.substring(1)?.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
+
+/** 写代码的 Agent 的图标：插件自带的（mobile/scripts/gen-agent-icons.mjs 生成），颜色由电脑发来；没有图标的显示首字母。 */
+@Composable
+fun AgentMark(agent: AgentOption, size: Dp = 14.dp) {
+    val icon = agentIcons[agent.kind]
+    val described = Modifier.semantics { contentDescription = agent.name }
+    if (icon != null) {
+        Icon(icon, described, size, hexColor(agent.color) ?: palette.muted)
+    } else {
+        Box(described.size(size).clip(RoundedCornerShape(3.dp)).background(palette.button), Alignment.Center) {
+            Text(agent.kind.take(1).uppercase(), color = palette.muted, fontSize = (size.value * 0.7f).sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** 项目里的哪个仓库。 */
+@Composable
+fun RepoTag(name: String) = Label(
+    name, Modifier.clip(RoundedCornerShape(5.dp)).background(palette.raised).padding(horizontal = 6.dp, vertical = 1.dp),
+    size = 12.sp, color = palette.muted, maxLines = 1,
+)
+
 /** 任务状态的颜色、图标和名字，列表和详情都用这一份。 */
 data class StatusStyle(val icon: Int, val color: Color, val label: String, val active: Boolean)
 
 @Composable
 fun statusStyle(state: TaskRow.State, t: Localizer): StatusStyle {
     val p = palette
-    val (icon, color, label) = when (state) {
-        TaskRow.State.NeedsYou -> Triple(R.drawable.ic_question, p.wait, t("status.needs_input"))
-        is TaskRow.State.Issues -> Triple(R.drawable.ic_issue_opened, p.bad, t("mobile.state.issues", "count" to state.count))
-        TaskRow.State.ReviewFailed -> Triple(R.drawable.ic_issue_opened, p.bad, t("review.failed"))
-        TaskRow.State.Crashed -> Triple(R.drawable.ic_x_circle, p.bad, t("status.failed"))
-        TaskRow.State.Writing -> Triple(R.drawable.ic_pencil, p.write, t("mobile.state.writing"))
-        TaskRow.State.Reviewing -> Triple(R.drawable.ic_eye, p.review, t("mobile.state.reviewing"))
-        TaskRow.State.Passed -> Triple(R.drawable.ic_check_circle, p.greenText, t("mobile.state.passed"))
-        TaskRow.State.Reviewed -> Triple(R.drawable.ic_check_circle, p.gray, t("mobile.state.reviewed"))
-        TaskRow.State.Written -> Triple(R.drawable.ic_check_circle, p.gray, t("mobile.state.written"))
-        TaskRow.State.Ended -> Triple(R.drawable.ic_skip, p.gray, t("status.exited"))
-        TaskRow.State.NotStarted -> Triple(R.drawable.ic_circle, p.gray, t("status.not_started"))
+    val (icon, color) = when (state) {
+        TaskRow.State.NeedsYou -> R.drawable.ic_question to p.wait
+        is TaskRow.State.Issues, TaskRow.State.ReviewFailed -> R.drawable.ic_issue_opened to p.bad
+        TaskRow.State.Crashed -> R.drawable.ic_x_circle to p.bad
+        TaskRow.State.Writing -> R.drawable.ic_pencil to p.write
+        TaskRow.State.Reviewing -> R.drawable.ic_eye to p.review
+        TaskRow.State.Passed -> R.drawable.ic_check_circle to p.greenText
+        TaskRow.State.Reviewed, TaskRow.State.Written -> R.drawable.ic_check_circle to p.gray
+        TaskRow.State.Ended -> R.drawable.ic_skip to p.gray
+        TaskRow.State.NotStarted -> R.drawable.ic_circle to p.gray
     }
+    // 文案和电脑共用 state.*。
+    val label = t("state.${state.code}", "count" to ((state as? TaskRow.State.Issues)?.count ?: 0))
     return StatusStyle(icon, color, label, state.group == TaskRow.Group.Active)
 }
 

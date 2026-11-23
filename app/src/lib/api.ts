@@ -3,6 +3,20 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 
 export type Status = "not_started" | "running" | "needs_input" | "idle" | "exited" | "failed";
+
+/** 任务在列表上的状态：写代码的 Agent 和审阅合在一起，由后端算好（duolo-core/src/wire.rs 的 TaskState），和手机端一致。 */
+export type TaskState =
+  | "needs_you"
+  | "issues"
+  | "review_failed"
+  | "crashed"
+  | "writing"
+  | "reviewing"
+  | "passed"
+  | "reviewed"
+  | "written"
+  | "ended"
+  | "not_started";
 export type Role = "writer" | "reviewer";
 
 export interface Agent {
@@ -33,6 +47,7 @@ export interface Task {
   /** 正在后台审阅时的开始时间（Unix 秒）。 */
   reviewingSince: number | null;
   review: Review | null;
+  state: TaskState;
   /** 换回来时能接着原来会话的 Agent。 */
   resumable: string[];
 }

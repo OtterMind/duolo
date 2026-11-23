@@ -105,6 +105,45 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
+extension Color {
+    /// `#rrggbb`，读不出来时为空。
+    init?(hex: String) {
+        guard hex.hasPrefix("#"), hex.count == 7, let value = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+        self.init(red: Double(value >> 16 & 0xFF) / 255, green: Double(value >> 8 & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
+    }
+}
+
+/// 写代码的 Agent 的图标：插件自带的（mobile/scripts/gen-agent-icons.mjs 生成），颜色由电脑发来；没有图标的显示首字母。
+struct AgentMark: View {
+    let agent: AgentOption
+    var size: CGFloat = 14
+
+    var body: some View {
+        Group {
+            if UIImage(named: "agent-\(agent.kind)") != nil {
+                Image("agent-\(agent.kind)").renderingMode(.template).resizable().scaledToFit()
+                    .foregroundStyle(agent.color.flatMap(Color.init(hex:)) ?? Palette.muted)
+            } else {
+                Text(agent.kind.prefix(1).uppercased()).font(.system(size: size * 0.72, weight: .semibold)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.button, in: .rect(cornerRadius: 3))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(agent.name)
+    }
+}
+
+/// 项目里的哪个仓库。
+struct RepoTag: View {
+    let name: String
+
+    var body: some View {
+        Text(name).font(.app(12, relativeTo: .caption)).foregroundStyle(Palette.muted).lineLimit(1)
+            .padding(.horizontal, 6).padding(.vertical, 1).background(Palette.raised, in: .rect(cornerRadius: 5))
+            .fixedSize()
+    }
+}
+
 /// 任务状态的颜色、图标和名字，列表和详情都用这一份。
 struct StatusStyle {
     let icon: String
@@ -114,18 +153,21 @@ struct StatusStyle {
 
     init(_ state: TaskRow.State, _ t: Localizer) {
         active = state.group == .active
+        // 文案和电脑共用 state.*。
+        var issues = 0
+        if case .issues(let n) = state { issues = n }
+        label = t("state.\(state.code)", ["count": "\(issues)"])
         switch state {
-        case .needsYou: (icon, color, label) = ("question", Palette.wait, t("status.needs_input"))
-        case .issues(let n): (icon, color, label) = ("issue-opened", Palette.bad, t("mobile.state.issues", ["count": "\(n)"]))
-        case .reviewFailed: (icon, color, label) = ("issue-opened", Palette.bad, t("review.failed"))
-        case .crashed: (icon, color, label) = ("x-circle", Palette.bad, t("status.failed"))
-        case .writing: (icon, color, label) = ("pencil", Palette.write, t("mobile.state.writing"))
-        case .reviewing: (icon, color, label) = ("eye", Palette.review, t("mobile.state.reviewing"))
-        case .passed: (icon, color, label) = ("check-circle", Palette.greenText, t("mobile.state.passed"))
-        case .reviewed: (icon, color, label) = ("check-circle", Palette.gray, t("mobile.state.reviewed"))
-        case .written: (icon, color, label) = ("check-circle", Palette.gray, t("mobile.state.written"))
-        case .ended: (icon, color, label) = ("skip", Palette.gray, t("status.exited"))
-        case .notStarted: (icon, color, label) = ("circle", Palette.gray, t("status.not_started"))
+        case .needsYou: (icon, color) = ("question", Palette.wait)
+        case .issues: (icon, color) = ("issue-opened", Palette.bad)
+        case .reviewFailed: (icon, color) = ("issue-opened", Palette.bad)
+        case .crashed: (icon, color) = ("x-circle", Palette.bad)
+        case .writing: (icon, color) = ("pencil", Palette.write)
+        case .reviewing: (icon, color) = ("eye", Palette.review)
+        case .passed: (icon, color) = ("check-circle", Palette.greenText)
+        case .reviewed, .written: (icon, color) = ("check-circle", Palette.gray)
+        case .ended: (icon, color) = ("skip", Palette.gray)
+        case .notStarted: (icon, color) = ("circle", Palette.gray)
         }
     }
 }

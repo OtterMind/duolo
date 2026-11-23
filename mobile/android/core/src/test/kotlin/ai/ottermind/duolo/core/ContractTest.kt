@@ -147,9 +147,10 @@ class BehaviorContractTest {
     @Test
     fun rows() {
         for (c in contract.at("rows").jsonArray) {
-            val row = TaskRow(task(c.at("task")))
+            // 状态由电脑算好（Rust 的测试核对规则），这里核对分组和第二行。
+            val row = TaskRow(task(JsonObject(c.at("task").jsonObject + ("state" to c.at("state")))))
             val name = c.at("name").string
-            assertEquals(name, c.at("state").string, row.state::class.simpleName!!.replaceFirstChar { it.lowercase() })
+            assertEquals(name, c.at("state").string, row.state.code)
             assertEquals(name, c.at("group").string, row.group.name.lowercase())
             assertEquals(name, c.at("detail").string, row.detail)
         }
@@ -236,7 +237,7 @@ class BehaviorContractTest {
             assertEquals(code, keys("en"), keys(code))
         }
         val zh = Localizer("zh-CN") { dir.resolve(it).inputStream() }
-        assertEquals("2 个问题", zh("mobile.state.issues", "count" to 2))
+        assertEquals("2 个问题", zh("state.issues", "count" to 2))
         assertEquals("no.such.key", zh("no.such.key"))
         assertTrue("weird" in zh.error("weird"))
     }

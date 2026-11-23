@@ -39,6 +39,8 @@ pub(crate) struct LiveState {
     watchers: HashMap<AgentKey, Watch>,
     /// 上次记下的状态和提示，变了才记新事件。
     status: HashMap<AgentKey, String>,
+    /// 记下的状态是什么时候变成的（Unix 毫秒）。
+    status_since: HashMap<AgentKey, u64>,
     /// 刚变成的状态和变的时间：稳定一会儿才记，避免界面重绘时"运行中 / 空闲"来回跳。
     settling: HashMap<AgentKey, (String, Instant)>,
     prompt: HashMap<AgentKey, OpenPrompt>,
@@ -70,6 +72,7 @@ impl LiveState {
             fresh: Vec::new(),
             watchers: HashMap::new(),
             status: HashMap::new(),
+            status_since: HashMap::new(),
             settling: HashMap::new(),
             prompt: HashMap::new(),
             diff: HashMap::new(),
@@ -88,6 +91,11 @@ impl Engine {
         self.poll_agent_states();
         self.poll_diffs();
         std::mem::take(&mut self.live.fresh)
+    }
+
+    /// Agent 进入现在这个状态的时间（Unix 毫秒）；这次启动之后还没记过时为空。
+    pub fn status_since(&self, key: AgentKey) -> Option<u64> {
+        self.live.status_since.get(&key).copied()
     }
 
     /// 任务第 `after` 条之后的事件（断线重连时补齐用）。
@@ -253,6 +261,7 @@ impl Engine {
                 if urgent || since.elapsed() >= STATUS_SETTLE {
                     self.live.settling.remove(&key);
                     self.live.status.insert(key, code.to_string());
+                    self.live.status_since.insert(key, crate::events::now_millis());
                     self.record(key.task, EventKind::Status { agent: key.agent, status: code.into() });
                 }
             }
@@ -428,6 +437,7 @@ impl Engine {
     pub(crate) fn hand_over(&mut self, key: AgentKey, successor: Option<AgentKey>) {
         self.live.watchers.remove(&key);
         self.live.status.remove(&key);
+        self.live.status_since.remove(&key);
         self.live.settling.remove(&key);
         self.live.prompt.remove(&key);
         self.live.settled.remove(&key);
@@ -440,6 +450,7 @@ impl Engine {
     pub(crate) fn forget_task(&mut self, task: TaskId) {
         self.live.watchers.retain(|k, _| k.task != task);
         self.live.status.retain(|k, _| k.task != task);
+        self.live.status_since.retain(|k, _| k.task != task);
         self.live.settling.retain(|k, _| k.task != task);
         self.live.prompt.retain(|k, _| k.task != task);
         self.live.pending.retain(|k, _| k.task != task);

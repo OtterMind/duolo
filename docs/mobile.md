@@ -50,7 +50,7 @@ server/dev/mobile-sandbox.ts   联调沙箱：真的服务端 + 模拟电脑
 
 | `type` | 用途 |
 |---|---|
-| `overview { rev, projects, tasks, … }` | 列表页的全部内容，整份替换；`rev` 比手机上的旧就忽略 |
+| `overview { rev, projects, tasks, … }` | 列表页的全部内容，整份替换；`rev` 比手机上的旧就忽略。每个任务带着电脑算好的 `state`（见下一节） |
 | `events { task, events, latest }` | 任务的事件，编号连续；`latest` 是电脑上最后一条 |
 | `review { task, finishedAt, output }` | 最近一次审阅的全文，`fetch` 时一起发 |
 | `result { id, result }` | 命令的结果 |
@@ -63,6 +63,20 @@ server/dev/mobile-sandbox.ts   联调沙箱：真的服务端 + 模拟电脑
 4. **回答要核对提示**：`Answer.prompt` 不是现在这条、或者没有这个选项，回 `promptChanged`（`Engine::answer` 已经这样做）。手机发来的 `Answer` 没带 `prompt` 一律拒绝。
 5. 一条消息加密后不超过服务器的上限（默认 256 KB）：`events` 分页，一次最多 200 条，超长的正文截断。
 6. 收到解不开的消息：确认掉，不处理。
+
+## 和电脑端保持一致
+
+- **任务状态只算一次**：`duolo-core/src/wire.rs` 的 `TaskState::of` 把写代码的 Agent 的状态和审阅结论合成一个状态，
+  桌面快照（`view.rs` 的 `TaskView.state`）和发给手机的总览都带着它，电脑侧边栏和两个手机端都不自己推导。
+  规则的样例在 `contract/behavior.json` 的 `rows`，由 Rust 的测试核对；手机端的测试只核对分组和第二行。
+- **颜色的意思相同**：琥珀色只表示等你确认；红色是要你处理的问题（审出问题、审阅失败、异常退出）；
+  绿色只表示审阅通过；蓝色在写，紫色在审；灰色是没有下一步（写完了、审完了、已结束）。
+- **文案相同**：状态名都是 `state.<code>`，"N 个任务在等你确认"都是 `sidebar.waiting`，都叫"项目"。
+- **项目**：两边的项目和顺序一样（`state.json` 里的顺序）。电脑把所有项目排开、项目内按创建先后，行不会跳；
+  手机一次看一个项目、按状态排（要处理 → 进行中 → 完成）。电脑顶部和手机列表顶部都有跨项目的"在等你确认"入口。
+  任务改的是项目里的某个仓库时，两边都显示仓库标签（`repo`）。
+- **Agent 图标**：来自插件自带的 `icon.svg`，颜色是插件的 `icon_color`（随数据发给手机）。插件有增减时运行
+  `node mobile/scripts/gen-agent-icons.mjs`；没有图标的 Agent 两边都显示首字母。代码里不写死任何 Agent。
 
 ## 端到端加密
 
@@ -109,7 +123,9 @@ server/dev/mobile-sandbox.ts   联调沙箱：真的服务端 + 模拟电脑
 ## 改东西的时候
 
 - 改消息格式：先改 `wire.rs` 和 `contract/wire.json`，三端的测试会告诉你哪里没跟上。
-- 改列表状态、排序、时间线的规则：先改 `contract/behavior.json`，再改两端。
+- 改任务状态的规则：先改 `contract/behavior.json`，再改 `wire.rs` 的 `TaskState`（电脑和手机都用它）；新状态要在
+  `locales/*.json` 加 `state.<code>`，在电脑的 `StatusIcon.tsx` 和两个手机端的 `StatusStyle` 加图标和颜色。
+- 改手机的排序、第二行、时间线的规则：先改 `contract/behavior.json`，再改两端。
 - 两端的 `SyncEngine` 是同样的结构，改一边要同时改另一边和它的测试。
 - 颜色在 `Theme.swift` / `Theme.kt`，深浅成对，两端一致。
 

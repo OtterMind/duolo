@@ -164,9 +164,11 @@ extension JSONValue {
 
     @Test func rows() throws {
         for c in contract["rows"].array {
-            let row = TaskRow(try task(c["task"]))
-            let state = String(describing: row.state).split(separator: "(")[0]
-            #expect(state == c["state"].string, "\(c["name"].string)")
+            // 状态由电脑算好（Rust 的测试核对规则），这里核对分组和第二行。
+            guard case .object(var fields) = c["task"] else { continue }
+            fields["state"] = c["state"]
+            let row = TaskRow(try task(.object(fields)))
+            #expect(row.state.code == c["state"].string, "\(c["name"].string)")
             #expect(row.group.rawValue == c["group"].string, "\(c["name"].string)")
             #expect(row.detail == c["detail"].string, "\(c["name"].string)")
         }
@@ -232,7 +234,7 @@ extension JSONValue {
             #expect(Set(mine.keys) == Set(base.keys), "\(code)")
         }
         let zh = Localizer(code: "zh-CN", directory: dir)
-        #expect(zh("mobile.state.issues", ["count": "2"]) == "2 个问题")
+        #expect(zh("state.issues", ["count": "2"]) == "2 个问题")
         #expect(zh("no.such.key") == "no.such.key")
         #expect(zh.error("promptChanged") != "promptChanged" && zh.error("weird").contains("weird"))
     }

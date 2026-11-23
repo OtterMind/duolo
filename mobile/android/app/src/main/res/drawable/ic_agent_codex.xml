@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 由 mobile/scripts/gen-agent-icons.mjs 从插件的 icon.svg 生成 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="16dp" android:height="16dp" android:viewportWidth="16" android:viewportHeight="16">
+    <path android:strokeColor="#FF000000" android:strokeWidth="1.3" android:strokeLineCap="butt" android:pathData="M14.2 8A6.2 2.9 0 1 0 1.8 8A6.2 2.9 0 1 0 14.2 8Z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="1.3" android:strokeLineCap="butt" android:pathData="M11.1 13.369A6.2 2.9 60 1 0 4.9 2.631A6.2 2.9 60 1 0 11.1 13.369Z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="1.3" android:strokeLineCap="butt" android:pathData="M4.9 13.369A6.2 2.9 120 1 0 11.1 2.631A6.2 2.9 120 1 0 4.9 13.369Z" />
+</vector>

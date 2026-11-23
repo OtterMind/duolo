@@ -191,7 +191,7 @@ struct TaskView: View {
 
     private func activityText(_ row: TaskRow) -> String {
         let t = model.t
-        if row.state == .reviewing { return "\(t("mobile.state.reviewing")) · \(row.task.reviewer.name)" }
+        if row.state == .reviewing { return "\(t("state.reviewing")) · \(row.task.reviewer.name)" }
         guard let step = timeline.activity, !step.target.isEmpty else { return t("mobile.working", ["agent": row.task.writer.name]) }
         return "\(StepsSheet.label(step.kind, t)) \(step.target)"
     }

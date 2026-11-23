@@ -5,10 +5,13 @@ import Foundation
 public struct AgentOption: Codable, Hashable, Sendable {
     public var kind: String
     public var name: String
+    /// 图标的颜色（插件的 `icon_color`，`#rrggbb`）；没有时用文字的颜色。
+    public var color: String?
 
-    public init(kind: String, name: String) {
+    public init(kind: String, name: String, color: String? = nil) {
         self.kind = kind
         self.name = name
+        self.color = color
     }
 }
 
@@ -79,6 +82,10 @@ public struct TaskOverview: Codable, Hashable, Sendable, Identifiable {
     public var untitled: Bool
     public var branch: String
     public var status: String
+    /// 列表上显示的状态，电脑按 crates/duolo-core/src/wire.rs 的 `TaskState` 算好；不认识的当作未启动。
+    public var state: String
+    /// 改的是项目里的哪个仓库；项目本身就是仓库时为空。
+    public var repo: String
     public var writer: AgentOption
     public var reviewer: AgentOption
     public var updatedAt: Int64
@@ -98,6 +105,8 @@ public struct TaskOverview: Codable, Hashable, Sendable, Identifiable {
         untitled = try c.value(.untitled, or: false)
         branch = try c.value(.branch, or: "")
         status = try c.decode(String.self, forKey: .status)
+        state = try c.value(.state, or: "not_started")
+        repo = try c.value(.repo, or: "")
         writer = try c.decode(AgentOption.self, forKey: .writer)
         reviewer = try c.decode(AgentOption.self, forKey: .reviewer)
         updatedAt = try c.decode(Int64.self, forKey: .updatedAt)

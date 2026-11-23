@@ -16,6 +16,9 @@
   --danger: #e0716c;
   --ins: #8fc286;
   --ok: #5bb98b;
+  /* 任务状态：在写、在审（和手机端同样的意思）。 */
+  --writing: #5cb8ff;
+  --reviewing: #b69cff;
   --focus: #6e9bf5;
   --claude: #d97757;
   --del: #e0716c;
@@ -364,27 +367,20 @@ body.is-resizing * {
 .review-chip:hover {
   filter: brightness(1.25);
 }
-.review-chip.is-running {
-  animation: pulse 1.4s ease-in-out infinite;
-}
-.review-chip.is-pass {
-  background: rgba(91, 185, 139, 0.12);
-  color: #7fcfa6;
-}
-.review-chip.is-issues {
-  background: rgba(229, 163, 58, 0.12);
-  color: #f0c27a;
-}
-.review-chip.is-failed {
-  background: rgba(224, 113, 108, 0.12);
-  color: var(--danger);
-}
 .status-glyph {
   flex: none;
   color: var(--dim);
 }
-.status-glyph.is-done {
+.status-glyph.is-passed {
   color: var(--ok);
+}
+.state-issues {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--danger);
+  font: 11px var(--sans);
+  font-variant-numeric: tabular-nums;
 }
 .status-glyph.is-failed {
   color: var(--danger);
@@ -557,6 +553,12 @@ body.is-resizing * {
   border: 1.75px solid #3a3a3a;
   border-top-color: var(--claude);
   animation: spin 0.9s linear infinite;
+}
+.status-running.is-writing {
+  border-top-color: var(--writing);
+}
+.status-running.is-reviewing {
+  border-top-color: var(--reviewing);
 }
 .status-needs_input {
   width: 7px;

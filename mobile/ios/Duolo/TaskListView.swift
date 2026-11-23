@@ -45,6 +45,7 @@ struct TaskListView: View {
                 if searching { searchBar } else { header }
                 filters
                 LinkNotice()
+                if !searching { waitingBanner }
                 list
             }
             .background(Palette.bg)
@@ -94,7 +95,7 @@ struct TaskListView: View {
             .accessibilityLabel(t("mobile.menu.title"))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Icon("repo", size: 16).foregroundStyle(Palette.muted)
+                    Icon("file-directory", size: 16).foregroundStyle(Palette.muted)
                     Text(model.currentProject?.name ?? "Duolo").font(.app(17, .semibold)).lineLimit(1)
                 }
                 HStack(spacing: 6) {
@@ -172,6 +173,29 @@ struct TaskListView: View {
         }
     }
 
+    /// 所有项目里在等你确认的任务，和电脑侧边栏顶上的那条一样；点了打开最近的一个，需要时换到它的项目。
+    @ViewBuilder private var waitingBanner: some View {
+        let waiting = model.rows.filter { $0.state == .needsYou }
+        if let next = waiting.first {
+            Button {
+                model.choose(project: next.task.project)
+                path = [next.id]
+            } label: {
+                HStack(spacing: 10) {
+                    Circle().fill(Palette.wait).frame(width: 8, height: 8)
+                    Text(model.t("sidebar.waiting", ["count": "\(waiting.count)"])).font(.app(14, .medium, relativeTo: .subheadline))
+                    Spacer(minLength: 8)
+                    Icon("chevron-right", size: 14).foregroundStyle(Palette.muted)
+                }
+                .padding(.horizontal, 14).frame(minHeight: 44)
+                .background(Palette.wait.opacity(0.1), in: .rect(cornerRadius: 12))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16).padding(.vertical, 4)
+        }
+    }
+
     @ViewBuilder private var list: some View {
         let t = model.t
         if model.overview == nil {
@@ -220,7 +244,12 @@ struct TaskRowView: View {
             StatusBadge(style: style)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(model.title(row.task)).font(.app(16, .semibold)).lineLimit(1)
+                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。
+                    HStack(spacing: 6) {
+                        AgentMark(agent: row.task.writer).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
+                        Text(model.title(row.task)).font(.app(16, .semibold)).lineLimit(1)
+                        if !row.task.repo.isEmpty { RepoTag(name: row.task.repo) }
+                    }
                     Spacer(minLength: 0)
                     Text(style.label).font(.app(13, .semibold, relativeTo: .footnote)).foregroundStyle(style.color).lineLimit(1).layoutPriority(1)
                 }

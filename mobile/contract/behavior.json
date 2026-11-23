@@ -1,5 +1,5 @@
 {
-  "comment": "两个手机端必须一致的行为。Swift 和 Kotlin 的测试都读这一份。",
+  "comment": "必须一致的行为。rows 的状态由 Rust（wire.rs 的 TaskState）测；手机端拿样例里的 state 测分组和第二行。Swift 和 Kotlin 的测试都读这一份。",
   "preview": [
     { "in": "", "out": "" },
     { "in": "Done.", "out": "Done." },
@@ -17,10 +17,10 @@
     {
       "name": "waiting beats everything; shows what it wants to run",
       "task": { "status": "needs_input", "since": 10, "last": "Done.", "reviewingSince": 5, "prompt": { "seq": 4, "question": "Proceed?", "detail": "pnpm test\nRun tests", "options": ["Yes", "No"] } },
-      "state": "needsYou", "group": "attention", "detail": "pnpm test"
+      "state": "needs_you", "group": "attention", "detail": "pnpm test"
     },
-    { "name": "waiting without detail shows the question", "task": { "status": "needs_input", "since": 10, "last": "x", "prompt": { "seq": 4, "question": "Proceed?", "detail": "", "options": ["Yes", "No"] } }, "state": "needsYou", "group": "attention", "detail": "Proceed?" },
-    { "name": "waiting but the prompt could not be read", "task": { "status": "needs_input", "since": 10, "last": "Shall I? Yes." }, "state": "needsYou", "group": "attention", "detail": "Shall I?" },
+    { "name": "waiting without detail shows the question", "task": { "status": "needs_input", "since": 10, "last": "x", "prompt": { "seq": 4, "question": "Proceed?", "detail": "", "options": ["Yes", "No"] } }, "state": "needs_you", "group": "attention", "detail": "Proceed?" },
+    { "name": "waiting but the prompt could not be read", "task": { "status": "needs_input", "since": 10, "last": "Shall I? Yes." }, "state": "needs_you", "group": "attention", "detail": "Shall I?" },
     { "name": "reviewing", "task": { "status": "idle", "since": 10, "last": "Done.", "reviewingSince": 20 }, "state": "reviewing", "group": "active", "detail": "Done." },
     { "name": "running", "task": { "status": "running", "since": 10, "last": "Working" }, "state": "writing", "group": "active", "detail": "Working" },
     { "name": "running again hides an old review", "task": { "status": "running", "since": 30, "last": "Working", "review": { "finishedAt": 20, "ok": true, "verdict": "issues", "issues": 2, "summary": "bad" } }, "state": "writing", "group": "active", "detail": "Working" },
@@ -28,23 +28,23 @@
     { "name": "review found issues", "task": { "status": "idle", "since": 10, "last": "Done.", "review": { "finishedAt": 20, "ok": true, "verdict": "issues", "issues": 2, "summary": "CI uses Node 18. Old." } }, "state": "issues", "group": "attention", "detail": "CI uses Node 18." },
     { "name": "review passed", "task": { "status": "idle", "since": 10, "last": "Done.", "review": { "finishedAt": 20, "ok": true, "verdict": "pass", "issues": 0, "summary": "" } }, "state": "passed", "group": "done", "detail": "Done." },
     { "name": "review without a verdict", "task": { "status": "exited", "since": 10, "last": "Done.", "review": { "finishedAt": 20, "ok": true, "verdict": "unknown", "issues": 0, "summary": "Looks fine" } }, "state": "reviewed", "group": "done", "detail": "Looks fine" },
-    { "name": "review failed", "task": { "status": "idle", "since": 10, "last": "Done.", "review": { "finishedAt": 20, "ok": false, "verdict": "unknown", "issues": 0, "summary": "timeout" } }, "state": "reviewFailed", "group": "attention", "detail": "timeout" },
+    { "name": "review failed", "task": { "status": "idle", "since": 10, "last": "Done.", "review": { "finishedAt": 20, "ok": false, "verdict": "unknown", "issues": 0, "summary": "timeout" } }, "state": "review_failed", "group": "attention", "detail": "timeout" },
     { "name": "work after the review makes it stale", "task": { "status": "idle", "since": 30, "last": "Fixed.", "review": { "finishedAt": 20, "ok": true, "verdict": "issues", "issues": 2, "summary": "bad" } }, "state": "written", "group": "done", "detail": "Fixed." },
     { "name": "after a restart the review still counts", "task": { "status": "not_started", "since": 99, "last": "Done.", "review": { "finishedAt": 20, "ok": true, "verdict": "pass", "issues": 0, "summary": "" } }, "state": "passed", "group": "done", "detail": "Done." },
     { "name": "finished", "task": { "status": "idle", "since": 10, "last": "Done." }, "state": "written", "group": "done", "detail": "Done." },
     { "name": "ended", "task": { "status": "exited", "since": 10, "last": "" }, "state": "ended", "group": "done", "detail": "" },
-    { "name": "not started", "task": { "status": "not_started", "since": 0, "last": "" }, "state": "notStarted", "group": "done", "detail": "" },
-    { "name": "a status from a newer desktop", "task": { "status": "dreaming", "since": 0, "last": "" }, "state": "notStarted", "group": "done", "detail": "" }
+    { "name": "not started", "task": { "status": "not_started", "since": 0, "last": "" }, "state": "not_started", "group": "done", "detail": "" },
+    { "name": "a status from a newer desktop", "task": { "status": "dreaming", "since": 0, "last": "" }, "state": "not_started", "group": "done", "detail": "" }
   ],
   "sort": {
-    "comment": "先按组（要处理、进行中、完成），组内新的在前，时间一样编号大的在前",
+    "comment": "手机的排序：先按组（要处理、进行中、完成），组内新的在前，时间一样编号大的在前。电脑侧边栏按创建先后，不用这条",
     "tasks": [
-      { "id": 1, "status": "idle", "updatedAt": 900 },
-      { "id": 2, "status": "running", "updatedAt": 100 },
-      { "id": 3, "status": "needs_input", "updatedAt": 50 },
-      { "id": 4, "status": "failed", "updatedAt": 60 },
-      { "id": 5, "status": "running", "updatedAt": 100 },
-      { "id": 6, "status": "idle", "updatedAt": 950 }
+      { "id": 1, "status": "idle", "state": "written", "updatedAt": 900 },
+      { "id": 2, "status": "running", "state": "writing", "updatedAt": 100 },
+      { "id": 3, "status": "needs_input", "state": "needs_you", "updatedAt": 50 },
+      { "id": 4, "status": "failed", "state": "crashed", "updatedAt": 60 },
+      { "id": 5, "status": "running", "state": "writing", "updatedAt": 100 },
+      { "id": 6, "status": "idle", "state": "written", "updatedAt": 950 }
     ],
     "order": [4, 3, 5, 2, 6, 1]
   },

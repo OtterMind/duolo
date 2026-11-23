@@ -12,10 +12,10 @@ import {
 
 import { useT } from "../i18n";
 import { api, type Diff, type Snapshot, type Task } from "../lib/api";
-import { elapsed, statusKey, writerOf } from "../lib/format";
+import { elapsed, writerOf } from "../lib/format";
 import type { View } from "../App";
 import { AgentIcon } from "./AgentIcon";
-import { StatusIcon } from "./StatusIcon";
+import { StateIcon, useStateLabel } from "./StatusIcon";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
 import { SettingsPopover } from "./SettingsPopover";
 import { isMac, kbd } from "../lib/platform";
@@ -163,6 +163,7 @@ function TaskRow({
   const t = useT();
   const writer = writerOf(task);
   const status = writer?.status ?? "not_started";
+  const stateLabel = useStateLabel()(task);
   const untitled = task.untitled;
   const title = untitled ? t("task.untitled") : task.title;
   const [renaming, setRenaming] = useState(false);
@@ -192,7 +193,7 @@ function TaskRow({
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
       }}
-      title={writer ? `${title}\n${writer.name} · ${t(statusKey(status))}` : title}
+      title={writer ? `${title}\n${writer.name} · ${stateLabel}` : title}
     >
       <div className="task-line">
         <span className={untitled ? "is-faded" : ""}>
@@ -212,7 +213,7 @@ function TaskRow({
         {task.repo && <span className="repo-tag">{task.repo}</span>}
         <ReviewChip task={task} onOpen={() => onOpenReview(task.id)} />
         <span className="row-status">
-          {untitled && status !== "needs_input" ? null : <StatusIcon status={status} />}
+          {untitled && task.state !== "needs_you" ? null : <StateIcon task={task} />}
         </span>
         <span className="row-actions">
           <button
@@ -255,33 +256,15 @@ function TaskRow({
   );
 }
 
-/** 审阅的小标记：审阅中是灰色，通过是绿色，有问题是琥珀色并带问题数，失败是红色。 */
+/** 打开审阅的小标记（审阅中、审过才有）。结论由右边的状态图标表示，这里不再带颜色。 */
 function ReviewChip({ task, onOpen }: { task: Task; onOpen(): void }) {
   const t = useT();
   const running = task.reviewingSince != null;
-  const review = task.review;
-  if (!running && !review) return null;
-  let tone = "";
-  let label = t("sidebar.reviewRunning");
-  let count: number | null = null;
-  if (!running && review) {
-    if (!review.ok) {
-      tone = "is-failed";
-      label = t("sidebar.reviewFailed");
-    } else if (review.verdict === "pass") {
-      tone = "is-pass";
-      label = review.summary;
-    } else if (review.verdict === "issues") {
-      tone = "is-issues";
-      count = review.issues;
-      label = review.summary;
-    } else {
-      label = review.summary;
-    }
-  }
+  if (!running && !task.review) return null;
+  const label = running ? t("sidebar.reviewRunning") : task.review?.ok ? task.review.summary : t("sidebar.reviewFailed");
   return (
     <button
-      className={`review-chip ${running ? "is-running" : tone}`}
+      className="review-chip"
       title={`${t("sidebar.reviewTitle", { agent: task.reviewer.name })} · ${label}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -289,7 +272,6 @@ function ReviewChip({ task, onOpen }: { task: Task; onOpen(): void }) {
       }}
     >
       <AgentIcon kind={task.reviewer.kind} size={11} />
-      {count != null && <span>{count}</span>}
     </button>
   );
 }

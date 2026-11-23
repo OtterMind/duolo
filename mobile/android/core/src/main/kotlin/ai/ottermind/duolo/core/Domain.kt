@@ -27,7 +27,7 @@ object Excerpt {
     }
 }
 
-/** 列表上的一行。 */
+/** 列表上的一行。状态由电脑算好，这里只决定第二行写什么和怎么排；规则和 iOS 一致，样例在 mobile/contract/behavior.json。 */
 data class TaskRow(val task: TaskOverview) {
     enum class Group { Attention, Active, Done }
 
@@ -43,10 +43,43 @@ data class TaskRow(val task: TaskOverview) {
         data object Written : State(Group.Done)
         data object Ended : State(Group.Done)
         data object NotStarted : State(Group.Done)
+
+        /** 状态码，文案是 `state.<code>`。 */
+        val code: String
+            get() = when (this) {
+                NeedsYou -> "needs_you"
+                is Issues -> "issues"
+                ReviewFailed -> "review_failed"
+                Crashed -> "crashed"
+                Writing -> "writing"
+                Reviewing -> "reviewing"
+                Passed -> "passed"
+                Reviewed -> "reviewed"
+                Written -> "written"
+                Ended -> "ended"
+                NotStarted -> "not_started"
+            }
+
+        companion object {
+            /** 电脑发来的状态码（`TaskState`）；不认识的（更新版本的电脑）当作未启动。 */
+            fun of(code: String, issues: Int): State = when (code) {
+                "needs_you" -> NeedsYou
+                "issues" -> Issues(issues)
+                "review_failed" -> ReviewFailed
+                "crashed" -> Crashed
+                "writing" -> Writing
+                "reviewing" -> Reviewing
+                "passed" -> Passed
+                "reviewed" -> Reviewed
+                "written" -> Written
+                "ended" -> Ended
+                else -> NotStarted
+            }
+        }
     }
 
     val id: Long get() = task.id
-    val state: State = stateOf(task)
+    val state: State = State.of(task.state, task.review?.issues ?: 0)
     val group: Group get() = state.group
 
     /** 第二行：最能说明现在情况的一句话。 */
@@ -67,28 +100,6 @@ data class TaskRow(val task: TaskOverview) {
         }
 
     companion object {
-        private fun stateOf(task: TaskOverview): State {
-            if (task.status == "needs_input") return State.NeedsYou
-            if (task.reviewingSince != null) return State.Reviewing
-            if (task.status == "running") return State.Writing
-            if (task.status == "failed") return State.Crashed
-            // 审阅之后又接着做了：以前的结论不算数。
-            val review = task.review
-            if (review != null && !(task.status == "idle" && task.since > review.finishedAt)) {
-                if (!review.ok) return State.ReviewFailed
-                return when (review.verdict) {
-                    "issues" -> State.Issues(review.issues)
-                    "pass" -> State.Passed
-                    else -> State.Reviewed
-                }
-            }
-            return when (task.status) {
-                "idle" -> State.Written
-                "exited" -> State.Ended
-                else -> State.NotStarted
-            }
-        }
-
         fun rows(tasks: List<TaskOverview>): List<TaskRow> =
             tasks.map(::TaskRow).sortedWith(compareBy<TaskRow> { it.group }.thenByDescending { it.task.updatedAt }.thenByDescending { it.id })
     }

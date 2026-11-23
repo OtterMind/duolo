@@ -84,6 +84,9 @@ pub struct Overview {
 pub struct AgentOption {
     pub kind: String,
     pub name: String,
+    /// 图标的颜色（插件的 `icon_color`）；没有时用文字的颜色。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,6 +114,12 @@ pub struct TaskOverview {
     pub branch: String,
     /// 写代码的 Agent 的状态码，和 [`crate::EventKind::Status`] 一致。
     pub status: String,
+    /// 列表上显示的状态，由电脑算好（[`TaskState::of`]），手机不用自己推导。
+    #[serde(default)]
+    pub state: TaskState,
+    /// 改的是项目里的哪个仓库（相对项目文件夹的路径）；项目本身就是仓库时为空。
+    #[serde(default)]
+    pub repo: String,
     pub writer: AgentOption,
     pub reviewer: AgentOption,
     /// 最近一次有动静的时间（Unix 毫秒），列表按它排。
@@ -168,6 +177,83 @@ pub struct DiffOverview {
     pub deletions: u32,
 }
 
+/// 任务的状态：写代码的 Agent 的状态和审阅结论合在一起。电脑和手机的列表都按它显示，
+/// 规则只有这一份；样例在 mobile/contract/behavior.json。文案是 `state.<code>`。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskState {
+    /// 等你确认。
+    NeedsYou,
+    /// 审出了必须改的问题。
+    Issues,
+    ReviewFailed,
+    /// Agent 异常退出。
+    Crashed,
+    Writing,
+    Reviewing,
+    Passed,
+    /// 审完了，但结论里没有判断标记。
+    Reviewed,
+    /// 写完了，等你下一句。
+    Written,
+    Ended,
+    #[default]
+    NotStarted,
+}
+
+/// 状态归哪一组：要你处理、进行中、完成。手机按组排序和筛选。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateGroup {
+    Attention,
+    Active,
+    Done,
+}
+
+/// 推导状态要用的审阅结果。时间都是 Unix 毫秒。
+#[derive(Debug, Clone, Copy)]
+pub struct ReviewFacts<'a> {
+    pub ok: bool,
+    /// `pass`、`issues` 或 `unknown`。
+    pub verdict: &'a str,
+    pub finished_at: u64,
+}
+
+impl TaskState {
+    /// `status` 是写代码的 Agent 的状态码，`since` 是它进入这个状态的时间（不知道时为 0）。
+    pub fn of(status: &str, reviewing: bool, review: Option<ReviewFacts<'_>>, since: u64) -> Self {
+        match status {
+            "needs_input" => return Self::NeedsYou,
+            _ if reviewing => return Self::Reviewing,
+            "running" => return Self::Writing,
+            "failed" => return Self::Crashed,
+            _ => {}
+        }
+        // 审阅之后又接着做了：以前的结论不算数。
+        if let Some(review) = review.filter(|r| !(status == "idle" && since > r.finished_at)) {
+            return match (review.ok, review.verdict) {
+                (false, _) => Self::ReviewFailed,
+                (true, "issues") => Self::Issues,
+                (true, "pass") => Self::Passed,
+                _ => Self::Reviewed,
+            };
+        }
+        match status {
+            "idle" => Self::Written,
+            "exited" => Self::Ended,
+            _ => Self::NotStarted,
+        }
+    }
+
+    pub fn group(self) -> StateGroup {
+        match self {
+            Self::NeedsYou | Self::Issues | Self::ReviewFailed | Self::Crashed => StateGroup::Attention,
+            Self::Writing | Self::Reviewing => StateGroup::Active,
+            Self::Passed | Self::Reviewed | Self::Written | Self::Ended | Self::NotStarted => StateGroup::Done,
+        }
+    }
+}
+
 impl Command {
     /// 到达时（`now`，Unix 毫秒）是不是已经太晚，不该再执行。
     pub fn is_expired(&self, at: u64, now: u64) -> bool {
@@ -202,6 +288,29 @@ mod tests {
         for case in contract["desktop"].as_array().unwrap() {
             let packet: Packet<DesktopMessage> = serde_json::from_value(case["json"].clone()).unwrap();
             assert_eq!(serde_json::to_value(&packet).unwrap(), case["json"], "{}", case["name"]);
+        }
+    }
+
+    /// 列表状态的规则，手机端的测试读同一份样例。
+    #[test]
+    fn task_states_match_the_contract() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../mobile/contract/behavior.json");
+        let contract: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for case in contract["rows"].as_array().unwrap() {
+            let task = &case["task"];
+            let review = task.get("review").map(|r| ReviewFacts {
+                ok: r["ok"].as_bool().unwrap(),
+                verdict: r["verdict"].as_str().unwrap(),
+                finished_at: r["finishedAt"].as_u64().unwrap(),
+            });
+            let state = TaskState::of(
+                task["status"].as_str().unwrap(),
+                task.get("reviewingSince").is_some(),
+                review,
+                task["since"].as_u64().unwrap(),
+            );
+            assert_eq!(serde_json::to_value(state).unwrap(), case["state"], "{}", case["name"]);
+            assert_eq!(serde_json::to_value(state.group()).unwrap(), case["group"], "{}", case["name"]);
         }
     }
 

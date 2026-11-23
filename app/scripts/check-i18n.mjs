@@ -5,7 +5,7 @@
 // 3. 代码里用到的键都存在：Rust 的 t("…") / tf("…")（命令行、终端界面、菜单），手机端 Swift / Kotlin 的 t("…")。
 //    TypeScript 里的键由类型检查保证；
 // 4. TypeScript 里有占位符的文案调用时传了参数；
-// 5. 没有用不到的键：每个键都要在代码里出现（status.*、error.*、menu.*、macos.*、mobile.perm.* 是拼出来的，不检查）；
+// 5. 没有用不到的键：每个键都要在代码里出现（status.*、state.*、error.*、menu.*、macos.*、mobile.perm.* 是拼出来的，不检查）；
 // 6. iOS 系统授权弹窗的说明是最新的（mobile/scripts/gen-ios-strings.mjs）。
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -90,7 +90,7 @@ for (const file of sourceFiles(join(repo, "app/src"), /\.tsx?$/)) {
 }
 
 for (const key of base.keys()) {
-  if (!/^(status|error|menu|macos|mobile\.perm)\./.test(key) && !allSource.includes(`"${key}"`)) problem(`en.json: ${key} is not used anywhere`);
+  if (!/^(status|state|error|menu|macos|mobile\.perm)\./.test(key) && !allSource.includes(`"${key}"`)) problem(`en.json: ${key} is not used anywhere`);
 }
 
 const strings = spawnSync(process.execPath, [join(repo, "mobile/scripts/gen-ios-strings.mjs"), "--check"], { stdio: "inherit" });

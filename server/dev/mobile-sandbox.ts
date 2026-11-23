@@ -10,6 +10,7 @@
 // 模拟电脑按 docs/mobile.md 的约定收发，Rust 的实现接上之前由它当参照。
 
 import { createCipheriv, createDecipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 import pg from "pg";
@@ -145,6 +146,8 @@ type Event = { task: number; seq: number; at: number; type: string } & Record<st
 interface Task {
   id: number;
   project: string;
+  /** 项目里的哪个仓库；项目本身就是仓库时为空。 */
+  repo?: string;
   title: string;
   branch: string;
   status: string;
@@ -160,6 +163,29 @@ interface Task {
 }
 
 const NAMES: Record<string, string> = { claude: "Claude", codex: "Codex" };
+/** 图标颜色和电脑一样取插件的 icon_color。 */
+const colorOf = (kind: string) => {
+  try {
+    const toml = readFileSync(new URL(`../../crates/duolo-agent/agents/${kind}/agent.toml`, import.meta.url), "utf8");
+    return toml.match(/^icon_color\s*=\s*"([^"]+)"/m)?.[1];
+  } catch {
+    return undefined;
+  }
+};
+
+/** 列表状态，和 crates/duolo-core/src/wire.rs 的 TaskState::of 同样的规则（沙箱代替电脑算）。 */
+function stateOf(t: Task): string {
+  if (t.status === "needs_input") return "needs_you";
+  if (t.reviewingSince != null) return "reviewing";
+  if (t.status === "running") return "writing";
+  if (t.status === "failed") return "crashed";
+  const r = t.review;
+  if (r && !(t.status === "idle" && t.since > r.finishedAt)) {
+    if (!r.ok) return "review_failed";
+    return r.verdict === "issues" ? "issues" : r.verdict === "pass" ? "passed" : "reviewed";
+  }
+  return t.status === "idle" ? "written" : t.status === "exited" ? "ended" : "not_started";
+}
 const minute = 60_000;
 const tasks: Task[] = [];
 let rev = Date.now();
@@ -167,7 +193,7 @@ let nextId = 1;
 
 function addTask(project: string, title: string, branch: string, ago: number, writer = "claude", reviewer = "codex"): Task {
   const at = Date.now() - ago;
-  const task: Task = { id: nextId++, project, title, branch, status: "not_started", writer, reviewer, since: at, updatedAt: at, events: [] };
+  const task: Task = { id: nextId++, project, repo: "", title, branch, status: "not_started", writer, reviewer, since: at, updatedAt: at, events: [] };
   tasks.push(task);
   return task;
 }
@@ -224,6 +250,7 @@ function seed() {
   tool(login, "Bash", "pnpm test login", now - 2 * minute);
 
   const sidebar = addTask("shop", "Rework the sidebar", "feat/sidebar", 40 * minute);
+  sidebar.repo = "web";
   say(sidebar, "agent", "Drag to reorder and collapse both work now.", now - 2 * minute);
   status(sidebar, "idle", now - 2 * minute);
   sidebar.reviewingSince = now - minute;
@@ -256,7 +283,7 @@ function finishReview(task: Task, verdict: string, summary: string, output: stri
   record(task, "review_finished", { ok: true, verdict, issues, summary }, at);
 }
 
-const agent = (kind: string) => ({ kind, name: NAMES[kind] ?? kind });
+const agent = (kind: string) => ({ kind, name: NAMES[kind] ?? kind, ...(colorOf(kind) ? { color: colorOf(kind) } : {}) });
 function overview() {
   return {
     v: 1,
@@ -270,7 +297,8 @@ function overview() {
       const { review, events, writer, reviewer, ...rest } = t;
       const last = events.findLast((e) => e.type === "message")?.text ?? "";
       const { output: _, ...brief } = review ?? ({} as Partial<NonNullable<Task["review"]>>);
-      return { ...rest, untitled: false, writer: agent(writer), reviewer: agent(reviewer), last, seq: events.length, ...(review ? { review: brief } : {}) };
+      const state = stateOf(t);
+      return { ...rest, state, untitled: false, writer: agent(writer), reviewer: agent(reviewer), last, seq: events.length, ...(review ? { review: brief } : {}) };
     }),
     agents: Object.keys(NAMES).map(agent),
     writer: "claude",

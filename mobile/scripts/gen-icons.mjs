@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const ICONS = [
   "three-bars", "search", "plus", "repo", "device-desktop", "gear", "question", "issue-opened", "x-circle", "pencil", "eye",
   "check-circle", "skip", "circle", "chevron-right", "chevron-left", "chevron-down", "kebab-horizontal", "x", "arrow-up", "arrow-left",
-  "square-fill", "clock", "check",
+  "square-fill", "clock", "check", "file-directory",
 ];
 // Octicons 里没有麦克风，用一组声波代替。
 const CUSTOM = { mic: { viewport: 24, stroke: "M12 4v16M8 8v8M16 8v8M4 11v2M20 11v2" } };

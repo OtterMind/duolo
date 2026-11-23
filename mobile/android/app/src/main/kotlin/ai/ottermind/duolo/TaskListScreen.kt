@@ -110,6 +110,7 @@ fun TaskListScreen(open: (Long) -> Unit, newTask: (String) -> Unit, addComputer:
                 Alignment.CenterVertically,
             ) { Filter.entries.forEach { f -> Chip(t(f.key), all.count(f::matches), f == filter) { filter = f } } }
             LinkNotice()
+            if (!searching) WaitingBanner(open)
             if (model.overview == null) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = palette.green) }
             } else {
@@ -157,7 +158,7 @@ private fun Header(openMenu: () -> Unit, search: () -> Unit, newTask: () -> Unit
         }
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(R.drawable.ic_repo, size = 16.dp, tint = palette.muted)
+                Icon(R.drawable.ic_file_directory, size = 16.dp, tint = palette.muted)
                 Spacer(Modifier.width(6.dp))
                 Label(model.currentProject?.name ?: "Duolo", size = 17.sp, weight = FontWeight.SemiBold, maxLines = 1)
             }
@@ -255,9 +256,14 @@ private fun TaskRowView(row: TaskRow, onClick: () -> Unit) {
         StatusBadge(style)
         Column(Modifier.weight(1f)) {
             Column(Modifier.padding(vertical = 12.dp), Arrangement.spacedBy(2.dp)) {
-                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
-                    Label(model.title(row.task), Modifier.weight(1f).alignByBaseline(), weight = FontWeight.SemiBold, maxLines = 1)
-                    Label(style.label, Modifier.alignByBaseline(), size = 13.sp, weight = FontWeight.SemiBold, color = style.color, maxLines = 1)
+                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
+                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。标题用掉剩下的宽度。
+                    Row(Modifier.weight(1f), Arrangement.spacedBy(6.dp), Alignment.CenterVertically) {
+                        AgentMark(row.task.writer)
+                        Label(model.title(row.task), Modifier.weight(1f, fill = false), weight = FontWeight.SemiBold, maxLines = 1)
+                        if (row.task.repo.isNotEmpty()) RepoTag(row.task.repo)
+                    }
+                    Label(style.label, size = 13.sp, weight = FontWeight.SemiBold, color = style.color, maxLines = 1)
                 }
                 Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
                     Label(row.detail, Modifier.weight(1f).alignByBaseline(), size = 14.sp, color = palette.muted, maxLines = 1)
@@ -294,6 +300,27 @@ private fun PendingRow(item: OutboxItem) {
             )
         }
         if (failed) IconButton(R.drawable.ic_x, t("common.cancel")) { model.discard(item) }
+    }
+}
+
+/** 所有项目里在等你确认的任务，和电脑侧边栏顶上的那条一样；点了打开最近的一个，需要时换到它的项目。 */
+@Composable
+private fun WaitingBanner(open: (Long) -> Unit) {
+    val model = LocalModel.current
+    val waiting = model.rows.filter { it.state == TaskRow.State.NeedsYou }
+    val next = waiting.firstOrNull() ?: return
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().defaultMinSize(minHeight = 48.dp).clip(RoundedCornerShape(12.dp))
+            .background(palette.wait.copy(alpha = 0.1f)).clickable(role = Role.Button) {
+                model.choose(next.task.project)
+                open(next.id)
+            }.padding(horizontal = 14.dp),
+        Arrangement.spacedBy(10.dp),
+        Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(palette.wait))
+        Label(model.t("sidebar.waiting", "count" to waiting.size), Modifier.weight(1f), size = 14.sp, weight = FontWeight.Medium)
+        Icon(R.drawable.ic_chevron_right, size = 14.dp, tint = palette.muted)
     }
 }
 

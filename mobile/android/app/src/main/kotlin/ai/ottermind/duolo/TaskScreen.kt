@@ -307,7 +307,7 @@ private fun Activity(row: TaskRow, timeline: Timeline, showSteps: () -> Unit) {
     val tick = rememberTick()
     val step = timeline.activity
     val text = when {
-        row.state == TaskRow.State.Reviewing -> "${t("mobile.state.reviewing")} · ${row.task.reviewer.name}"
+        row.state == TaskRow.State.Reviewing -> "${t("state.reviewing")} · ${row.task.reviewer.name}"
         step == null || step.target.isEmpty() -> t("mobile.working", "agent" to row.task.writer.name)
         else -> "${stepLabel(step.kind, t)} ${step.target}"
     }

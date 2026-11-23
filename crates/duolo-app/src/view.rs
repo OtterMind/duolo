@@ -1,5 +1,6 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
+use duolo_core::wire::{ReviewFacts, TaskState};
 use duolo_core::{AgentRole, State, Task, Verdict};
 use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine, Plugin};
 use serde::Serialize;
@@ -42,6 +43,8 @@ pub struct TaskView {
     /// 正在后台审阅时的开始时间（Unix 秒）。
     pub reviewing_since: Option<u64>,
     pub review: Option<ReviewView>,
+    /// 列表上显示的状态（写代码的 Agent 和审阅合在一起），和手机端同一套规则。
+    pub state: TaskState,
     /// 换回来时能接着原来会话的 Agent（插件 id）。
     pub resumable: Vec<String>,
 }
@@ -225,6 +228,18 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             session: engine.session_id(task.key(agent.id)),
         })
         .collect();
+    let state = {
+        let writer = task.agent_with_role(AgentRole::Writer).map(|a| task.key(a.id));
+        let status = writer.map_or(AgentStatus::NotStarted, |key| engine.agent_status(key));
+        let since = writer.and_then(|key| engine.status_since(key)).unwrap_or(0);
+        let verdict = task.review.as_ref().map(|r| (r.ok, r.verdict()));
+        let review = task.review.as_ref().zip(verdict).map(|(r, (ok, verdict))| ReviewFacts {
+            ok,
+            verdict: verdict_code(verdict),
+            finished_at: r.finished_at * 1000,
+        });
+        TaskState::of(status.code(), engine.review_started_at(task.id).is_some(), review, since)
+    };
     TaskView {
         id: task.id.0,
         title: task.title.clone(),
@@ -246,15 +261,12 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             .map(|rel| rel.display().to_string())
             .unwrap_or_default(),
         reviewing_since: engine.review_started_at(task.id),
+        state,
         resumable: engine.resumable_writers(task.id).into_iter().map(|kind| kind.0).collect(),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,
-            verdict: match r.verdict() {
-                Verdict::Pass => "pass",
-                Verdict::Issues(_) => "issues",
-                Verdict::Unknown => "unknown",
-            },
+            verdict: verdict_code(r.verdict()),
             issues: match r.verdict() {
                 Verdict::Issues(n) => n,
                 _ => 0,
@@ -262,5 +274,13 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             summary: r.summary().to_string(),
             output: r.output.clone(),
         }),
+    }
+}
+
+fn verdict_code(verdict: Verdict) -> &'static str {
+    match verdict {
+        Verdict::Pass => "pass",
+        Verdict::Issues(_) => "issues",
+        Verdict::Unknown => "unknown",
     }
 }

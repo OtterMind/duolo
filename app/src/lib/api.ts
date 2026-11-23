@@ -62,15 +62,27 @@ export interface Snapshot {
 
 export interface Check {
   kind: "git" | "agent" | "voice";
-  /** Agent 的种类（claude、codex），其他检查为空。 */
+  /** Agent 的种类，其他检查为空。 */
   agent: string;
   /** 没安装时的安装命令（Agent 才有）。 */
   install: string;
-  /** 显示名，例如 git、Claude。 */
+  /** 显示名，例如 git、Agent 的名字。 */
   name: string;
   ok: boolean;
   command: string;
   version: string;
+}
+
+/** 一种 Agent 的名字和图标。 */
+export interface AgentPlugin {
+  id: string;
+  name: string;
+  /** 单色 SVG，没有时显示首字母。 */
+  icon: string | null;
+  /** 图标的颜色，没有时跟随文字颜色。 */
+  color: string | null;
+  /** 能不能用来审阅。 */
+  reviews: boolean;
 }
 
 /** 关闭任务的结果。 */
@@ -182,8 +194,8 @@ export const api = {
       repo: opts.repo ?? null,
       base: opts.base ?? null,
       branch: opts.branch ?? null,
-      writer: opts.writer ?? null,
-      reviewer: opts.reviewer ?? null,
+      writer: opts.writer || null,
+      reviewer: opts.reviewer || null,
     }),
   taskEvents: (task: number, after: number) => invoke<TaskEvent[]>("task_events", { task, after }),
   execute: (command: RemoteCommand) => invoke<CommandResult>("execute", { command }),
@@ -194,6 +206,7 @@ export const api = {
   projectsHome: () => invoke<string>("projects_home"),
   createProjectFolder: (name: string, parent: string | null) =>
     invoke<string>("create_project_folder", { name, parent }),
+  agentPlugins: () => invoke<AgentPlugin[]>("agent_plugins"),
   agentDefaults: () => invoke<{ writer: string; reviewer: string }>("agent_defaults"),
   renameTask: (task: number, title: string) => invoke<void>("rename_task", { task, title }),
   branches: (repo: string) => invoke<string[]>("branches", { repo }),
@@ -205,6 +218,7 @@ export const api = {
   startReview: (task: number) => invoke<void>("start_review", { task }),
   cancelReview: (task: number) => invoke<void>("cancel_review", { task }),
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),
+  newline: (r: AgentRef) => invoke<void>("newline", { ...r }),
   sendText: (r: AgentRef, text: string, submit: boolean) => invoke<void>("send_text", { ...r, text, submit }),
   resize: (rows: number, cols: number) => invoke<void>("resize", { rows, cols }),
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),

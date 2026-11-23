@@ -1,0 +1,7 @@
+  Would you like to run the following command?
+
+  $ pnpm add csv-stringify
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `pnpm add` (p)
+  3. No, and tell Codex what to do differently (esc)

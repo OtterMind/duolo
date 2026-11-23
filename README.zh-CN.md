@@ -104,22 +104,21 @@ duolo tui                      # 在终端里打开（适合 SSH 远程）
 writer = "claude"          # 默认写代码的 Agent
 reviewer = "codex"         # 默认审阅的 Agent
 
-[agents.claude]
-command = "claude"
-resume_args = ["--continue"]
-
-[agents.codex]
-command = "codex"
-resume_args = ["resume", "--last"]
-review_args = ["--sandbox", "read-only"]
+[agents.claude]            # 在内置的设置上改，没写的保持不变
+command = "/opt/homebrew/bin/claude"
+args = ["--model", "opus"]
 
 [voice]
 # 录音并转写的命令：启动时开始录音，收到停止信号后把文字打印到 stdout
 # （macOS / Linux 发 SIGINT，Windows 往标准输入写一行 stop）
 command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # 整理口头语和改口
-organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令
+organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认用装了的 Agent
 ```
+
+### 接入别的 Agent
+
+每种 Agent 都是一个插件：一份说明怎么启动、恢复、审阅它的 `agent.toml`，放在 `~/.duolo/agents/<id>/`。写法见 [docs/agents.md](docs/agents.md)。
 
 ### 语音
 

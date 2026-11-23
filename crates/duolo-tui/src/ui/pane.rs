@@ -40,7 +40,7 @@ fn render_home(frame: &mut Frame, app: &mut App, area: Rect) {
     let [content, input] = Layout::vertical([Constraint::Min(1), Constraint::Length(5)]).areas(area);
 
     let adding = app.home.adding_project;
-    let config = app.engine.config();
+    let (config, agents) = (app.engine.config(), app.engine.agents());
     let mut lines = if adding {
         vec![
             Line::styled(t("tui.addProjectTitle"), theme::strong()),
@@ -55,7 +55,7 @@ fn render_home(frame: &mut Frame, app: &mut App, area: Rect) {
             Line::styled(
                 tf(
                     "tui.homeBody",
-                    &[("writer", &config.writer.display_name()), ("reviewer", &config.reviewer.display_name())],
+                    &[("writer", &agents.name(&config.writer)), ("reviewer", &agents.name(&config.reviewer))],
                 ),
                 theme::dim(),
             ),
@@ -183,7 +183,7 @@ fn render_header(frame: &mut Frame, app: &mut App, area: Rect) {
         let active = Some(key) == selected;
         let label_style = if active { Style::new().add_modifier(Modifier::BOLD) } else { theme::dim() };
         spans.push(Span::styled(icon, icon_style));
-        spans.push(Span::styled(format!(" {}", agent.role.label(&agent.kind.display_name())), label_style));
+        spans.push(Span::styled(format!(" {}", agent.role.label(&app.engine.agents().name(&agent.kind))), label_style));
         spans.push(Span::raw("    "));
     }
 
@@ -203,7 +203,7 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
     let Some(key) = app.selected_key() else { return };
     let status = app.engine.agent_status(key);
     let Some(agent) = app.selected_task().and_then(|t| t.agent(key.agent)).cloned() else { return };
-    let name = agent.kind.display_name();
+    let name = app.engine.agents().name(&agent.kind);
 
     if !status.is_live() {
         let line = match status {

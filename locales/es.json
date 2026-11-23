@@ -119,6 +119,7 @@
   "error.stateRestored": "El archivo de datos de Duolo estaba dañado y se restauró desde la copia de seguridad. El archivo dañado se guardó en {path}.",
   "error.stateReset": "El archivo de datos de Duolo estaba dañado y no hay una copia de seguridad utilizable, por eso la lista de proyectos está vacía. Tu código, tus ramas y tus directorios de trabajo siguen intactos. El archivo dañado se guardó en {path}.",
   "error.configInvalid": "{path} tiene un error, así que Duolo usa por ahora la configuración predeterminada. Corrígelo y reinicia Duolo. Detalles: {detail}",
+  "error.agentPluginInvalid": "El plugin de agente {path} tiene un error y se ha omitido. Corrígelo y reinicia Duolo. Detalles: {detail}",
   "error.cannotStart": "Duolo no puede iniciarse: {detail}",
   "error.invalidBranch": "«{name}» no sirve como nombre de rama. Usa letras, números, - y /, sin espacios.",
   "error.branchExists": "La rama «{name}» ya existe. Elige otro nombre.",

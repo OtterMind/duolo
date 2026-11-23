@@ -45,32 +45,18 @@ pub struct Project {
     pub root: PathBuf,
 }
 
-/// 用哪个 CLI 来跑 Agent。名字对应配置里的 `[agents.<name>]`。
+/// 用哪个 Agent 插件（见 `duolo-agent`）。名字也是配置里 `[agents.<name>]` 的名字。
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AgentKind(pub String);
 
 impl AgentKind {
-    pub fn claude() -> Self {
-        Self("claude".into())
-    }
-
-    pub fn codex() -> Self {
-        Self("codex".into())
-    }
-
-    /// 界面上显示的名字。
-    pub fn display_name(&self) -> String {
-        match self.0.as_str() {
-            "claude" => "Claude".into(),
-            "codex" => "Codex".into(),
-            other => {
-                let mut chars = other.chars();
-                match chars.next() {
-                    Some(first) => first.to_uppercase().chain(chars).collect(),
-                    None => String::new(),
-                }
-            }
+    /// 找不到对应的插件时显示的名字：首字母大写。
+    pub fn fallback_name(&self) -> String {
+        let mut chars = self.0.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => String::new(),
         }
     }
 }
@@ -285,9 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn display_names() {
-        assert_eq!(AgentKind::claude().display_name(), "Claude");
-        assert_eq!(AgentKind("aider".into()).display_name(), "Aider");
+    fn fallback_names() {
+        assert_eq!(AgentKind("aider".into()).fallback_name(), "Aider");
+        assert_eq!(AgentKind(String::new()).fallback_name(), "");
     }
 
     #[test]

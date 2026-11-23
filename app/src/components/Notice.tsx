@@ -1,14 +1,15 @@
 import { useEffect, useRef } from "react";
 
 import { errorMessage, useT } from "../i18n";
+import { useModalFocus } from "../lib/modal";
 
 /** 启动时发现的问题（数据文件损坏后恢复了、配置写错了）：说明情况，看过才关。 */
 export function Notice({ problems, onClose }: { problems: unknown[]; onClose(): void }) {
   const t = useT();
   const button = useRef<HTMLButtonElement>(null);
 
+  useModalFocus(button);
   useEffect(() => {
-    button.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();

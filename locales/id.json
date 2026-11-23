@@ -119,6 +119,7 @@
   "error.stateRestored": "Berkas data Duolo rusak dan sudah dipulihkan dari cadangan. Berkas yang rusak disimpan di {path}.",
   "error.stateReset": "Berkas data Duolo rusak dan tidak ada cadangan yang bisa dipakai, jadi daftar proyek kosong. Kode, branch, dan direktori kerja Anda tidak berubah. Berkas yang rusak disimpan di {path}.",
   "error.configInvalid": "{path} berisi kesalahan, jadi Duolo memakai pengaturan bawaan untuk sementara. Perbaiki lalu mulai ulang Duolo. Detail: {detail}",
+  "error.agentPluginInvalid": "Plugin agen {path} berisi kesalahan dan dilewati. Perbaiki lalu mulai ulang Duolo. Detail: {detail}",
   "error.cannotStart": "Duolo tidak bisa dimulai: {detail}",
   "error.invalidBranch": "“{name}” tidak bisa jadi nama branch. Pakai huruf, angka, - dan /, tanpa spasi.",
   "error.branchExists": "Branch “{name}” sudah ada. Pilih nama lain.",

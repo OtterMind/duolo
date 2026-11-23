@@ -119,6 +119,7 @@
   "error.stateRestored": "Il file dati di Duolo era danneggiato ed è stato ripristinato dal backup. Il file danneggiato è conservato in {path}.",
   "error.stateReset": "Il file dati di Duolo era danneggiato e non c’è un backup utilizzabile, quindi l’elenco dei progetti è vuoto. Codice, branch e directory di lavoro sono intatti. Il file danneggiato è conservato in {path}.",
   "error.configInvalid": "{path} contiene un errore, quindi per ora Duolo usa le impostazioni predefinite. Correggilo e riavvia Duolo. Dettagli: {detail}",
+  "error.agentPluginInvalid": "Il plugin dell’agente {path} contiene un errore ed è stato ignorato. Correggilo e riavvia Duolo. Dettagli: {detail}",
   "error.cannotStart": "Impossibile avviare Duolo: {detail}",
   "error.invalidBranch": "«{name}» non può essere un nome di branch. Usa lettere, numeri, - e /, senza spazi.",
   "error.branchExists": "Il branch «{name}» esiste già. Scegli un altro nome.",

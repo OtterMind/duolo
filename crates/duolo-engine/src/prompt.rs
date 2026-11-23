@@ -53,10 +53,11 @@ pub fn parse_prompt(screen: &str) -> Option<Prompt> {
 }
 
 /// 画面上有一个正等着用户选的列表（光标停在某个选项上），例如第一次启动时选主题、确认信任目录。
-/// 和 [`parse_prompt`] 不同，对话里普通的编号列表不算。
-pub fn is_choosing(screen: &str) -> bool {
+/// 和 [`parse_prompt`] 不同，对话里普通的编号列表不算。`markers` 是这个 Agent 自己的写法（小写）。
+pub fn is_choosing(screen: &str, markers: &[String]) -> bool {
     screen.lines().map(clean).any(|line| {
-        (line.starts_with(['❯', '›']) && option_of(&line).is_some()) || line.to_lowercase().contains("enter to confirm")
+        let lower = line.to_lowercase();
+        (line.starts_with(['❯', '›']) && option_of(&line).is_some()) || markers.iter().any(|m| lower.contains(m))
     })
 }
 
@@ -100,6 +101,15 @@ mod tests {
         assert_eq!(p.question, "Do you want to proceed?");
         assert_eq!(p.detail, "pnpm test --filter orders\nRun order tests");
         assert_eq!(p.options, ["Yes", "Yes, and don't ask again for pnpm", "No, and tell Claude what to do"]);
+    }
+
+    #[test]
+    fn choosing_is_not_a_plain_list() {
+        let markers = ["enter to confirm".to_string()];
+        assert!(is_choosing("Theme\n❯ 1. Dark\n  2. Light", &[]));
+        assert!(is_choosing("❯ No, exit\n  Yes\n Enter to confirm", &markers));
+        assert!(!is_choosing("❯ No, exit\n  Yes\n Enter to confirm", &[]));
+        assert!(!is_choosing("Steps:\n1. Read\n2. Write\n> ", &markers));
     }
 
     #[test]

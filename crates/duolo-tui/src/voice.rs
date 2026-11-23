@@ -14,6 +14,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
+use duolo_core::process::OneShot;
 use duolo_core::{AgentKey, VoiceConfig};
 use duolo_voice::{organize, OrganizeContext, Recorder};
 
@@ -109,18 +110,17 @@ impl Voice {
         Ok(())
     }
 
-    /// 结束录音，转写和整理在后台进行。
-    pub fn stop(&mut self, cfg: &VoiceConfig, ctx: OrganizeContext) {
+    /// 结束录音，转写和整理在后台进行。`organizer` 为 None 时不整理。
+    pub fn stop(&mut self, organizer: Option<OneShot>, timeout: Duration, ctx: OrganizeContext) {
         let Phase::Recording { recorder, target, prefix } = std::mem::replace(&mut self.phase, Phase::Idle) else {
             return;
         };
         self.phase = Phase::Processing { prefix: prefix.clone() };
-        let cfg = cfg.clone();
         let tx = self.tx.clone();
         thread::spawn(move || {
             let outcome = match recorder.finish() {
                 Ok(raw) => {
-                    let organized = cfg.organize.then(|| organize(&cfg, &raw, &ctx).ok()).flatten();
+                    let organized = organizer.and_then(|command| organize(&command, timeout, &raw, &ctx).ok());
                     Outcome::Ready { target, prefix, raw, organized }
                 }
                 Err(err) => Outcome::Failed { target, prefix, error: format!("{err:#}") },

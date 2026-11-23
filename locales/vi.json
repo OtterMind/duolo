@@ -119,6 +119,7 @@
   "error.stateRestored": "Tệp dữ liệu của Duolo bị hỏng và đã được khôi phục từ bản sao lưu. Tệp hỏng được giữ tại {path}.",
   "error.stateReset": "Tệp dữ liệu của Duolo bị hỏng và không có bản sao lưu dùng được, nên danh sách dự án đang trống. Mã nguồn, nhánh và thư mục làm việc của bạn vẫn nguyên vẹn. Tệp hỏng được giữ tại {path}.",
   "error.configInvalid": "{path} có lỗi nên Duolo tạm dùng cấu hình mặc định. Hãy sửa rồi khởi động lại Duolo. Chi tiết: {detail}",
+  "error.agentPluginInvalid": "Plugin agent {path} có lỗi nên đã bị bỏ qua. Hãy sửa rồi khởi động lại Duolo. Chi tiết: {detail}",
   "error.cannotStart": "Duolo không thể khởi động: {detail}",
   "error.invalidBranch": "“{name}” không dùng được làm tên nhánh. Hãy dùng chữ, số, - và /, không có dấu cách.",
   "error.branchExists": "Nhánh “{name}” đã tồn tại. Hãy chọn tên khác.",

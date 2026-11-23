@@ -1,4 +1,4 @@
-//! 后台审阅：在任务的 worktree 里以只读方式运行审阅命令（默认 `codex exec`），读取它的结论。
+//! 后台审阅：在任务的 worktree 里以只读方式运行审阅 Agent 的命令，读取它的结论。
 //!
 //! 审阅不占用界面上的 Agent 窗口，结束后结论保存在任务上，可以一键交给写代码的 Agent 修改。
 
@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use duolo_core::process::Prompted;
+use duolo_core::process::{OneShot, Prompted};
 use duolo_core::proctree::ProcessTree;
 use duolo_core::UserError;
 
@@ -37,14 +37,11 @@ pub(crate) struct ReviewJob {
 }
 
 impl ReviewJob {
-    pub(crate) fn spawn(command: &[String], prompt: &str, cwd: PathBuf, env_remove: &[&str]) -> Result<Self> {
+    pub(crate) fn spawn(command: &OneShot, prompt: &str, cwd: PathBuf) -> Result<Self> {
         let mut review = Prompted::new(command, Some(prompt)).ok_or(UserError::ReviewNotConfigured)?;
         review.cmd.current_dir(cwd).stdout(Stdio::piped()).stderr(Stdio::piped());
-        for key in env_remove {
-            review.cmd.env_remove(key);
-        }
         let (mut child, tree) =
-            review.spawn().map_err(|_| UserError::CommandNotFound { program: command[0].clone() })?;
+            review.spawn().map_err(|_| UserError::CommandNotFound { program: command.program().into() })?;
         let mut stdout = child.stdout.take().context("review command has no stdout")?;
         let mut stderr = child.stderr.take().context("review command has no stderr")?;
 

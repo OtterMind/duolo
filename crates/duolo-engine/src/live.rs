@@ -4,18 +4,18 @@
 //! 引擎自己（任务建好、改名、审阅、改动统计）。界面定期调用 [`Engine::poll_events`] 取新事件。
 //! 别的设备能对这台电脑做的事（`Command`）统一由 [`crate::ops::execute`] 执行。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use duolo_agent::{Entry, Home, Watch};
 use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, TaskEvent, TaskId, UserError};
 
 use crate::engine::Engine;
 use crate::events::EventLog;
 use crate::prompt::{is_choosing, parse_prompt};
 use crate::status::AgentStatus;
-use crate::transcript::{Entry, Flavor, Watcher};
 
 /// 状态要稳定这么久才记成事件。
 const STATUS_SETTLE: Duration = Duration::from_millis(1500);
@@ -26,7 +26,7 @@ pub(crate) struct LiveState {
     pub(crate) log: EventLog,
     /// 上次 poll 之后新记的事件。
     fresh: Vec<TaskEvent>,
-    watchers: HashMap<AgentKey, Watcher>,
+    watchers: HashMap<AgentKey, Watch>,
     /// 上次记下的状态和提示，变了才记新事件。
     status: HashMap<AgentKey, String>,
     /// 刚变成的状态和变的时间：稳定一会儿才记，避免界面重绘时"运行中 / 空闲"来回跳。
@@ -35,8 +35,10 @@ pub(crate) struct LiveState {
     diff: HashMap<TaskId, duolo_git::DiffStat>,
     /// Agent 还没准备好时收到的消息，准备好后再发。
     pending: HashMap<AgentKey, Vec<String>>,
-    /// Agent 会话记录所在的家目录。
-    home: PathBuf,
+    /// 这次启动之后已经画出过输入框的 Agent。
+    settled: HashSet<AgentKey>,
+    /// 去哪里找 Agent 的会话记录。
+    home: Home,
 }
 
 impl LiveState {
@@ -50,7 +52,8 @@ impl LiveState {
             prompt: HashMap::new(),
             diff: HashMap::new(),
             pending: HashMap::new(),
-            home: duolo_core::process::home_dir(),
+            settled: HashSet::new(),
+            home: Home::User,
         }
     }
 }
@@ -79,22 +82,21 @@ impl Engine {
     /// Agent 启动后开始跟着它的会话记录。
     pub(crate) fn watch_transcript(&mut self, key: AgentKey) {
         let Some(task) = self.state.task(key.task) else { return };
-        let Some(flavor) = task.agent(key.agent).and_then(|a| Flavor::of(&a.kind.0)) else { return };
-        let watcher = Watcher::new(flavor, &task.worktree, std::time::SystemTime::now(), self.live.home.clone());
-        self.live.watchers.insert(key, watcher);
+        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.live.home)) {
+            Some(watch) => self.live.watchers.insert(key, watch),
+            None => self.live.watchers.remove(&key),
+        };
     }
 
     /// 读 Agent 会话记录的时候用哪个家目录（测试里换成临时目录）。
     pub fn set_agent_home(&mut self, home: PathBuf) {
-        self.live.home = home;
+        self.live.home = Home::At(home);
     }
 
     fn poll_transcripts(&mut self) {
         let mut found = Vec::new();
-        for (key, watcher) in &mut self.live.watchers {
-            for entry in watcher.poll() {
-                found.push((*key, entry));
-            }
+        for (key, watch) in &self.live.watchers {
+            found.extend(watch.take().into_iter().map(|entry| (*key, entry)));
         }
         for (key, entry) in found {
             let kind = match entry {
@@ -149,8 +151,11 @@ impl Engine {
             } else {
                 self.live.prompt.remove(&key);
             }
-            // 刚启动的 Agent 准备好输入框之后，把排队的消息发过去。
-            if status == AgentStatus::Idle && self.live.pending.contains_key(&key) && self.can_take_message(key) {
+            if status == AgentStatus::Idle && self.can_take_message(key) {
+                self.live.settled.insert(key);
+            }
+            // 准备好输入框、没有在等用户选什么之后，把排队的消息发过去。
+            if status == AgentStatus::Idle && self.live.pending.contains_key(&key) && self.accepts_message(key) {
                 if let Some(queued) = self.live.pending.remove(&key) {
                     for text in queued {
                         let _ = self.paste(key, &text, true);
@@ -177,9 +182,33 @@ impl Engine {
 
     /// 画面上已经有准备好的输入框，而且没有在等用户选什么（第一次启动时选主题、确认信任目录……）。
     pub(crate) fn can_take_message(&self, key: AgentKey) -> bool {
-        self.sessions
-            .get(&key)
-            .is_some_and(|s| s.is_ready_for_input() && !s.with_screen(|screen| is_choosing(&screen.contents())))
+        let Ok(plugin) = self.plugin_of(key) else { return false };
+        let choosing = &plugin.screen().choosing;
+        self.sessions.get(&key).is_some_and(|s| {
+            s.is_ready_for_input() && !s.with_screen(|screen| is_choosing(&screen.contents(), choosing))
+        })
+    }
+
+    /// 现在可以发消息。启动时要看仔细（[`Engine::can_take_message`]）；画出过输入框之后，画面上的编号列表
+    /// 可能只是用户自己说过的话，只看它是不是在等用户确认。
+    fn accepts_message(&mut self, key: AgentKey) -> bool {
+        if self.live.settled.contains(&key) {
+            return !matches!(self.agent_status(key), AgentStatus::NeedsInput);
+        }
+        self.can_take_message(key)
+    }
+
+    /// 替用户发一句话（粘贴并回车）。Agent 停在要选的列表上（信任目录、是否升级、是否允许）时，
+    /// 回车会变成替用户选，所以先排着，等用户选完再发。
+    pub fn submit(&mut self, key: AgentKey, text: &str) -> Result<()> {
+        if self.session_mut(key).ok_or(UserError::AgentNotRunning)?.poll_exit().is_some() {
+            return Err(UserError::AgentNotRunning.into());
+        }
+        if self.accepts_message(key) {
+            return self.paste(key, text, true);
+        }
+        self.queue_message(key, text.to_string());
+        Ok(())
     }
 
     /// 给任务写代码的 Agent 发一句话并发送。Agent 没在运行时接着上次的会话启动，准备好后再发。
@@ -196,7 +225,7 @@ impl Engine {
         self.name_task(task, text, None)?;
         let running = self.sessions.get_mut(&key).is_some_and(|s| s.poll_exit().is_none());
         if running {
-            self.paste(key, text, true)
+            self.submit(key, text)
         } else {
             self.start_agent(key)?;
             if !becomes_prompt {
@@ -216,6 +245,11 @@ impl Engine {
         }
     }
 
+    /// Agent 新启动了：重新看它准备好没有。
+    pub(crate) fn unsettle(&mut self, key: AgentKey) {
+        self.live.settled.remove(&key);
+    }
+
     /// 刚启动的 Agent 准备好之后再发这句话（并回车）。
     pub(crate) fn queue_message(&mut self, key: AgentKey, text: String) {
         self.live.pending.entry(key).or_default().push(text);
@@ -227,10 +261,17 @@ impl Engine {
         self.write(key, (option + 1).to_string().as_bytes())
     }
 
-    /// 打断 Agent 正在做的事（终端里按 Esc）。
+    /// 打断 Agent 正在做的事。
     pub fn interrupt(&mut self, task: TaskId) -> Result<()> {
         let key = self.writer_key(task)?;
-        self.write(key, b"\x1b")
+        let interrupt = self.plugin_of(key)?.keys().interrupt.clone();
+        self.write(key, interrupt.as_bytes())
+    }
+
+    /// 在 Agent 的输入框里换行。
+    pub fn newline(&mut self, key: AgentKey) -> Result<()> {
+        let newline = self.plugin_of(key)?.keys().newline.clone();
+        self.write(key, newline.as_bytes())
     }
 
     pub(crate) fn writer_key(&self, task: TaskId) -> Result<AgentKey> {
@@ -246,6 +287,7 @@ impl Engine {
         self.live.settling.retain(|k, _| k.task != task);
         self.live.prompt.retain(|k, _| k.task != task);
         self.live.pending.retain(|k, _| k.task != task);
+        self.live.settled.retain(|k| k.task != task);
         self.live.diff.remove(&task);
     }
 }
@@ -376,7 +418,7 @@ mod tests {
     /// 假 Agent：和 Claude Code 一样，先空白一阵（此时的输入会丢），画出输入框后才打开括号粘贴、开始读。
     /// 打印启动时带的需求（`arg:…`）和收到的每一行（`got:…`）。
     const SLOW_START: &str = "sleep 2.2; stty -echo; perl -e 'use POSIX; tcflush(0, TCIFLUSH)'; \
-                              printf 'arg:%s\\n\\033[?2004h> ' \"$1\"; while read -r line; do echo \"got:$line\"; done";
+                              for prompt; do :; done; printf 'arg:%s\\n\\033[?2004h> ' \"$prompt\"; while read -r line; do echo \"got:$line\"; done";
 
     #[test]
     fn message_waits_until_the_agent_is_ready() {
@@ -427,6 +469,116 @@ mod tests {
         wait_screen(&mut engine, key, "args:0");
         wait_screen(&mut engine, key, "got:Export orders");
         wait_screen(&mut engine, key, "got:as CSV & \"Excel\" 100%");
+        engine.close_task(task).unwrap();
+    }
+
+    #[test]
+    fn message_does_not_answer_a_later_dialog() {
+        // 假 Agent：第一句话之后弹出确认框（默认选中的是危险的那个），选完才接着读消息。
+        let script = "stty -echo; printf '\\033[?2004h> '; read -r line; \
+                      printf '\\033[2J\\033[HDo you want to proceed?\\n❯ 1. Yes, delete\\n  2. No\\n'; read -r pick; \
+                      printf '\\033[2J\\033[Hpicked:%s\\n> ' \"$pick\"; while read -r line; do echo \"got:$line\"; done";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, ">");
+        wait_for(&mut engine, "idle", |all| {
+            all.iter().any(|e| matches!(&e.kind, EventKind::Status { status, .. } if status == "idle"))
+        });
+        // 用户自己说的话里有编号，不该被当成在选。
+        engine.submit(key, "1. go").unwrap();
+        wait_screen(&mut engine, key, "Yes, delete");
+        engine.send_message(task, "second").unwrap();
+        engine.submit(key, "third").unwrap();
+        let until = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < until {
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(screen(&engine, key).contains("Yes, delete"), "不能替用户选：{}", screen(&engine, key));
+        engine.write(key, b"2\r").unwrap();
+        wait_screen(&mut engine, key, "third");
+        let shown = screen(&engine, key);
+        assert!(shown.contains("picked:2") && shown.contains("second"), "{shown}");
+    }
+
+    #[test]
+    fn own_words_do_not_look_like_a_dialog() {
+        // 假 Agent：像 Claude Code 一样把用户说的话带着 ❯ 显示出来。
+        let script = "stty -echo; printf '\\033[?2004h> '; read -r first; \
+                      printf '\\n❯ 1. %s\\n  2. and tests\\n> ' \"$first\"; while read -r line; do echo \"got:$line\"; done";
+        let (_dir, mut engine, project) = engine(script);
+        let task = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_for(&mut engine, "idle", |all| {
+            all.iter().any(|e| matches!(&e.kind, EventKind::Status { status, .. } if status == "idle"))
+        });
+        engine.submit(key, "export").unwrap();
+        wait_screen(&mut engine, key, "2. and tests");
+        engine.submit(key, "next").unwrap();
+        wait_screen(&mut engine, key, "got:");
+        assert!(screen(&engine, key).contains("next"), "{}", screen(&engine, key));
+    }
+
+    /// 用户装在 `~/.duolo/agents/` 的插件：和内置的一样用，行为都按它的声明来。
+    #[cfg(unix)]
+    #[test]
+    fn user_plugin_works_end_to_end() {
+        let (dir, engine, project) = engine("cat");
+        drop(engine);
+        let plugin = dir.path().join("home/agents/toy");
+        std::fs::create_dir_all(&plugin).unwrap();
+        let agent = dir.path().join("toy.sh");
+        // 打印参数，然后把收到的字节按十六进制打印出来。`review` 时打印结论就退出。
+        let script = "if [ \"$1\" = review ]; then echo \"[PASS] $# args\"; exit; fi; \
+                      stty raw -echo; printf 'args:%s\\r\\n' \"$*\"; printf '\\033[?2004hPICK ONE\\r\\n'; \
+                      exec perl -e '$|=1; while (sysread(STDIN,$c,1)) { printf \"%02x \", ord $c }'\n";
+        std::fs::write(&agent, script).unwrap();
+        let manifest = format!(
+            "schema = 1\nid = \"toy\"\nname = \"Toy\"\ncommand = \"sh\"\n\
+             [start]\nargs = [{agent:?}]\nprompt = \"flag\"\nprompt_flag = \"--say=\"\nresume_args = [\"--again\"]\n\
+             [review]\nargs = [{agent:?}, \"review\"]\nseparator = \"--\"\n\
+             [screen]\napproval = [\"pick one\"]\nbusy = []\nchoosing = []\n\
+             [keys]\ninterrupt = \"\\u0003\"\nnewline = \"\\n\"\n",
+        );
+        std::fs::write(plugin.join("agent.toml"), manifest).unwrap();
+        std::fs::create_dir(dir.path().join("home/agents/bad")).unwrap();
+        std::fs::write(dir.path().join("home/agents/bad/agent.toml"), "schema = 1\n").unwrap();
+
+        let mut engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        let notices = engine.take_notices();
+        assert!(
+            matches!(&notices[..], [UserError::AgentPluginInvalid { path, .. }] if path.contains("bad")),
+            "{notices:?}"
+        );
+
+        let toy = duolo_core::AgentKind("toy".into());
+        let opts = crate::TaskOptions { writer: Some(toy.clone()), reviewer: Some(toy), ..Default::default() };
+        let task = engine.create_task_with(&project, "- list", &opts).unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--say=- list");
+        wait_screen(&mut engine, key, "PICK ONE");
+        assert_eq!(engine.agent_status(key), AgentStatus::NeedsInput, "按它自己的写法认状态");
+        engine.interrupt(task).unwrap();
+        wait_screen(&mut engine, key, "03");
+        engine.newline(key).unwrap();
+        wait_screen(&mut engine, key, "0a");
+
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--again");
+
+        engine.start_review(task).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while engine.poll_reviews().is_empty() {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(50));
+        }
+        let review = engine.state().task(task).unwrap().review.clone().unwrap();
+        assert_eq!((review.ok, review.output.as_str()), (true, "[PASS] 3 args"), "review -- <提示词>");
         engine.close_task(task).unwrap();
     }
 

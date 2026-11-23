@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Folder, FolderOpen, FolderPlus, Github, Plus } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { useT } from "../i18n";
+import { useModalFocus } from "../lib/modal";
 import { tildify, useProjectsHome, type ProjectAdder } from "../lib/projects";
 
 const ICON = { size: 15, strokeWidth: 1.75 } as const;
@@ -165,13 +166,15 @@ export function AddProjectDialog({
   onClose(): void;
 }) {
   const t = useT();
+  const dialog = useRef<HTMLDivElement>(null);
+  useModalFocus(dialog);
   return (
     <div
       className="scrim panel-scrim"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
-      <div className="dialog add-project-dialog" role="dialog" aria-label={t("addProject.title")}>
+      <div ref={dialog} tabIndex={-1} className="dialog add-project-dialog" role="dialog" aria-label={t("addProject.title")}>
         <h2>{t("addProject.title")}</h2>
         <AddProject adder={adder} onAdded={onAdded} />
       </div>

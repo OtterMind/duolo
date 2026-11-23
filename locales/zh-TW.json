@@ -119,6 +119,7 @@
   "error.stateRestored": "Duolo 的資料檔案損毀，已用備份還原。損毀的檔案保留在 {path}。",
   "error.stateReset": "Duolo 的資料檔案損毀，也沒有可用的備份，所以專案列表是空的。你的程式碼、分支和工作目錄都沒有變動。損毀的檔案保留在 {path}。",
   "error.configInvalid": "{path} 有錯誤，Duolo 暫時使用預設設定。請修正後重新啟動 Duolo。詳情：{detail}",
+  "error.agentPluginInvalid": "Agent 外掛 {path} 有錯誤，已略過。請修正後重新啟動 Duolo。詳情：{detail}",
   "error.cannotStart": "Duolo 無法啟動：{detail}",
   "error.invalidBranch": "「{name}」不能作為分支名稱。請用字母、數字、- 和 /，不要有空格。",
   "error.branchExists": "分支「{name}」已經存在，請換一個名稱。",

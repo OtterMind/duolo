@@ -1,5 +1,6 @@
 //! `duolo` 命令行入口。
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -47,7 +48,7 @@ fn main() -> ExitCode {
     if let Ok(paths) = Paths::discover() {
         i18n::apply_preference(&Settings::load(&paths.settings_file()).unwrap_or_default().language);
     }
-    let parsed = localized_command().try_get_matches().and_then(|m| Cli::from_arg_matches(&m));
+    let parsed = localized_command().try_get_matches_from(args()).and_then(|m| Cli::from_arg_matches(&m));
     let cli = match parsed {
         Ok(cli) => cli,
         Err(err) => exit_with(err),
@@ -59,6 +60,14 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// 命令行参数。需求可以是列表（`duolo new "- …"`），前面加个空格，不让 clap 当成选项。
+fn args() -> impl Iterator<Item = OsString> {
+    std::env::args_os().map(|arg| match arg.to_str() {
+        Some(text) if text.starts_with("- ") => format!(" {text}").into(),
+        _ => arg,
+    })
 }
 
 /// 命令行参数有误：clap 自己的报错只有英文，这里换成当前语言。帮助和版本照常输出。
@@ -185,7 +194,7 @@ fn run(cli: Cli) -> Result<()> {
                 println!("{}  {}", project.id, project.root.display());
                 for task in state.tasks_of(&project.id) {
                     let agents: Vec<String> =
-                        task.agents.iter().map(|a| a.role.label(&a.kind.display_name())).collect();
+                        task.agents.iter().map(|a| a.role.label(&engine.agents().name(&a.kind))).collect();
                     println!(
                         "  #{:<4} {:<30} {:<8} {}  {}",
                         task.id.0,
@@ -245,13 +254,13 @@ fn installed_app() -> Option<std::path::PathBuf> {
 
 fn doctor(paths: &Paths) -> Result<()> {
     let engine = open_engine(paths.clone())?;
-    let config = engine.config();
+    let (config, agents) = (engine.config(), engine.agents());
     println!("{}{}", pad(&t("cli.doctor.data"), 12), paths.root().display());
-    for check in check_environment(config) {
+    for check in check_environment(config, agents) {
         println!("{} {}{}", if check.ok { "✓" } else { "✕" }, pad(&check.name, 10), check.detail);
     }
-    println!("{}{}", pad(&t("cli.doctor.writer"), 12), config.writer.display_name());
-    println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), config.reviewer.display_name());
+    println!("{}{}", pad(&t("cli.doctor.writer"), 12), agents.name(&config.writer));
+    println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), agents.name(&config.reviewer));
     if !config.voice.is_configured() {
         println!("{}", tf("cli.doctor.voiceHint", &[("path", &paths.config_file().display())]));
     }

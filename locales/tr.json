@@ -119,6 +119,7 @@
   "error.stateRestored": "Duolo'nun veri dosyası hasarlıydı ve yedekten geri yüklendi. Hasarlı dosya {path} konumunda saklandı.",
   "error.stateReset": "Duolo'nun veri dosyası hasarlı ve kullanılabilir bir yedek yok; bu yüzden proje listesi boş. Kodunuz, dallarınız ve çalışma dizinleriniz olduğu gibi duruyor. Hasarlı dosya {path} konumunda saklandı.",
   "error.configInvalid": "{path} dosyasında hata var; Duolo şimdilik varsayılan ayarları kullanıyor. Düzeltip Duolo'yu yeniden başlatın. Ayrıntılar: {detail}",
+  "error.agentPluginInvalid": "{path} ajan eklentisinde hata var ve atlandı. Düzeltip Duolo'yu yeniden başlatın. Ayrıntılar: {detail}",
   "error.cannotStart": "Duolo başlatılamıyor: {detail}",
   "error.invalidBranch": "“{name}” dal adı olamaz. Boşluksuz harf, rakam, - ve / kullanın.",
   "error.branchExists": "“{name}” dalı zaten var. Başka bir ad seçin.",

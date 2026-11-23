@@ -119,6 +119,7 @@
   "error.stateRestored": "Duolo 的数据文件损坏了，已经用备份恢复。损坏的文件保留在 {path}。",
   "error.stateReset": "Duolo 的数据文件损坏了，也没有可用的备份，所以项目列表是空的。你的代码、分支和工作目录都没有动。损坏的文件保留在 {path}。",
   "error.configInvalid": "{path} 有错误，Duolo 暂时使用默认配置。请改好后重启 Duolo。详情：{detail}",
+  "error.agentPluginInvalid": "Agent 插件 {path} 有错误，已跳过。请改好后重启 Duolo。详情：{detail}",
   "error.cannotStart": "Duolo 无法启动：{detail}",
   "error.invalidBranch": "「{name}」不能作为分支名。请用字母、数字、- 和 /，不要有空格。",
   "error.branchExists": "分支「{name}」已经存在，请换一个名字。",

@@ -15,7 +15,7 @@ pub mod settings;
 pub mod store;
 pub mod text;
 
-pub use config::{AgentProfile, Config, VoiceConfig};
+pub use config::{AgentOverride, Config, VoiceConfig};
 pub use error::UserError;
 pub use event::{Command, CommandResult, EventKind, Speaker, TaskEvent};
 pub use i18n::{t, tf};

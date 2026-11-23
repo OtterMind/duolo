@@ -1,0 +1,62 @@
+# Claude Code。字段说明见 docs/agents.md。
+schema = 1
+id = "claude"
+name = "Claude"
+command = "claude"
+icon_color = "#d97757"
+
+[install]
+default = "npm install -g @anthropic-ai/claude-code"
+
+[start]
+prompt = "argument"
+separator = "--"
+resume_args = ["--continue"]
+
+# 只读：只有读文件和运行命令的工具，命令只放行看 git 改动的，其他的一律拒绝，不会停下来问。
+# `--allowedTools` 是在用户自己的设置上追加，所以还要用 `--disallowedTools` 拦住写文件的工具。
+# 这两个参数都会吞掉后面的参数，提示词前面必须有 `--`。
+[review]
+args = [
+  "-p",
+  "--no-session-persistence",
+  "--permission-mode", "dontAsk",
+  "--tools", "Read,Grep,Glob,Bash",
+  "--disallowedTools", "Edit,Write,NotebookEdit",
+  "--allowedTools", "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)",
+]
+separator = "--"
+
+[quick]
+args = ["-p", "--no-session-persistence", "--model", "haiku"]
+separator = "--"
+
+[screen]
+# 确认框是 "1. Yes" 开头的选项；第一次打开目录的信任提示没有编号，底部写着按 Enter 确认。
+approval = ["1. yes", "do you want to proceed", "enter to confirm"]
+busy = ["esc to interrupt", "esc to cancel"]
+choosing = ["enter to confirm"]
+
+[keys]
+interrupt = "\u001B"
+newline = "\u001B\r"
+
+[transcript]
+format = "claude"
+home = ".claude"
+home_env = "CLAUDE_CONFIG_DIR"
+
+# 从 Claude Code 里启动 Duolo 时会被继承下来，让 Agent 以为自己是子会话（例如不保存对话记录，之后就无法恢复）。
+[env]
+remove = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_CHILD_SESSION",
+  "CLAUDE_CODE_SESSION_ATTENDED",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_PID",
+  "CLAUDE_EFFORT",
+]

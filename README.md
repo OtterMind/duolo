@@ -103,22 +103,21 @@ Holding Fn needs the Accessibility permission once; Settings in the bottom left 
 writer = "claude"          # default agent for writing code
 reviewer = "codex"         # default agent for reviews
 
-[agents.claude]
-command = "claude"
-resume_args = ["--continue"]
-
-[agents.codex]
-command = "codex"
-resume_args = ["resume", "--last"]
-review_args = ["--sandbox", "read-only"]
+[agents.claude]            # changes the built-in settings; anything not listed stays as it is
+command = "/opt/homebrew/bin/claude"
+args = ["--model", "opus"]
 
 [voice]
 # A command that records and transcribes. It starts recording when launched and prints the text when told to stop
 # (SIGINT on macOS and Linux, a line saying "stop" on standard input on Windows).
 command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # tidy up filler words and self-corrections
-organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it
+organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it; defaults to an installed agent
 ```
+
+### Adding another agent
+
+Every agent is a plugin: an `agent.toml` that says how to start, resume and review with it, in `~/.duolo/agents/<id>/`. See [docs/agents.md](docs/agents.md) (in Chinese).
 
 ### Voice
 

@@ -119,6 +119,7 @@
   "error.stateRestored": "Le fichier de données de Duolo était endommagé et a été restauré depuis la sauvegarde. Le fichier endommagé est conservé dans {path}.",
   "error.stateReset": "Le fichier de données de Duolo était endommagé et aucune sauvegarde n’est utilisable : la liste des projets est donc vide. Votre code, vos branches et vos répertoires de travail sont intacts. Le fichier endommagé est conservé dans {path}.",
   "error.configInvalid": "{path} contient une erreur ; Duolo utilise pour l’instant la configuration par défaut. Corrigez-le puis redémarrez Duolo. Détails : {detail}",
+  "error.agentPluginInvalid": "Le plugin d’agent {path} contient une erreur et a été ignoré. Corrigez-le puis redémarrez Duolo. Détails : {detail}",
   "error.cannotStart": "Duolo ne peut pas démarrer : {detail}",
   "error.invalidBranch": "« {name} » ne peut pas être un nom de branche. Utilisez lettres, chiffres, - et /, sans espaces.",
   "error.branchExists": "La branche « {name} » existe déjà. Choisissez un autre nom.",

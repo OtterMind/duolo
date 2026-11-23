@@ -336,6 +336,9 @@ body.is-resizing * {
   flex: none;
   color: var(--muted);
 }
+.agent-mask {
+  display: inline-block;
+}
 .agent-letter {
   display: inline-flex;
   align-items: center;
@@ -1096,6 +1099,9 @@ body.is-resizing * {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.dialog:focus {
+  outline: none;
 }
 .dialog {
   width: 400px;

@@ -119,6 +119,7 @@
   "error.stateRestored": "Duolo のデータファイルが壊れていたため、バックアップから復元しました。壊れたファイルは {path} に残してあります。",
   "error.stateReset": "Duolo のデータファイルが壊れていて、使えるバックアップもないため、プロジェクト一覧は空です。コード、ブランチ、作業ディレクトリはそのままです。壊れたファイルは {path} に残してあります。",
   "error.configInvalid": "{path} に誤りがあるため、今はデフォルト設定を使っています。修正して Duolo を再起動してください。詳細：{detail}",
+  "error.agentPluginInvalid": "エージェントのプラグイン {path} に誤りがあるため、読み込みませんでした。修正して Duolo を再起動してください。詳細：{detail}",
   "error.cannotStart": "Duolo を起動できません：{detail}",
   "error.invalidBranch": "「{name}」はブランチ名に使えません。英数字、-、/ を使い、空白は入れないでください。",
   "error.branchExists": "ブランチ「{name}」はすでにあります。別の名前にしてください。",

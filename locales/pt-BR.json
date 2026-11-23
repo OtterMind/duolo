@@ -119,6 +119,7 @@
   "error.stateRestored": "O arquivo de dados do Duolo estava danificado e foi restaurado do backup. O arquivo danificado foi mantido em {path}.",
   "error.stateReset": "O arquivo de dados do Duolo estava danificado e não há backup utilizável, por isso a lista de projetos está vazia. Seu código, branches e diretórios de trabalho estão intactos. O arquivo danificado foi mantido em {path}.",
   "error.configInvalid": "{path} tem um erro, então o Duolo está usando a configuração padrão por enquanto. Corrija e reinicie o Duolo. Detalhes: {detail}",
+  "error.agentPluginInvalid": "O plugin de agente {path} tem um erro e foi ignorado. Corrija e reinicie o Duolo. Detalhes: {detail}",
   "error.cannotStart": "O Duolo não pode iniciar: {detail}",
   "error.invalidBranch": "“{name}” não pode ser nome de branch. Use letras, números, - e /, sem espaços.",
   "error.branchExists": "O branch “{name}” já existe. Escolha outro nome.",

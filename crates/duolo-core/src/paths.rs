@@ -13,6 +13,7 @@ pub const HOME_ENV: &str = "DUOLO_HOME";
 /// ~/.duolo/
 ///   config.toml   用户配置
 ///   state.json    项目和任务
+///   agents/       用户自己装的 Agent 插件
 ///   wt/           每个任务的 git worktree
 /// ```
 #[derive(Debug, Clone)]
@@ -49,6 +50,11 @@ impl Paths {
 
     pub fn state_file(&self) -> PathBuf {
         self.root.join("state.json")
+    }
+
+    /// 用户自己装的 Agent 插件：`agents/<id>/agent.toml`。
+    pub fn agents(&self) -> PathBuf {
+        self.root.join("agents")
     }
 
     pub fn worktrees(&self) -> PathBuf {

@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use duolo_core::proctree::{Members, ProcessTree};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
-use crate::detect::{classify, AgentState};
+use crate::detect::{classify, AgentState, Rules};
 
 /// 保留的回滚行数。
 const SCROLLBACK_LINES: usize = 5_000;
@@ -85,6 +85,8 @@ pub struct SessionSpec {
     /// 不传给子进程的环境变量。
     pub env_remove: Vec<String>,
     pub size: Size,
+    /// 怎么从画面认出状态。
+    pub rules: Rules,
     pub on_output: Option<OutputHook>,
 }
 
@@ -139,6 +141,7 @@ pub struct Session {
     pid: Option<u32>,
     started: Instant,
     size: Size,
+    rules: Rules,
     exit: Option<Exit>,
 }
 
@@ -215,6 +218,7 @@ impl Session {
             pid,
             started: Instant::now(),
             size: spec.size,
+            rules: spec.rules,
             exit: None,
         })
     }
@@ -308,7 +312,7 @@ impl Session {
             return AgentState::Exited(exit);
         }
         let tail = self.with_screen(|screen| tail_text(screen, DETECT_TAIL_LINES));
-        classify(&tail, self.activity.quiet_for())
+        classify(&self.rules, &tail, self.activity.quiet_for())
     }
 
     /// 画面上有内容、而且已经可以接收粘贴了。Claude Code、Codex 准备好输入框时会打开括号粘贴模式；
@@ -490,6 +494,7 @@ mod tests {
             env: Vec::new(),
             env_remove: Vec::new(),
             size: Size::new(10, 40),
+            rules: Rules::default(),
             on_output: None,
         }
     }

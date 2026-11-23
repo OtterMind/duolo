@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useT } from "../i18n";
+import { useModalFocus } from "../lib/modal";
 
 export interface ConfirmSpec {
   title: string;
@@ -16,8 +17,8 @@ export function Confirm({ spec, onDone, onError }: { spec: ConfirmSpec; onDone()
   const [running, setRunning] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
 
+  useModalFocus(button);
   useEffect(() => {
-    button.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();

@@ -119,6 +119,7 @@
   "error.stateRestored": "Duolo's data file was damaged and has been restored from its backup. The damaged file was kept at {path}.",
   "error.stateReset": "Duolo's data file was damaged and there is no usable backup, so the project list is empty. Your code, branches and working directories are untouched. The damaged file was kept at {path}.",
   "error.configInvalid": "{path} has a mistake, so Duolo is using the default settings for now. Fix it and restart Duolo. Details: {detail}",
+  "error.agentPluginInvalid": "The agent plugin {path} has a mistake and was skipped. Fix it and restart Duolo. Details: {detail}",
   "error.cannotStart": "Duolo can't start: {detail}",
   "error.invalidBranch": "“{name}” can't be a branch name. Use letters, numbers, - and /, without spaces.",
   "error.branchExists": "Branch “{name}” already exists. Pick another name.",

@@ -119,6 +119,7 @@
   "error.stateRestored": "Die Datendatei von Duolo war beschädigt und wurde aus der Sicherung wiederhergestellt. Die beschädigte Datei liegt unter {path}.",
   "error.stateReset": "Die Datendatei von Duolo war beschädigt und es gibt keine brauchbare Sicherung, daher ist die Projektliste leer. Code, Branches und Arbeitsverzeichnisse sind unverändert. Die beschädigte Datei liegt unter {path}.",
   "error.configInvalid": "{path} enthält einen Fehler, Duolo verwendet vorerst die Standardeinstellungen. Korrigiere die Datei und starte Duolo neu. Details: {detail}",
+  "error.agentPluginInvalid": "Das Agent-Plugin {path} enthält einen Fehler und wurde übersprungen. Korrigiere es und starte Duolo neu. Details: {detail}",
   "error.cannotStart": "Duolo kann nicht starten: {detail}",
   "error.invalidBranch": "„{name}“ ist kein gültiger Branch-Name. Nutze Buchstaben, Zahlen, - und / ohne Leerzeichen.",
   "error.branchExists": "Der Branch „{name}“ existiert bereits. Wähle einen anderen Namen.",

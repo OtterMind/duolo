@@ -2,6 +2,8 @@
 
 - 架构和依赖方向见 docs/architecture.md：`core` 不依赖任何 crate，`engine` 不依赖 UI。
 - 新功能先想清楚放在哪一层；和进程、终端相关的放 `duolo-pty`，和任务生命周期相关的放 `duolo-engine`。
+- **不写死任何 Agent 产品**：按 Agent 区分的事写进插件的声明（`crates/duolo-agent/agents/<id>/`），见 docs/agents.md。
+  替用户给 Agent 发消息用 `Engine::submit`，不直接粘贴加回车（会替用户选对话框里的选项）。
 - 持久化的模型字段只增不改，新增字段带 `#[serde(default)]`。
 - 拿着引擎的锁不做费时间的事（git、等进程退出、网络）；要几秒的操作放在 `duolo_engine::ops`。
 - 启动外部命令用 `duolo_core::process`（`command`、`Prompted`、`spawn_tree`），结束时用 `ProcessTree` / `Session::stop` 结束整棵进程树。

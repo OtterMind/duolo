@@ -29,6 +29,8 @@ import {
   type AgentOption,
 } from "../lib/agents";
 import type { Voice, VoiceTarget } from "../lib/voice";
+import { useModalFocus } from "../lib/modal";
+import { pluginName } from "../lib/plugins";
 import { AgentIcon } from "./AgentIcon";
 import { Waveform } from "./VoiceBar";
 import { TALK_KEY } from "../lib/platform";
@@ -91,7 +93,7 @@ export function NewTaskPanel(props: Props) {
   const agents = agentOptions(env);
   const noAgent = noAgentInstalled(env);
 
-  useEffect(() => input.current?.focus(), []);
+  useModalFocus(input);
   const refocus = () => {
     setOpen(null);
     input.current?.focus();
@@ -155,7 +157,9 @@ export function NewTaskPanel(props: Props) {
       className="scrim panel-scrim"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) => {
-        if (e.key === "Escape" && !open && !branch.editing && voice.phase.kind === "idle") onClose();
+        if (e.key !== "Escape") return;
+        if (open) setOpen(null);
+        else if (!branch.editing && voice.phase.kind === "idle") onClose();
       }}
     >
       <div className="new-task" role="dialog" aria-label={t("sidebar.newTask")}>
@@ -164,7 +168,7 @@ export function NewTaskPanel(props: Props) {
           className="new-task-input"
           rows={2}
           value={prompt}
-          placeholder={t("newTask.placeholder", { agent: nameOf(agents, choice.writer) })}
+          placeholder={t("newTask.placeholder", { agent: pluginName(choice.writer) })}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -288,7 +292,7 @@ export function NewTaskPanel(props: Props) {
             <div className="dropdown-anchor">
               <button
                 className={`chip ${open === "writer" ? "is-open" : ""}`}
-                title={t("newTask.writer", { agent: nameOf(agents, choice.writer) })}
+                title={t("newTask.writer", { agent: pluginName(choice.writer) })}
                 onClick={() => setOpen(open === "writer" ? null : "writer")}
               >
                 <AgentIcon kind={choice.writer} size={13} />
@@ -311,7 +315,7 @@ export function NewTaskPanel(props: Props) {
             <div className="dropdown-anchor">
               <button
                 className={`chip ${open === "reviewer" ? "is-open" : ""}`}
-                title={t("newTask.reviewer", { agent: nameOf(agents, choice.reviewer) })}
+                title={t("newTask.reviewer", { agent: pluginName(choice.reviewer) })}
                 onClick={() => setOpen(open === "reviewer" ? null : "reviewer")}
               >
                 <AgentIcon kind={choice.reviewer} size={13} />
@@ -319,7 +323,7 @@ export function NewTaskPanel(props: Props) {
               {open === "reviewer" && (
                 <AgentMenu
                   title={t("newTask.reviewerTitle")}
-                  agents={agents}
+                  agents={agents.filter((a) => a.reviews)}
                   selected={choice.reviewer}
                   onPick={(id) => {
                     pickedAgents.current = true;
@@ -493,9 +497,6 @@ function BranchField({ branch }: { branch: BranchNameState }) {
   );
 }
 
-/** Agent 的显示名；环境检查还没结果时用种类名首字母大写。 */
-const nameOf = (agents: AgentOption[], id: string) =>
-  agents.find((a) => a.id === id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1);
 
 /** 选项目：已添加的项目，最下面是"添加项目…"。 */
 function ProjectMenu({

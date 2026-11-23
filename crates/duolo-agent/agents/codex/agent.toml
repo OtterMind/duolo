@@ -1,0 +1,43 @@
+# Codex CLI。字段说明见 docs/agents.md。
+schema = 1
+id = "codex"
+name = "Codex"
+command = "codex"
+
+[install]
+default = "npm install -g @openai/codex"
+
+[start]
+prompt = "argument"
+separator = "--"
+resume_args = ["resume", "--last"]
+review_args = ["--sandbox", "read-only"]
+
+[review]
+args = ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never"]
+separator = "--"
+
+[quick]
+args = [
+  "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never",
+  "--ephemeral", "-c", "model_reasoning_effort=low",
+]
+separator = "--"
+
+[screen]
+# 信任目录、是否升级这样的对话框，底部写着 "enter continue"（旧版是 "Press enter to continue"）。
+approval = [
+  "1. yes", "allow command", "would you like to run the following command",
+  "enter to confirm", "enter continue", "enter to continue",
+]
+busy = ["esc to interrupt", "esc to cancel"]
+choosing = ["enter to confirm", "enter continue", "enter to continue"]
+
+[keys]
+interrupt = "\u001B"
+newline = "\u001B\r"
+
+[transcript]
+format = "codex"
+home = ".codex"
+home_env = "CODEX_HOME"

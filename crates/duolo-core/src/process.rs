@@ -74,29 +74,49 @@ impl FeatureGate {
     }
 }
 
-/// 程序开着的功能，按程序文件和修改时间记住（程序自己升级后重新问）。
+/// 程序开着的功能（程序自己升级后重新问）。
 fn enabled_features(program: &str, list: &[String]) -> Vec<String> {
-    use std::collections::HashMap;
-    use std::sync::{Mutex, OnceLock};
-    /// 按（程序的真实路径，修改时间）记住的结果。
-    type Cache = Mutex<HashMap<(PathBuf, Option<std::time::SystemTime>), Vec<String>>>;
-    static CACHE: OnceLock<Cache> = OnceLock::new();
+    probe(program, list, PROBE_TIMEOUT).map(|out| parse_enabled(&out)).unwrap_or_default()
+}
+
+/// 问程序一件事（版本号、功能列表）最长等多久。
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 记住的输出：键是（程序的真实路径，修改时间，参数），程序自己升级后修改时间变了，就重新问。
+type ProbeCache =
+    std::sync::Mutex<std::collections::HashMap<(PathBuf, Option<std::time::SystemTime>, Vec<String>), String>>;
+
+fn probe_cache() -> &'static ProbeCache {
+    static CACHE: std::sync::OnceLock<ProbeCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+fn probe_key(program: &str, args: &[String]) -> (PathBuf, Option<std::time::SystemTime>, Vec<String>) {
     let path = resolve(program);
     let real = std::fs::canonicalize(&path).unwrap_or(path);
-    let key = (real.clone(), std::fs::metadata(&real).and_then(|m| m.modified()).ok());
-    let cache = CACHE.get_or_init(Mutex::default);
-    if let Some(found) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&key) {
-        return found.clone();
+    let modified = std::fs::metadata(&real).and_then(|m| m.modified()).ok();
+    (real, modified, args.to_vec())
+}
+
+/// 运行 `program args`，返回并记住它的标准输出。没运行成功（找不到、出错、超时）时为 None，不记住。
+pub fn probe(program: &str, args: &[String], timeout: Duration) -> Option<String> {
+    if let Some(found) = probed(program, args) {
+        return Some(found);
     }
-    let mut cmd = command(program);
-    cmd.args(list).stdin(Stdio::null()).stderr(Stdio::null());
-    let Ok(output) = cmd.output() else { return Vec::new() };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    let found = parse_enabled(&String::from_utf8_lossy(&output.stdout));
-    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(key, found.clone());
-    found
+    let argv: Vec<String> = std::iter::once(program.to_string()).chain(args.iter().cloned()).collect();
+    let (status, out) = output_within(Prompted::new(&OneShot::from(argv), None)?, timeout).ok()?;
+    status.success().then(|| remember(program, args, &out)).flatten()
+}
+
+/// 只看记住的，不运行（拿着锁的时候用）。
+pub fn probed(program: &str, args: &[String]) -> Option<String> {
+    probe_cache().lock().unwrap_or_else(|p| p.into_inner()).get(&probe_key(program, args)).cloned()
+}
+
+/// 记住别处运行得到的输出（例如环境检查里的 `--version`），返回它。
+pub fn remember(program: &str, args: &[String], output: &str) -> Option<String> {
+    probe_cache().lock().unwrap_or_else(|p| p.into_inner()).insert(probe_key(program, args), output.to_string());
+    Some(output.to_string())
 }
 
 /// `<功能名> … <true|false>` 的行里开着的功能名。

@@ -121,7 +121,7 @@ organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认�
 
 ### 接入别的 Agent
 
-每种 Agent 都是一个插件：一份说明怎么启动、恢复、审阅它的 `agent.toml`，放在 `~/.duolo/agents/<id>/`。写法见 [docs/agents.md](docs/agents.md)。
+每种 Agent 都是一个插件：一份说明怎么启动、恢复、审阅它的 `agent.toml`，放在 `~/.duolo/agents/<id>/`。写法见 [docs/agents.md](docs/agents.md)。Agent 升级后 Duolo 怎么还能用（状态报告、不让启动对话框出现、版本检查、钩子）见 [docs/agent-compat.md](docs/agent-compat.md)。
 
 ### 语音
 

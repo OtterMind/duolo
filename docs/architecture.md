@@ -119,6 +119,9 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 - 换人只改状态，谁跑着 Agent 谁负责执行：`Engine::adopt`（每次读到新状态都会走）发现这个进程里跑着的 Agent
   已经不在任务里了，就停掉它，没发出去的消息交给接手的。所以命令行（`duolo switch`）、手机都能换；
   接手的由打开任务的界面启动（手机发来的命令直接启动）。
+- Agent 升级后还能用的整体做法见 [agent-compat.md](agent-compat.md)。
+- 钩子：`--settings` 交给 Agent 一份设置文件，钩子命令是 Duolo 自己的程序（`__hook`，`duolo-core/src/hook.rs`），
+  事件写成 `~/.duolo/hooks/<任务>-<Agent>/` 里的文件，引擎（`live.rs` 的 `poll_hooks`）读了就删。
 - Agent 的状态：先看它自己报告的（OSC 7501，`duolo-pty/src/status.rs` 回答询问、读报告），
   没报告过的（不支持，或者还停在启动时的对话框上）再看画面上的字（插件的 `[screen]`）。
   启动前替用户信任任务的目录（插件的 `[trust]`，`duolo-agent/src/trust.rs`）、关掉升级提示（`always_args`、`env`），

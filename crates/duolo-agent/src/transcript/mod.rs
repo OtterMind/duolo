@@ -330,9 +330,9 @@ fn user_text(text: &str) -> Option<Entry> {
     (!generated).then(|| Entry::User(text.into()))
 }
 
-/// 工具调用的对象：文件路径、命令、搜索词，取第一个有的。
-fn tool_target(input: &Value) -> String {
-    for key in ["file_path", "path", "notebook_path", "pattern", "url", "query", "description"] {
+/// 工具调用的对象：文件路径、命令、搜索词，取第一个有的。命令排在说明前面：请求授权时要看清楚运行的是什么。
+pub(crate) fn tool_target(input: &Value) -> String {
+    for key in ["file_path", "path", "notebook_path", "pattern", "url", "query"] {
         if let Some(s) = input[key].as_str() {
             return short(s);
         }
@@ -340,7 +340,7 @@ fn tool_target(input: &Value) -> String {
     match &input["command"] {
         Value::String(s) => short(s),
         Value::Array(parts) => short(&parts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),
-        _ => String::new(),
+        _ => input["description"].as_str().map(short).unwrap_or_default(),
     }
 }
 

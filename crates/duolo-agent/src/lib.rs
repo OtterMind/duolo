@@ -4,12 +4,14 @@
 //! 声明表达不了的部分（读会话记录）在这里写成代码，由声明按名字引用。
 //! 别的 crate 只通过 [`Registry`] 和 [`Plugin`] 使用，不出现任何产品的名字。写法见 docs/agents.md。
 
+mod hooks;
 mod manifest;
 mod plugin;
 mod registry;
 mod transcript;
 mod trust;
 
+pub use hooks::HookEvent;
 pub use manifest::{Keys, Manifest, PromptVia, Screen};
 pub use plugin::{Launch, Plugin, Start};
 pub use registry::Registry;

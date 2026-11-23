@@ -73,6 +73,16 @@ pub fn clean_branch_name(raw: &str) -> Option<String> {
 
 const BRANCH_MAX_CHARS: usize = 50;
 
+/// 从 `--version` 的输出里取出版本号，例如 `codex-cli 0.169.1` → `0.169.1`、`2.1.311 (Claude Code)` → `2.1.311`。
+pub fn version_in(output: &str) -> Option<String> {
+    output
+        .lines()
+        .next()?
+        .split_whitespace()
+        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))
+        .map(Into::into)
+}
+
 /// `2.1.311`、`v0.169.1`、`1.2.3-beta.1` 的数字部分；不像版本号时为 None。
 pub fn parse_version(text: &str) -> Option<Vec<u64>> {
     let core = text.trim().trim_start_matches('v').split(['-', '+']).next()?;

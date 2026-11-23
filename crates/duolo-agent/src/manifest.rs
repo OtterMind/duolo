@@ -12,6 +12,8 @@ pub const SCHEMA: u32 = 1;
 
 /// `resume_session_args` 里换成会话编号的占位符。
 pub(crate) const SESSION: &str = "{session}";
+/// `hooks.args` 里换成设置文件路径的占位符。
+pub(crate) const SETTINGS: &str = "{settings}";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -48,6 +50,8 @@ pub struct Manifest {
     pub transcript: Option<TranscriptSpec>,
     #[serde(default)]
     pub trust: Option<TrustSpec>,
+    #[serde(default)]
+    pub hooks: Option<HooksSpec>,
     #[serde(default)]
     pub env: EnvSpec,
 }
@@ -193,6 +197,18 @@ pub struct TranscriptSpec {
     pub home_env: Option<String>,
 }
 
+/// 钩子：它在会话开始、请求授权这些时候运行 Duolo 给的命令（见 `hooks` 模块）。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HooksSpec {
+    /// 用哪段代码拼设置、读事件，见 `hooks` 模块。
+    pub format: String,
+    /// 把设置文件交给它的参数，`{settings}` 换成文件路径。
+    pub args: Vec<String>,
+    /// 要的事件和最早支持它的版本。装的版本更旧、或者读不出版本时，不装这个事件。
+    pub events: std::collections::BTreeMap<String, String>,
+}
+
 /// 它把"信任这个文件夹"记在哪里，Duolo 启动它之前替用户记下（见 `trust` 模块）。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -255,6 +271,7 @@ impl Manifest {
             keys: Keys::default(),
             transcript: None,
             trust: None,
+            hooks: None,
             env: EnvSpec::default(),
         }
     }
@@ -281,6 +298,16 @@ impl Manifest {
         }
         if let Some(minimum) = &self.minimum_version {
             ensure!(duolo_core::text::parse_version(minimum).is_some(), "minimum_version must look like 1.2.3");
+        }
+        if let Some(hooks) = &self.hooks {
+            ensure!(crate::hooks::format(&hooks.format).is_some(), "unknown hooks format {:?}", hooks.format);
+            ensure!(hooks.args.iter().any(|a| a.contains(SETTINGS)), "hooks.args must contain {SETTINGS}");
+            for (event, since) in &hooks.events {
+                ensure!(
+                    duolo_core::text::parse_version(since).is_some(),
+                    "hooks.events.{event} must be a version like 1.2.3"
+                );
+            }
         }
         if let Some(trust) = &self.trust {
             ensure!(crate::trust::store(&trust.format).is_some(), "unknown trust format {:?}", trust.format);

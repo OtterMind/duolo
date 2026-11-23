@@ -120,7 +120,7 @@ organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it; de
 
 ### Adding another agent
 
-Every agent is a plugin: an `agent.toml` that says how to start, resume and review with it, in `~/.duolo/agents/<id>/`. See [docs/agents.md](docs/agents.md) (in Chinese).
+Every agent is a plugin: an `agent.toml` that says how to start, resume and review with it, in `~/.duolo/agents/<id>/`. See [docs/agents.md](docs/agents.md) (in Chinese). How Duolo keeps working when an agent updates (status reports, no startup dialogs, version checks, hooks) is in [docs/agent-compat.md](docs/agent-compat.md).
 
 ### Voice
 

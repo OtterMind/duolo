@@ -19,6 +19,14 @@ review_args = ["--permission-mode", "plan"]
 # 不在启动时自己升级（升级由用户决定，也免得升级到一半换了界面）。
 env = { DISABLE_AUTOUPDATER = "1" }
 
+# 钩子（见 docs/agent-compat.md）：会话开始时告诉 Duolo 准确的会话编号（清空对话后也跟得上），
+# 请求授权时告诉它要用什么工具、做什么。设置文件每次启动时交给它，不改用户的配置。
+# 后面是最早支持这个事件的版本：旧版遇到不认识的事件会拒绝整个设置文件（版本取自 Orca 整理的 Claude Code 事件表）。
+[hooks]
+format = "claude"
+args = ["--settings", "{settings}"]
+events = { SessionStart = "1.0.62", PermissionRequest = "2.0.45" }
+
 # 第一次在一个文件夹里启动时问的"信任这个文件夹吗"：按文件夹的真实路径记在 .claude.json 里，子文件夹不继承。
 [trust]
 format = "claude"

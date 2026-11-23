@@ -5,8 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use duolo_agent::Registry;
-use duolo_core::process::{output_within, OneShot, Prompted};
-use duolo_core::text::is_older;
+use duolo_core::process::{self, output_within, OneShot, Prompted};
+use duolo_core::text::{is_older, version_in};
 use duolo_core::{t, tf, AgentKind, Config};
 
 /// `--version` 最长等多久。
@@ -117,7 +117,9 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
     let Some(prompted) = Prompted::new(&command, None) else { return base };
     match output_within(prompted, timeout) {
         Ok((status, out)) if status.success() => {
-            let version = version_of(&out).unwrap_or_default();
+            // 记下来：启动 Agent 时要按版本决定用哪些功能，那时拿着锁，不能再运行它。
+            process::remember(command.program(), &command.argv[1..], &out);
+            let version = version_in(&out).unwrap_or_default();
             Check { ok: true, detail: version.clone(), version, ..base }
         }
         // 装了，只是版本号半天出不来（例如正在检查更新）。
@@ -126,25 +128,16 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
     }
 }
 
-/// 从 `--version` 的输出里取出版本号，例如 `codex-cli 0.169.1` → `0.169.1`。
-fn version_of(text: &str) -> Option<String> {
-    text.lines()
-        .next()?
-        .split_whitespace()
-        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))
-        .map(Into::into)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn versions() {
-        assert_eq!(version_of("codex-cli 0.169.1\n").as_deref(), Some("0.169.1"));
-        assert_eq!(version_of("2.1.311 (Claude Code)").as_deref(), Some("2.1.311"));
-        assert_eq!(version_of("git version 2.50.1 (Apple Git-155)").as_deref(), Some("2.50.1"));
-        assert_eq!(version_of("no digits"), None);
+        assert_eq!(version_in("codex-cli 0.169.1\n").as_deref(), Some("0.169.1"));
+        assert_eq!(version_in("2.1.311 (Claude Code)").as_deref(), Some("2.1.311"));
+        assert_eq!(version_in("git version 2.50.1 (Apple Git-155)").as_deref(), Some("2.50.1"));
+        assert_eq!(version_in("no digits"), None);
     }
 
     #[test]

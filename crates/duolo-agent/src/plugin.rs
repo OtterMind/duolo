@@ -5,7 +5,10 @@ use duolo_core::{AgentKind, AgentOverride, AgentRole};
 
 use std::path::Path;
 
-use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, SESSION};
+use duolo_core::text::{is_older, version_in};
+
+use crate::hooks::{self, HookEvent};
+use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, SESSION, SETTINGS};
 use crate::transcript::{self, Home, Sessions, Watch};
 use crate::trust;
 
@@ -26,6 +29,8 @@ pub struct Start<'a> {
     /// 恢复时：要恢复的会话编号，不知道时恢复这个目录里最近的一次。
     /// 新开时：Duolo 给它定的会话编号（见 [`Plugin::assigns_session`]）。
     pub session: Option<&'a str>,
+    /// 钩子设置文件（见 [`Plugin::hook_settings`]）；不装钩子时为 None。
+    pub hooks: Option<&'a str>,
     pub prompt: Option<&'a str>,
 }
 
@@ -84,6 +89,26 @@ impl Plugin {
 
     pub fn command(&self) -> &str {
         &self.manifest.command
+    }
+
+    /// 装的版本：环境检查问过（`--version`）才知道，这里不再运行它。
+    pub fn version(&self) -> Option<String> {
+        process::probed(self.command(), &["--version".to_string()]).and_then(|out| version_in(&out))
+    }
+
+    /// 启动时交给它的钩子设置：它要的事件里，`version` 已经支持的那些发生时运行 `command`。
+    /// 不支持钩子、读不出版本（旧版遇到不认识的事件会拒绝整个设置）、一个事件都用不了时为 None。
+    pub fn hook_settings(&self, command: &str, version: Option<&str>) -> Option<String> {
+        let spec = self.manifest.hooks.as_ref()?;
+        let version = version?;
+        let events: Vec<&str> =
+            spec.events.iter().filter(|(_, since)| !is_older(version, since)).map(|(e, _)| e.as_str()).collect();
+        (!events.is_empty()).then(|| hooks::format(&spec.format)).flatten().map(|f| f.settings(command, &events))
+    }
+
+    /// 一个钩子事件里 Duolo 用得上的。
+    pub fn hook_event(&self, event: &serde_json::Value) -> Option<HookEvent> {
+        hooks::format(&self.manifest.hooks.as_ref()?.format)?.parse(event)
     }
 
     /// 最低能用的版本，见 [`Manifest::minimum_version`]。
@@ -151,6 +176,9 @@ impl Plugin {
         let mut paste = None;
         if start.role == AgentRole::Reviewer {
             args.extend(spec.review_args.iter().cloned());
+        }
+        if let (Some(file), Some(spec)) = (start.hooks, &self.manifest.hooks) {
+            args.extend(spec.args.iter().map(|a| a.replace(SETTINGS, file)));
         }
         if start.resume {
             match start.session.filter(|_| !spec.resume_session_args.is_empty()) {
@@ -249,7 +277,7 @@ mod tests {
     }
 
     fn write(prompt: &str) -> Start<'_> {
-        Start { role: AgentRole::Writer, resume: false, session: None, prompt: Some(prompt) }
+        Start { role: AgentRole::Writer, resume: false, session: None, hooks: None, prompt: Some(prompt) }
     }
 
     #[test]
@@ -279,14 +307,15 @@ mod tests {
     #[test]
     fn resuming_does_not_repeat_the_prompt() {
         let p = plugin("resume_args = [\"-c\"]\nreview_args = [\"--ro\"]");
-        let start = Start { role: AgentRole::Reviewer, resume: true, session: None, prompt: Some("again") };
+        let start =
+            Start { role: AgentRole::Reviewer, resume: true, session: None, hooks: None, prompt: Some("again") };
         assert_eq!(p.launch_as(start, false).args, ["--ro", "-c"]);
     }
 
     #[test]
     fn resumes_the_known_session() {
         let p = plugin("resume_args = [\"-c\"]\nresume_session_args = [\"-r\", \"{session}\"]");
-        let start = |session| Start { role: AgentRole::Writer, resume: true, session, prompt: None };
+        let start = |session| Start { role: AgentRole::Writer, resume: true, session, hooks: None, prompt: None };
         assert_eq!(p.launch_as(start(Some("ab-12")), false).args, ["-r", "ab-12"]);
         assert_eq!(p.launch_as(start(None), false).args, ["-c"], "还不知道编号时恢复最近的");
         // 没写按编号怎么恢复的插件，有编号也只能恢复最近的。
@@ -299,7 +328,8 @@ mod tests {
     #[test]
     fn fresh_start_can_take_our_session_id() {
         let p = plugin("separator = \"--\"\nsession_id_args = [\"--session-id\", \"{session}\"]");
-        let start = Start { role: AgentRole::Writer, resume: false, session: Some("u-1"), prompt: Some("- fix") };
+        let start =
+            Start { role: AgentRole::Writer, resume: false, session: Some("u-1"), hooks: None, prompt: Some("- fix") };
         assert_eq!(p.launch_as(start, false).args, ["--session-id", "u-1", "--", "- fix"]);
         assert!(p.assigns_session() && !plugin("").assigns_session());
         let off = p.with(&AgentOverride { session_id_args: Some(Vec::new()), ..Default::default() });
@@ -309,10 +339,34 @@ mod tests {
     #[test]
     fn some_args_cannot_be_replaced() {
         let p = plugin("always_args = [\"--quiet\"]\nargs = [\"-v\"]");
-        let start = Start { role: AgentRole::Writer, resume: false, session: None, prompt: None };
+        let start = Start { role: AgentRole::Writer, resume: false, session: None, hooks: None, prompt: None };
         assert_eq!(p.launch_as(start, false).args, ["-v", "--quiet"]);
         let changed = p.with(&AgentOverride { args: Some(vec!["--model".into(), "x".into()]), ..Default::default() });
         assert_eq!(changed.launch_as(start, false).args, ["--model", "x", "--quiet"], "config.toml 的 args 换不掉它");
+    }
+
+    #[test]
+    fn hooks_follow_the_version() {
+        let text = "schema = 1\nid = \"x\"\nname = \"X\"\ncommand = \"x\"\n\
+                    [hooks]\nformat = \"claude\"\nargs = [\"--settings\", \"{settings}\"]\n\
+                    events = { SessionStart = \"1.0.62\", PermissionRequest = \"2.0.45\" }\n";
+        let p = Plugin::new(Manifest::parse(text).unwrap(), None);
+        let events = |version| {
+            let settings: serde_json::Value = serde_json::from_str(&p.hook_settings("h", Some(version))?).ok()?;
+            Some(settings["hooks"].as_object()?.keys().cloned().collect::<Vec<_>>())
+        };
+        assert_eq!(events("2.1.0").unwrap(), ["PermissionRequest", "SessionStart"]);
+        assert_eq!(events("1.0.70").unwrap(), ["SessionStart"], "旧版不认识的事件不装");
+        assert_eq!(events("1.0.1"), None);
+        assert_eq!(p.hook_settings("h", None), None, "读不出版本时不装");
+        let start = Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: Some("/h/s.json"),
+            prompt: Some("go"),
+        };
+        assert_eq!(p.launch_as(start, false).args, ["--settings", "/h/s.json", "go"]);
     }
 
     #[test]

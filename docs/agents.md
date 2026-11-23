@@ -1,5 +1,7 @@
 # Agent 插件
 
+Agent 升级后怎么还能用（状态、对话框、版本、钩子的设计和理由，以及升级后的检查步骤）见 [agent-compat.md](agent-compat.md)。
+
 Duolo 里的每一种编程 Agent 都是一个插件：一份声明 `agent.toml`，加一个图标 `icon.svg`。
 引擎、终端界面、桌面界面都只认插件的接口，代码里不出现任何产品的名字
 （测试 `only_plugins_know_product_names` 会检查）。
@@ -67,6 +69,11 @@ newline = "\u001B\r"       # 输入框里换行（⇧↵）
 format = "claude"          # 用哪段代码读，见 crates/duolo-agent/src/transcript/
 home = ".toy"              # 数据目录，相对家目录
 home_env = "TOY_HOME"      # 设置了这个环境变量时用它
+
+[hooks]                    # 钩子：每次启动交给它一份设置文件，事件由 Duolo 自己的程序（`__hook`）收
+format = "claude"          # 用哪段代码拼设置、读事件，见 crates/duolo-agent/src/hooks.rs
+args = ["--settings", "{settings}"]   # 怎么把设置文件交给它
+events = { SessionStart = "1.0.62" }  # 要的事件和最早支持它的版本；更旧、读不出版本时不装
 
 [trust]                    # 它把"信任这个文件夹"记在哪里，Duolo 启动它之前替用户记下
 format = "claude"          # 用哪段代码写，见 crates/duolo-agent/src/trust.rs

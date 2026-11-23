@@ -66,6 +66,12 @@ pub enum EventKind {
         detail: String,
         options: Vec<String>,
     },
+    /// Agent 请求授权（来自它的钩子）：用什么工具、对什么（文件路径、命令）。
+    Approval {
+        agent: u32,
+        tool: String,
+        target: String,
+    },
     /// 换了写代码的 Agent：`from` 换下来，`to`（`kind` 插件）接手。
     WriterChanged {
         from: u32,

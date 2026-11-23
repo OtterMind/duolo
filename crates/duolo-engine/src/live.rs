@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use duolo_agent::{Entry, Home, Sessions, Watch};
+use duolo_agent::{Entry, Home, HookEvent, Sessions, Watch};
 use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, State, TaskEvent, TaskId, UserError};
 
 use crate::engine::Engine;
@@ -73,6 +73,7 @@ impl LiveState {
 impl Engine {
     /// 收集新事件并记下来，返回这次新增的（界面每次刷新时调用）。
     pub fn poll_events(&mut self) -> Vec<TaskEvent> {
+        self.poll_hooks();
         self.poll_transcripts();
         self.poll_agent_states();
         self.poll_diffs();
@@ -127,6 +128,42 @@ impl Engine {
             };
             self.record(key.task, kind);
         }
+    }
+
+    /// Agent 的钩子写下的事件（见 `duolo_core::hook`）：会话编号以它为准，请求授权记成事件。
+    fn poll_hooks(&mut self) {
+        let keys: Vec<AgentKey> = self.sessions.keys().copied().collect();
+        for key in keys {
+            let events = duolo_core::hook::take_events(&self.hook_dir(key));
+            if events.is_empty() {
+                continue;
+            }
+            let Ok(plugin) = self.plugin_of(key) else { continue };
+            let found: Vec<HookEvent> = events.iter().filter_map(|e| plugin.hook_event(e)).collect();
+            for event in found {
+                match event {
+                    HookEvent::Session(id) => self.set_session(key, id),
+                    HookEvent::Approval { tool, target } => {
+                        self.record(key.task, EventKind::Approval { agent: key.agent, tool, target });
+                    }
+                }
+            }
+        }
+    }
+
+    /// Agent 亲口说的会话编号（钩子）：直接记下，告诉同一个任务里的其他 Agent。
+    fn set_session(&mut self, key: AgentKey, id: String) {
+        let known = self.state.task(key.task).and_then(|t| t.agent(key.agent)).and_then(|a| a.session.clone());
+        if known.as_deref() == Some(id.as_str()) {
+            return;
+        }
+        let _ = self.update(|state| {
+            if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
+                agent.session = Some(id.clone());
+            }
+            Ok(())
+        });
+        self.share_sessions(key.task);
     }
 
     /// 记下 Agent 的会话编号，下次按编号恢复。同一个任务里别的 Agent 已经认领的编号不抢，
@@ -724,6 +761,58 @@ mod tests {
         assert_eq!(read()["numStartups"], 1);
         engine.close_task(task).unwrap();
         assert!(read()["projects"].get(worktree.display().to_string()).is_none(), "任务关了，信任也删掉");
+    }
+
+    /// 钩子：设置文件随启动交给它；它在钩子里说的会话编号以此为准，请求授权记成事件。
+    #[cfg(unix)]
+    #[test]
+    fn hook_events_are_picked_up() {
+        let (dir, engine, project) = engine("cat");
+        drop(engine);
+        // 假的钩子程序：和 Duolo 的 `__hook` 一样，把标准输入写成事件目录里的一个文件。
+        let hook = dir.path().join("hook.sh");
+        std::fs::write(
+            &hook,
+            "f=\"$DUOLO_HOOK_DIR/$(date +%s)$$-$1.json\"; cat > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"\n",
+        )
+        .unwrap();
+        // 假 Agent：打印参数，然后像 Claude 一样运行两个钩子。
+        let script = format!(
+            "echo \"args:$*\"; \
+             printf '%s' '{{\"hook_event_name\":\"SessionStart\",\"session_id\":\"zz-1\"}}' | sh {hook} 1; \
+             printf '%s' '{{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":\"pnpm test\"}}}}' | sh {hook} 2; \
+             cat",
+            hook = hook.display()
+        );
+        let config = format!(
+            "[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\nsession_id_args = []\n"
+        );
+        std::fs::write(dir.path().join("home/config.toml"), config).unwrap();
+        let mut engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        engine.set_agent_home(dir.path().join("user-home"));
+        // 环境检查问过版本；钩子命令交给假的钩子程序（真的是 Duolo 自己）。
+        duolo_core::process::remember("sh", &["--version".to_string()], "2.1.300 (Claude Code)");
+        engine.set_hook_program(hook.clone());
+
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--settings ");
+        let settings_file =
+            screen(&engine, key).split("--settings ").nth(1).unwrap().split_whitespace().next().unwrap().to_string();
+        let settings: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_file).unwrap()).unwrap();
+        assert!(settings["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("hook.sh\" __hook"));
+        let events = wait_for(&mut engine, "approval", |events| {
+            events.iter().any(|e| matches!(&e.kind, EventKind::Approval { tool, target, .. } if tool == "Bash" && target == "pnpm test"))
+        });
+        assert!(!events.is_empty());
+        assert_eq!(engine.state().task(task).unwrap().agents[0].session.as_deref(), Some("zz-1"));
+        engine.close_task(task).unwrap();
+        assert!(!std::path::Path::new(&settings_file).exists(), "关任务时清掉");
     }
 
     /// 能定会话编号的：启动时就定好、记下，下次按它恢复；重新开始时换一个新的。

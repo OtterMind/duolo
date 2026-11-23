@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use duolo_agent::{Plugin, Registry, Start};
 use duolo_core::config::{CHANGES_IN_FILE, CHANGES_IN_GIT};
+use duolo_core::hook::HOOK_DIR_ENV;
 use duolo_core::process::OneShot;
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
@@ -173,6 +174,8 @@ pub struct Engine {
     pub(crate) resuming: HashSet<AgentKey>,
     /// 由 Duolo 定了会话编号、还在观察期内的 Agent。
     assigning: HashSet<AgentKey>,
+    /// 钩子命令用的程序（Duolo 自己，见 `duolo_core::hook`）；没设置时不装钩子。
+    hook_program: Option<PathBuf>,
     /// 这次运行里发现不认得"指定会话编号"选项的 Agent（版本太旧，或者以后改了名字），之后不再给它定编号。
     no_session_ids: HashSet<AgentKind>,
     reviews: HashMap<TaskId, ReviewJob>,
@@ -248,6 +251,7 @@ impl Engine {
             next_session_id: 1,
             resuming: HashSet::new(),
             assigning: HashSet::new(),
+            hook_program: None,
             no_session_ids: HashSet::new(),
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
@@ -616,10 +620,15 @@ impl Engine {
     pub fn finish_close(&mut self, id: TaskId, result: Result<Closed>) -> Result<Closed> {
         self.closing.remove(&id);
         let closed = result?;
-        // 任务的目录没了，替它记下的信任也删掉（每种 Agent 都试一下：中途可能换过人）。
+        // 任务的目录没了，替它记下的信任也删掉（每种 Agent 都试一下：中途可能换过人）。钩子的事件也不要了。
         if let Some(task) = self.state.task(id) {
             for plugin in self.agents.iter() {
                 let _ = plugin.forget_trust(&self.live.home, &task.worktree);
+            }
+            for agent in task.agents.iter().chain(&task.retired) {
+                let dir = self.hook_dir(task.key(agent.id));
+                let _ = std::fs::remove_dir_all(&dir);
+                let _ = std::fs::remove_file(dir.with_extension("settings.json"));
             }
         }
         self.update(|state| {
@@ -965,6 +974,29 @@ impl Engine {
     }
 
     /// 启动 Agent 的命令。第二项是要等 Agent 准备好后再粘贴过去的第一句话（见下面的说明），一般是 None。
+    /// Agent 的钩子交给哪个程序：桌面应用、命令行启动时传自己（`std::env::current_exe`）。
+    pub fn set_hook_program(&mut self, program: PathBuf) {
+        self.hook_program = Some(program);
+    }
+
+    /// Agent 的钩子事件写在哪个目录。
+    pub(crate) fn hook_dir(&self, key: AgentKey) -> PathBuf {
+        self.paths.hooks().join(format!("{}-{}", key.task, key.agent))
+    }
+
+    /// 准备好钩子：清掉上次留下的事件，写好设置文件，返回它的路径。不装钩子时为 None。
+    fn prepare_hooks(&self, key: AgentKey, plugin: &Plugin) -> Option<String> {
+        let program = self.hook_program.as_ref()?;
+        let command = format!("\"{}\" {}", program.display(), duolo_core::hook::HOOK_ARG);
+        let settings = plugin.hook_settings(&command, plugin.version().as_deref())?;
+        let dir = self.hook_dir(key);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).ok()?;
+        let file = dir.with_extension("settings.json");
+        std::fs::write(&file, settings).ok()?;
+        Some(file.display().to_string())
+    }
+
     /// `assigned` 是新开会话时 Duolo 给它定的会话编号。
     fn session_spec(
         &self,
@@ -988,14 +1020,19 @@ impl Engine {
             )),
         };
         let session = if resume { agent.session.as_deref() } else { assigned };
-        let start = Start { role: agent.role, resume, session, prompt: prompt.as_deref() };
+        let hooks = self.prepare_hooks(key, plugin);
+        let start = Start { role: agent.role, resume, session, hooks: hooks.as_deref(), prompt: prompt.as_deref() };
         let launch = plugin.launch(start);
         let screen = plugin.screen();
         let spec = SessionSpec {
             program: launch.program,
             args: launch.args,
             cwd: task.worktree.clone(),
-            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())].into_iter().chain(launch.env).collect(),
+            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())]
+                .into_iter()
+                .chain(hooks.map(|_| (HOOK_DIR_ENV.to_string(), self.hook_dir(key).display().to_string())))
+                .chain(launch.env)
+                .collect(),
             env_remove: self.agents.env_remove(),
             size: self.pane,
             rules: Rules { approval: screen.approval.clone(), busy: screen.busy.clone() },

@@ -55,6 +55,11 @@ enum Cmd {
 }
 
 fn main() -> ExitCode {
+    // Agent 运行钩子时用的就是这个程序（见 duolo_core::hook）：写下事件就退出。
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == duolo_core::hook::HOOK_ARG) {
+        duolo_core::hook::run();
+        return ExitCode::SUCCESS;
+    }
     // 命令行和终端界面跟随用户在 Duolo 里选的语言，没选过时跟随系统语言。
     if let Ok(paths) = Paths::discover() {
         i18n::apply_preference(&Settings::load(&paths.settings_file()).unwrap_or_default().language);
@@ -170,6 +175,15 @@ fn localize_chrome(mut cmd: clap::Command) -> clap::Command {
     cmd
 }
 
+/// 终端界面用的引擎：Agent 的钩子交给这个程序（`duolo __hook`）。
+fn engine_with_hooks(paths: Paths) -> Result<Engine> {
+    let mut engine = Engine::open(paths)?;
+    if let Ok(exe) = std::env::current_exe() {
+        engine.set_hook_program(exe);
+    }
+    Ok(engine)
+}
+
 /// 打开引擎，启动时发现的问题写到 stderr。
 fn open_engine(paths: Paths) -> Result<Engine> {
     let mut engine = Engine::open(paths)?;
@@ -189,9 +203,9 @@ fn run(cli: Cli) -> Result<()> {
                 return Ok(());
             }
             eprintln!("{}", t("cli.appNotFound"));
-            duolo_tui::run(Engine::open(paths)?, &dir)
+            duolo_tui::run(engine_with_hooks(paths)?, &dir)
         }
-        Some(Cmd::Tui { path }) => duolo_tui::run(Engine::open(paths)?, &path.unwrap_or(cwd)),
+        Some(Cmd::Tui { path }) => duolo_tui::run(engine_with_hooks(paths)?, &path.unwrap_or(cwd)),
         Some(Cmd::Add { path }) => {
             let mut engine = open_engine(paths)?;
             let id = engine.add_project(&path)?;

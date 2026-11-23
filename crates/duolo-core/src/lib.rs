@@ -6,6 +6,7 @@
 pub mod config;
 pub mod error;
 pub mod event;
+pub mod hook;
 pub mod i18n;
 pub mod model;
 pub mod paths;

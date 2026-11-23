@@ -16,6 +16,7 @@ pub const HOME_ENV: &str = "DUOLO_HOME";
 ///   agents/       用户自己装的 Agent 插件
 ///   wt/           每个任务的 git worktree
 ///   review/       审阅时的临时副本，审阅完就删
+///   hooks/        Agent 的钩子事件：`<任务>-<Agent>/` 里一个事件一个文件，`<任务>-<Agent>.settings.json` 是交给它的设置
 /// ```
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -60,6 +61,11 @@ impl Paths {
 
     pub fn worktrees(&self) -> PathBuf {
         self.root.join("wt")
+    }
+
+    /// Agent 的钩子：事件目录和设置文件，见 `duolo_core::hook`。
+    pub fn hooks(&self) -> PathBuf {
+        self.root.join("hooks")
     }
 
     /// 审阅时的临时副本：`review/<开始时间>-<任务>-<序号>`。

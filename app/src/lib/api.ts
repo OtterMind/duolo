@@ -117,6 +117,7 @@ export type TaskEvent = { task: number; seq: number; at: number } & (
   | { type: "tool"; agent: number; tool: string; target: string }
   | { type: "status"; agent: number; status: Status }
   | { type: "prompt"; agent: number; question: string; detail: string; options: string[] }
+  | { type: "approval"; agent: number; tool: string; target: string }
   | { type: "writer_changed"; from: number; to: number; kind: string }
   | { type: "reviewer_changed"; reviewer: string }
   | { type: "review_started"; reviewer: string }

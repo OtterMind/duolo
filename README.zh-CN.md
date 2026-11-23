@@ -9,7 +9,7 @@
 
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
 
-Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Claude Code 或 Codex；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
+Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode 或 pi；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
 
 > Duolo 还在早期，还没有发布安装包，目前需要从源码构建。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 
@@ -30,7 +30,7 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 ## 能做什么
 
 - **多任务并行**：每个任务一个新分支和独立的工作目录（git worktree，放在 `~/.duolo/wt/`），互不干扰，也不碰你正在用的那份代码。
-- **原生 CLI 嵌入**：右侧就是 Claude Code / Codex 本身，Duolo 不改变它们的任何行为。
+- **原生 CLI 嵌入**：右侧就是 Claude Code / Codex / OpenCode / pi 本身，Duolo 不改变它们的任何行为，每个任务都可以换。
 - **侧边栏看状态**：一个任务一行，左边是模型图标，右边一个状态小图标（运行中 / 等你确认 / 做完了 / 出错），审阅结果也是一个小标记；有任务等你时顶部出现提醒。搜索、折叠项目、双击改名、右键菜单。
 - **一写一审**：点"审阅"，Codex 在后台只读审阅这个任务从基准分支分出来之后的全部改动（包括还没提交的和新文件）。审阅在一份临时副本里进行，只给只读的工具：Claude 只能读文件，Codex 在它的只读沙箱里运行，连接的云端应用和插件都关掉。它做什么都碰不到你的代码。结论一键交给 Claude 修改。
 - **中途换 Agent**：点任务顶栏左边的 Agent 图标，可以换谁写、谁审。新的写代码的 Agent 在同一个文件夹里接着做：它会拿到需求和最近的对话，并先看一遍现在的改动。一天之内换回原来的 Agent，它会接着自己原来的会话，并被告知这期间发生了什么。命令行里也能换：`duolo switch <任务> --writer codex`。
@@ -44,7 +44,7 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 
 ## 安装
 
-需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`npm install -g @anthropic-ai/claude-code`）或 [Codex](https://github.com/openai/codex)（`npm install -g @openai/codex`）。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
+需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`npm install -g @anthropic-ai/claude-code`）、[Codex](https://github.com/openai/codex)（`npm install -g @openai/codex`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）或 [pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

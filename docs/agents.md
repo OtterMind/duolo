@@ -37,7 +37,7 @@ env = { TOY_NO_UPDATE = "1" }    # 启动时设置的环境变量（同上，例
 prompt = "argument"        # 第一句话怎么给：argument（最后一个参数）、flag、paste（准备好后粘贴）
 prompt_flag = "--prompt="  # prompt = "flag" 时，和第一句话拼成一个参数
 separator = "--"           # 放在第一句话前面。不写时，以 - 开头的第一句话前面会加一个空格
-resume_args = ["--continue"]     # 恢复这个目录里上一次会话（还不知道会话编号时用）
+resume_args = ["--continue"]     # 恢复这个目录里上一次会话（还不知道会话编号时用）。"最近一次"不分 worktree 的不要写
 resume_session_args = ["--resume", "{session}"]  # 按编号恢复，{session} 换成会话编号
 session_id_args = ["--session-id", "{session}"]  # 新开会话时由 Duolo 定编号（UUID）。没有这个参数的，从会话记录里认
 review_args = []           # 作为审阅者在终端里启动时追加
@@ -47,6 +47,7 @@ review_args = []           # 作为审阅者在终端里启动时追加
 args = ["-p"]
 separator = "--"
 stdin_args = []            # 提示词改从标准输入给时追加（Windows 的 .cmd 带不了换行）
+env = { TOY_CONFIG = "{}" }      # 运行时设置的环境变量（例如临时定义一个只读的 agent）
 
 [review.features]          # 只留下允许的功能：先运行 `toy features list`，开着的、不在 allow 里的都关掉
 list = ["features", "list"]      # 输出每行 `<功能名> … <true|false>`
@@ -64,6 +65,12 @@ choosing = ["enter to confirm"]  # 出现：停在要选的列表上，不能发
 [keys]
 interrupt = "\u001B"       # 打断
 newline = "\u001B\r"       # 输入框里换行（⇧↵）
+
+[session_list]             # 会话存在数据库里、没有会话记录文件的：用它的命令列出会话，认出这次的编号
+args = ["session", "list", "--format", "json"]   # 在任务目录里运行，输出 JSON 数组
+id = "id"                  # 每一项里会话编号、工作目录、创建时间（Unix 毫秒）的字段名
+directory = "directory"
+created = "created"
 
 [transcript]               # 对话记录（手机端要用），没有就省略
 format = "claude"          # 用哪段代码读，见 crates/duolo-agent/src/transcript/

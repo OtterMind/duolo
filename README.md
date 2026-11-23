@@ -9,7 +9,7 @@
 
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real Claude Code or Codex CLI running inside it. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
+Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real agent CLI running inside it: Claude Code, Codex, OpenCode or pi. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
 
 > Duolo is early. There are no released installers yet, so for now you build it from source. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 
@@ -30,7 +30,7 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 ## Features
 
 - **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
-- **The real CLIs.** The main pane is Claude Code or Codex itself. Duolo doesn't change how they behave.
+- **The real CLIs.** The main pane is Claude Code, Codex, OpenCode or pi itself, and you can switch between them per task. Duolo doesn't change how they behave.
 - **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
 - **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews in a temporary copy with only read-only tools: Claude can only read files, and Codex runs in its read-only sandbox with connectors and plugins turned off. Nothing it does can touch your work. One click sends the findings to Claude.
 - **Switch agents mid-task.** Click the agent icon in the task's top bar to change who writes or who reviews. The new writer continues in the same folder: it gets the request and the recent conversation, and looks at the current changes first. Switch back within a day and the earlier agent picks up its own conversation, told what happened while it was away. From the command line: `duolo switch <task> --writer codex`.
@@ -45,7 +45,7 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 
 ## Install
 
-You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`) or [Codex](https://github.com/openai/codex) (`npm install -g @openai/codex`). Building from source also needs Rust 1.89+, Node 20+ and pnpm.
+You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`), [Codex](https://github.com/openai/codex) (`npm install -g @openai/codex`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`) or [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`). Building from source also needs Rust 1.89+, Node 20+ and pnpm.
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

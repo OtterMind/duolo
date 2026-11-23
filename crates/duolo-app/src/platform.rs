@@ -64,7 +64,7 @@ pub fn open_terminal(path: &Path) -> io::Result<()> {
     ];
     for (program, args) in candidates {
         if which::which(program).is_ok() {
-            return Command::new(program).args(args).current_dir(path).spawn().map(drop);
+            return Command::new(program).args(args).current_dir(path).env("PWD", path).spawn().map(drop);
         }
     }
     Err(io::Error::new(io::ErrorKind::NotFound, "no terminal emulator found"))

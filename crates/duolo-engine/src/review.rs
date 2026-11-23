@@ -75,7 +75,7 @@ impl ReviewJob {
                 Ok(()) => {
                     // 要先问它开着哪些功能（见 FeatureGate），所以也在这里做。
                     let mut review = Prompted::new(&command, Some(&prompt)).expect("argv is not empty");
-                    review.cmd.current_dir(&copy).stdout(Stdio::piped()).stderr(Stdio::piped());
+                    review.in_dir(&copy).stdout(Stdio::piped()).stderr(Stdio::piped());
                     run(review, &running, &cancelled).map(|out| own_paths(out, &copy, &worktree))
                 }
                 Err(err) => Err(tf("review.copyFailed", &[("detail", &format!("{err:#}"))])),

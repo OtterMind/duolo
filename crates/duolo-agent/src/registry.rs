@@ -20,7 +20,7 @@ macro_rules! builtin {
         )),*];
     };
 }
-builtin!("claude", "codex");
+builtin!("claude", "codex", "opencode", "pi");
 
 /// 复制很便宜，可以带到别的线程用。
 #[derive(Debug, Clone, Default)]
@@ -154,13 +154,16 @@ mod tests {
         registry.iter().map(Plugin::id).collect()
     }
 
+    /// 内置插件，按登记的顺序。
+    const BUILTIN: [&str; 4] = ["claude", "codex", "opencode", "pi"];
+
     const AIDER: &str = "schema = 1\nid = \"aider\"\nname = \"Aider\"\ncommand = \"aider\"\n";
 
     #[test]
     fn builtin_plugins_come_first() {
         let dir = tempfile::tempdir().unwrap();
         let (registry, problems) = Registry::load(&Config::default(), &dir.path().join("none"));
-        assert_eq!(ids(&registry), ["claude", "codex"]);
+        assert_eq!(ids(&registry), BUILTIN);
         assert!(problems.is_empty());
     }
 
@@ -171,7 +174,7 @@ mod tests {
         std::fs::create_dir(dir.path().join("not-a-plugin")).unwrap();
         let config = config("[agents.gemini]\ncommand = \"gemini\"\n[agents.aider]\nargs = [\"--dark\"]\n");
         let (registry, problems) = Registry::load(&config, dir.path());
-        assert_eq!(ids(&registry), ["claude", "codex", "aider", "gemini"]);
+        assert_eq!(ids(&registry), [&BUILTIN[..], &["aider", "gemini"]].concat());
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(registry.name(&AgentKind("gemini".into())), "Gemini");
         assert_eq!(registry.name(&AgentKind("removed-one".into())), "Removed-one");
@@ -185,7 +188,7 @@ mod tests {
         install(dir.path(), "broken", "schema = 1\nid = ");
         install(dir.path(), "other-name", AIDER);
         let (registry, problems) = Registry::load(&Config::default(), dir.path());
-        assert_eq!(ids(&registry), ["claude", "codex", "aider"]);
+        assert_eq!(ids(&registry), [&BUILTIN[..], &["aider"]].concat());
         assert_eq!(problems.len(), 2);
         assert!(problems.iter().all(|p| p.code() == "agentPluginInvalid"), "{problems:?}");
     }
@@ -195,7 +198,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         install(dir.path(), "codex", "schema = 1\nid = \"codex\"\nname = \"My Codex\"\ncommand = \"my-codex\"\n");
         let (registry, _) = Registry::load(&Config::default(), dir.path());
-        assert_eq!(ids(&registry), ["claude", "codex"]);
+        assert_eq!(ids(&registry), BUILTIN, "换掉内置的，不是多一个");
         assert_eq!(registry.name(&AgentKind("codex".into())), "My Codex");
     }
 

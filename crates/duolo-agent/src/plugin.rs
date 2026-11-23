@@ -147,6 +147,18 @@ impl Plugin {
         !self.manifest.start.resume_session_args.is_empty()
     }
 
+    /// 读得到它的对话记录（会话记录文件）。
+    pub fn reads_conversation(&self) -> bool {
+        self.manifest.transcript.is_some()
+    }
+
+    /// 能恢复上一次会话：知道会话编号时按编号，否则看有没有"恢复这个目录里最近一次"的参数。
+    /// 有的 Agent 的"最近一次"不分 worktree（会接到同一个仓库里别的任务的会话），插件就不写 `resume_args`。
+    pub fn can_resume(&self, session: Option<&str>) -> bool {
+        let start = &self.manifest.start;
+        !start.resume_args.is_empty() || (session.is_some() && !start.resume_session_args.is_empty())
+    }
+
     /// 新开会话时可以由 Duolo 指定会话编号。
     pub fn assigns_session(&self) -> bool {
         !self.manifest.start.session_id_args.is_empty()
@@ -229,6 +241,7 @@ impl Plugin {
             separator: spec.separator.clone(),
             stdin_args: spec.stdin_args.clone(),
             env_remove: Vec::new(),
+            env: spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             features,
         }
     }
@@ -261,6 +274,11 @@ impl Plugin {
 
     /// 开始跟着它在 `worktree` 里的会话记录；读不了它的记录时为 None。
     pub fn watch(&self, worktree: &std::path::Path, home: &Home, sessions: Sessions) -> Option<Watch> {
+        if let Some(list) = &self.manifest.session_list {
+            let mut argv = vec![self.command().to_string()];
+            argv.extend(list.args.iter().cloned());
+            return Some(Watch::start_listing(argv, list.clone(), worktree, sessions));
+        }
         let spec = self.manifest.transcript.as_ref()?;
         let format = transcript::format(&spec.format)?;
         Some(Watch::start(format, worktree, home.data_dir(&spec.home, spec.home_env.as_deref()), sessions))

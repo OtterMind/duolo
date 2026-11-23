@@ -5,6 +5,8 @@
 
 mod claude;
 mod codex;
+mod listing;
+mod pi;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -47,6 +49,7 @@ pub(crate) fn format(name: &str) -> Option<&'static dyn Format> {
     match name {
         "claude" => Some(&claude::Claude),
         "codex" => Some(&codex::Codex),
+        "pi" => Some(&pi::Pi),
         _ => None,
     }
 }
@@ -132,6 +135,25 @@ impl Watch {
             }
         });
         // 线程都建不了时只是没有对话记录，不影响 Agent。
+        drop(spawned);
+        Self { entries, session, others, stop }
+    }
+
+    /// 不读会话记录，只用 Agent 自己的命令列出会话、认出会话编号（见 `listing`）。
+    pub(crate) fn start_listing(
+        argv: Vec<String>,
+        spec: crate::manifest::SessionListSpec,
+        worktree: &Path,
+        sessions: Sessions,
+    ) -> Self {
+        let (_sender, entries) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let session = Arc::new(Mutex::new(None));
+        let others = Arc::new(Mutex::new(sessions.others.clone()));
+        let (s, o, st, wt) = (Arc::clone(&session), Arc::clone(&others), Arc::clone(&stop), worktree.to_path_buf());
+        let spawned = thread::Builder::new()
+            .name("duolo-sessions".into())
+            .spawn(move || listing::run(argv, spec, wt, sessions, o, s, st));
         drop(spawned);
         Self { entries, session, others, stop }
     }
@@ -351,7 +373,7 @@ fn short(s: &str) -> String {
 }
 
 /// 会话编号会作为参数交给 Agent：只认字母、数字、`-`、`_`，不能以 `-` 开头（会被当成选项）。
-fn is_session_id(id: &str) -> bool {
+pub(crate) fn is_session_id(id: &str) -> bool {
     let ok = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
     !id.is_empty() && id.len() <= 128 && !id.starts_with('-') && id.chars().all(ok)
 }

@@ -21,8 +21,12 @@ fn builtin() -> Registry {
     Registry::load(&Config::default(), Path::new("no-such-dir")).0
 }
 
+fn fixture_path(plugin: &Plugin, name: &str) -> PathBuf {
+    repo().join("crates/duolo-agent/agents").join(plugin.id()).join("fixtures").join(name)
+}
+
 fn fixture(plugin: &Plugin, name: &str) -> String {
-    let path = repo().join("crates/duolo-agent/agents").join(plugin.id()).join("fixtures").join(name);
+    let path = fixture_path(plugin, name);
     std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display())).replace("\r\n", "\n")
 }
 
@@ -88,7 +92,10 @@ fn prompt_arrives_whole_and_is_never_an_option() {
         assert!(blank.paste.is_none() && !blank.args.iter().any(|a| a == "--"), "{}: {:?}", p.id(), blank.args);
         let resumed =
             p.launch(Start { role: AgentRole::Writer, resume: true, session: None, hooks: None, prompt: None });
-        assert_ne!(resumed.args, blank.args, "{} 不能恢复会话", p.id());
+        if p.can_resume(None) {
+            assert_ne!(resumed.args, blank.args, "{} 不能恢复会话", p.id());
+        }
+        assert!(p.can_resume(Some(SESSION)), "{} 不能按编号恢复会话", p.id());
         let by_id = p.launch(Start {
             role: AgentRole::Writer,
             resume: true,
@@ -113,16 +120,31 @@ fn prompt_arrives_whole_and_is_never_an_option() {
 }
 
 #[test]
+/// 声明了什么就查什么：有的 Agent 不要求确认（pi），有的启动时没有对话框，有的工作时画面上没有固定的字
+/// （靠它自己报告状态）。`idle.txt` 都要有。
 fn recognizes_its_own_screens() {
     for p in builtin().iter() {
         let id = p.id();
-        let choosing = |name: &str| is_choosing(&fixture(p, name), &p.screen().choosing);
-        assert_eq!(state(p, "approval.txt"), AgentState::NeedsInput, "{id}");
-        let prompt = parse_prompt(&fixture(p, "approval.txt")).unwrap_or_else(|| panic!("{id}：认不出确认框的选项"));
-        assert!(prompt.options.len() >= 2 && !prompt.question.is_empty(), "{id}: {prompt:?}");
-        assert!(choosing("approval.txt") && choosing("dialog.txt"), "{id}：这时不能发消息");
-        assert_eq!(state(p, "dialog.txt"), AgentState::NeedsInput, "{id}");
-        assert_eq!(state(p, "busy.txt"), AgentState::Running, "{id}");
+        let screen = p.screen();
+        let has = |name: &str| fixture_path(p, name).exists();
+        let choosing = |name: &str| is_choosing(&fixture(p, name), &screen.choosing);
+        if !screen.approval.is_empty() {
+            assert_eq!(state(p, "approval.txt"), AgentState::NeedsInput, "{id}");
+            assert!(choosing("approval.txt"), "{id}：确认框上不能发消息（回车会替用户选）");
+            // 带编号的选项手机上能回答（发数字键）；没编号的（只能用方向键选）回答不了，这里不要求。
+            if fixture(p, "approval.txt").contains("1. ") {
+                let prompt =
+                    parse_prompt(&fixture(p, "approval.txt")).unwrap_or_else(|| panic!("{id}：认不出确认框的选项"));
+                assert!(prompt.options.len() >= 2 && !prompt.question.is_empty(), "{id}: {prompt:?}");
+            }
+        }
+        if has("dialog.txt") {
+            assert!(choosing("dialog.txt"), "{id}：启动时的对话框上不能发消息");
+            assert_eq!(state(p, "dialog.txt"), AgentState::NeedsInput, "{id}");
+        }
+        if !screen.busy.is_empty() {
+            assert_eq!(state(p, "busy.txt"), AgentState::Running, "{id}");
+        }
         assert_eq!(state(p, "idle.txt"), AgentState::Idle, "{id}");
         assert!(!choosing("idle.txt") && parse_prompt(&fixture(p, "idle.txt")).is_none(), "{id}");
     }
@@ -144,6 +166,9 @@ fn session_file(id: &str, worktree: &str) -> PathBuf {
     match id {
         "claude" => Path::new(".claude/projects").join(worktree.replace('/', "-")).join(format!("{SESSION}.jsonl")),
         "codex" => PathBuf::from(format!(".codex/sessions/2026/11/22/rollout-2026-11-22T10-00-00-{SESSION}.jsonl")),
+        "pi" => Path::new(".pi/agent/sessions")
+            .join(format!("--{}--", worktree.trim_start_matches('/').replace('/', "-")))
+            .join(format!("2026-11-22T10-00-00-000Z_{SESSION}.jsonl")),
         other => panic!("没写明 {other} 的会话记录放在哪里"),
     }
 }
@@ -157,7 +182,8 @@ fn reads_its_own_conversation() {
     let now = "2100-01-01T00:00:00.000Z";
     assert!(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() < 4_102_444_800);
     let worktree = "/w/shop/1-export";
-    for p in builtin().iter() {
+    // 会话存在数据库里的 Agent（用命令列出会话）没有会话记录文件，不在这里查。
+    for p in builtin().iter().filter(|p| p.reads_conversation()) {
         let home = tempfile::tempdir().unwrap();
         let file = home.path().join(session_file(p.id(), worktree));
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -177,7 +203,17 @@ fn reads_its_own_conversation() {
             Entry::Agent("On it.".into()),
             Entry::Tool { tool: "Edit".into(), target: "src/orders.ts".into() },
         ];
-        assert_eq!(entries, expected, "{}", p.id());
+        // 工具名各家写法不同（Edit / edit），不分大小写比。
+        let lower = |entries: &[Entry]| -> Vec<Entry> {
+            entries
+                .iter()
+                .map(|e| match e {
+                    Entry::Tool { tool, target } => Entry::Tool { tool: tool.to_lowercase(), target: target.clone() },
+                    other => other.clone(),
+                })
+                .collect()
+        };
+        assert_eq!(lower(&entries), lower(&expected), "{}", p.id());
         assert_eq!(watch.session().as_deref(), Some(SESSION), "{}：认不出会话编号，只能恢复最近的一次", p.id());
     }
 }
@@ -229,7 +265,7 @@ fn real_commands_accept_our_arguments() {
         for (what, command) in [("review", p.review()), ("quick", p.quick())] {
             let Some(command) = command else { continue };
             let mut prompted = Prompted::new(&command, Some("- list\n- of things")).unwrap();
-            prompted.cmd.current_dir(home.path());
+            prompted.in_dir(home.path());
             for var in ["HOME", "USERPROFILE", "CLAUDE_CONFIG_DIR", "CODEX_HOME"] {
                 prompted.cmd.env(var, home.path());
             }

@@ -178,6 +178,8 @@ impl Session {
             cmd
         };
         cmd.cwd(&spec.cwd);
+        // 有的程序按 PWD 找项目（见 duolo_core::process::Prompted::in_dir）。
+        cmd.env("PWD", &spec.cwd);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         for key in &spec.env_remove {
@@ -582,6 +584,16 @@ mod tests {
         wait_until(|| s.poll_exit().is_some());
         wait_until(|| s.with_screen(|scr| scr.contents().contains("world")));
         assert!(matches!(s.state(), AgentState::Exited(Exit { success: true, .. })));
+    }
+
+    /// Agent 的 PWD 是它的工作目录（有的程序按 PWD 找项目）。
+    #[cfg(unix)]
+    #[test]
+    fn pwd_is_the_working_directory() {
+        let mut s = Session::spawn(spec("printenv", &["PWD"])).unwrap();
+        wait_until(|| s.poll_exit().is_some());
+        let expected = std::env::temp_dir().display().to_string();
+        wait_until(|| s.with_screen(|scr| scr.contents().contains(expected.trim_end_matches('/'))));
     }
 
     /// 在终端里启动真实的批处理文件（npm 装的 claude.cmd 就是），参数里的特殊字符不能变。

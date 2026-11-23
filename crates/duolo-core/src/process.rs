@@ -48,6 +48,8 @@ pub struct OneShot {
     pub stdin_args: Vec<String>,
     /// 不传给它的环境变量。
     pub env_remove: Vec<String>,
+    /// 要设置的环境变量。
+    pub env: Vec<(String, String)>,
     /// 运行前关掉不在允许名单里的功能（见 [`FeatureGate`]）。
     pub features: Option<FeatureGate>,
 }
@@ -182,6 +184,7 @@ impl Prompted {
         for key in &one.env_remove {
             cmd.env_remove(key);
         }
+        cmd.envs(one.env.iter().map(|(k, v)| (k, v)));
         let mut stdin = None;
         match prompt {
             Some(prompt) if batch => {
@@ -195,6 +198,12 @@ impl Prompted {
         }
         cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
         Self { cmd, stdin }
+    }
+
+    /// 在 `dir` 里运行。同时设置 `PWD`：有的程序（例如 OpenCode）按 `PWD` 而不是真正的工作目录找项目，
+    /// 只改工作目录的话它会去看 Duolo 自己被启动时所在的目录。
+    pub fn in_dir(&mut self, dir: &std::path::Path) -> &mut Command {
+        self.cmd.current_dir(dir).env("PWD", dir)
     }
 
     /// 启动，连同它之后启动的子进程一起管理（见 [`spawn_tree`]）。
@@ -304,6 +313,17 @@ mod tests {
         let line = batch_command_line(OsStr::new(r"C:\npm\codex.cmd"), &["resume".into(), r#"50% "done" \"#.into()]);
         assert_eq!(line.as_deref(), Some(r#""C:\npm\codex.cmd" "resume" "50% ""done"" \\""#));
         assert_eq!(batch_command_line(OsStr::new("a.cmd"), &["two\nlines".into()]), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runs_in_the_folder_it_says() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut prompted = Prompted::new(&OneShot::from(vec!["printenv".into(), "PWD".into()]), None).unwrap();
+        prompted.in_dir(dir.path()).stdout(Stdio::piped());
+        let (child, _tree) = prompted.spawn().unwrap();
+        let out = String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap();
+        assert_eq!(out.trim(), dir.path().display().to_string(), "PWD 也是这个目录");
     }
 
     #[test]

@@ -838,7 +838,12 @@ impl Engine {
     /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
     fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
         self.check_open(key.task)?;
-        let resumed = !fresh && self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
+        // 启动过的接着上次的会话；恢复不了的（不知道会话编号，插件又不能"恢复最近一次"）带着需求重新开始。
+        let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent)).cloned();
+        let resumable =
+            spec.as_ref().is_some_and(|a| self.plugin_of(key).is_ok_and(|p| p.can_resume(a.session.as_deref())));
+        let resumed = !fresh && resumable && spec.as_ref().is_some_and(|a| a.launched);
+        let fresh = !resumed;
         // 新开会话时能定编号的，由 Duolo 定：一开始就知道它的会话记录是哪个，不用猜。
         let kind = self.state.task(key.task).and_then(|t| t.agent(key.agent)).map(|a| a.kind.clone());
         let can_assign =
@@ -1381,7 +1386,9 @@ mod tests {
             let engine = Engine::open(Paths::at(dir.path())).unwrap();
             (engine.namer().map(|c| c.argv), engine.organizer().map(|c| c.argv))
         };
-        let fake = "[agents.claude]\ncommand = \"git\"\n[agents.codex]\ncommand = \"duolo-no-such-command\"\n";
+        // 别的内置 Agent 本机装没装都不影响结果。
+        let fake = "[agents.claude]\ncommand = \"git\"\n[agents.codex]\ncommand = \"duolo-no-such-command\"\n\
+                    [agents.opencode]\ncommand = \"duolo-no-such-command\"\n[agents.pi]\ncommand = \"duolo-no-such-command\"\n";
         let (namer, organizer) = open(fake);
         assert_eq!(namer.as_ref().unwrap()[0], "git", "没写时用装了的 Agent");
         assert_eq!(namer, organizer);

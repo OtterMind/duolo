@@ -173,8 +173,15 @@ pub enum Verdict {
 }
 
 impl Review {
+    /// 带判断标记的那一行；有的 Agent 在结论前先说一句"我先看看"，所以不只看第一行。没有标记时取第一行。
     fn first_line(&self) -> &str {
-        self.output.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
+        let mut lines = self.output.lines().map(str::trim).filter(|l| !l.is_empty());
+        let first = lines.clone().next().unwrap_or("");
+        let marked = |l: &&str| {
+            let upper = l.to_ascii_uppercase();
+            upper.starts_with("[PASS]") || upper.starts_with("[ISSUES")
+        };
+        lines.find(marked).unwrap_or(first)
     }
 
     /// 第一行开头的标记和剩下的摘要。
@@ -317,6 +324,8 @@ mod tests {
         let r = review("\n[ISSUES 2] 2 critical issues, 3 suggestions\n- a");
         assert_eq!(r.verdict(), Verdict::Issues(2));
         assert_eq!(r.summary(), "2 critical issues, 3 suggestions");
+        let chatty = review("I'll start by reading the review file.\n[ISSUES 1] 1 critical issue\n- a");
+        assert_eq!((chatty.verdict(), chatty.summary()), (Verdict::Issues(1), "1 critical issue"), "前面多说了一句");
         assert_eq!(review("Looks good").verdict(), Verdict::Unknown);
         assert_eq!(review("Looks good").summary(), "Looks good");
         let failed = Review { finished_at: 0, ok: false, output: "[PASS] x".into() };

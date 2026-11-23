@@ -53,6 +53,8 @@ pub struct Manifest {
     #[serde(default)]
     pub hooks: Option<HooksSpec>,
     #[serde(default)]
+    pub session_list: Option<SessionListSpec>,
+    #[serde(default)]
     pub env: EnvSpec,
 }
 
@@ -130,6 +132,8 @@ pub struct HeadlessSpec {
     pub stdin_args: Vec<String>,
     /// 只留下允许的功能，其余开着的都关掉。程序以后新加的功能也就默认关着。
     pub features: Option<FeaturesSpec>,
+    /// 运行时设置的环境变量（例如临时定义一个只读的 agent）。
+    pub env: std::collections::BTreeMap<String, String>,
 }
 
 /// 见 `duolo_core::process::FeatureGate`。
@@ -195,6 +199,18 @@ pub struct TranscriptSpec {
     /// 设置了这个环境变量时，用它作为数据目录。
     #[serde(default)]
     pub home_env: Option<String>,
+}
+
+/// 会话不是一个个文件（例如存在数据库里）时，用它自己的命令列出会话，认出这次的会话编号。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionListSpec {
+    /// 列出会话的参数，跟在命令后面，在任务的目录里运行；输出一个 JSON 数组。
+    pub args: Vec<String>,
+    /// 每一项里会话编号、工作目录、创建时间（Unix 毫秒）的字段名。
+    pub id: String,
+    pub directory: String,
+    pub created: String,
 }
 
 /// 钩子：它在会话开始、请求授权这些时候运行 Duolo 给的命令（见 `hooks` 模块）。
@@ -272,6 +288,7 @@ impl Manifest {
             transcript: None,
             trust: None,
             hooks: None,
+            session_list: None,
             env: EnvSpec::default(),
         }
     }

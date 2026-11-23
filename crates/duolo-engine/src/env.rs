@@ -159,13 +159,25 @@ mod tests {
     fn every_agent_is_checked() {
         let config: Config = toml::from_str(
             "writer = \"gone\"\nreviewer = \"codex\"\n[agents.claude]\ncommand = \"duolo-no-such-command\"\n\
-             [agents.codex]\ncommand = \"git\"\n",
+             [agents.codex]\ncommand = \"git\"\n[agents.opencode]\ncommand = \"duolo-no-such-command\"\n\
+             [agents.pi]\ncommand = \"duolo-no-such-command\"\n",
         )
         .unwrap();
         let dir = tempfile::tempdir().unwrap();
         let (agents, _) = Registry::load(&config, dir.path());
         let checks = check_environment(&config, &agents);
         let found: Vec<_> = checks.iter().map(|c| (c.agent.as_str(), c.ok)).collect();
-        assert_eq!(found, [("", true), ("gone", false), ("codex", true), ("claude", false), ("", false)]);
+        assert_eq!(
+            found,
+            [
+                ("", true),
+                ("gone", false),
+                ("codex", true),
+                ("claude", false),
+                ("opencode", false),
+                ("pi", false),
+                ("", false)
+            ]
+        );
     }
 }

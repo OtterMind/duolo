@@ -6,12 +6,13 @@
 mod claude;
 mod codex;
 
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -27,9 +28,15 @@ pub enum Entry {
 
 /// 一种会话记录的格式：一行一个 JSON 对象，`timestamp` 是 UTC 时间。
 pub(crate) trait Format: std::fmt::Debug + Send + Sync {
-    /// 在 `worktree` 里工作的会话写在哪个文件：`data` 是 Agent 的数据目录，`since` 之前就没再写过的不算。
+    /// 在 `worktree` 里工作的会话写在哪些文件：`data` 是 Agent 的数据目录，`since` 之前就没再写过的不算。
     /// 后台运行一次的（审阅、起名）不算。
-    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Option<PathBuf>;
+    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Vec<PathBuf>;
+
+    /// 会话文件里记着的会话编号，恢复会话时用。
+    fn session_id(&self, path: &Path) -> Option<String>;
+
+    /// 按编号找 `worktree` 里的会话文件（恢复会话时用）。
+    fn find(&self, data: &Path, worktree: &Path, id: &str) -> Option<PathBuf>;
 
     /// 一行记录里的内容，不关心的返回空。
     fn parse(&self, line: &Value) -> Vec<Entry>;
@@ -65,10 +72,21 @@ impl Home {
     }
 }
 
+/// 已经知道的会话编号。
+#[derive(Debug, Clone, Default)]
+pub struct Sessions {
+    /// 这个 Agent 要恢复的会话。
+    pub own: Option<String>,
+    /// 同一个目录里别的 Agent 的会话，不会认成它的。
+    pub others: Vec<String>,
+}
+
 /// 在后台跟着一个 Agent 的会话记录，丢掉它就停。找文件、读文件都不占用调用方的时间。
 #[derive(Debug)]
 pub struct Watch {
     entries: Receiver<Entry>,
+    session: Arc<Mutex<Option<String>>>,
+    others: Arc<Mutex<Vec<String>>>,
     stop: Arc<AtomicBool>,
 }
 
@@ -81,12 +99,18 @@ const LOCATE_EVERY: Duration = Duration::from_secs(2);
 const HEAD_BYTES: u64 = 1024 * 1024;
 
 impl Watch {
-    pub(crate) fn start(format: &'static dyn Format, worktree: &Path, data: PathBuf) -> Self {
+    pub(crate) fn start(format: &'static dyn Format, worktree: &Path, data: PathBuf, sessions: Sessions) -> Self {
         let (sender, entries) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let mut reader = Reader::new(format, worktree, data, SystemTime::now());
+        *reader.others.lock().unwrap_or_else(|p| p.into_inner()) = sessions.others;
+        reader.own = sessions.own;
+        let session = Arc::clone(&reader.session);
+        let others = Arc::clone(&reader.others);
         let stopped = Arc::clone(&stop);
         let spawned = thread::Builder::new().name("duolo-transcript".into()).spawn(move || {
+            // 找文件可能要翻很多目录，不占用调用方的时间。Agent 刚启动，这时还没往里写。
+            reader.find_resumed();
             while !stopped.load(Ordering::Relaxed) {
                 for entry in reader.poll() {
                     if sender.send(entry).is_err() {
@@ -98,12 +122,22 @@ impl Watch {
         });
         // 线程都建不了时只是没有对话记录，不影响 Agent。
         drop(spawned);
-        Self { entries, stop }
+        Self { entries, session, others, stop }
     }
 
     /// 上次之后新写进会话记录的内容，马上返回。
     pub fn take(&self) -> Vec<Entry> {
         self.entries.try_iter().collect()
+    }
+
+    /// 正在跟着的会话的编号；还没找到时为 None。
+    pub fn session(&self) -> Option<String> {
+        self.session.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// 同一个目录里别的 Agent 的会话编号变了（例如后启动的那个刚认出自己的会话）。
+    pub fn set_others(&self, others: Vec<String>) {
+        *self.others.lock().unwrap_or_else(|p| p.into_inner()) = others;
     }
 }
 
@@ -123,10 +157,22 @@ struct Reader {
     since_time: SystemTime,
     file: Option<PathBuf>,
     offset: u64,
+    /// 读过的会话文件读到了哪里。
+    offsets: HashMap<PathBuf, u64>,
+    /// 看到了更新的另一个文件，下次还是它才换过去。
+    pending: Option<PathBuf>,
     /// 还没写完的最后一行。
     partial: String,
     /// 上次找会话文件的时间。
     located_at: Option<SystemTime>,
+    /// 要恢复的会话。
+    own: Option<String>,
+    /// 同一个目录里别的 Agent 的会话。
+    others: Arc<Mutex<Vec<String>>>,
+    /// 要恢复的会话文件和开始跟着它时的大小：之前的内容不算这次的。
+    resumed: Option<(PathBuf, u64)>,
+    /// 正在读的会话的编号。
+    session: Arc<Mutex<Option<String>>>,
 }
 
 impl Reader {
@@ -141,9 +187,73 @@ impl Reader {
             since_time,
             file: None,
             offset: 0,
+            offsets: HashMap::new(),
+            pending: None,
             partial: String::new(),
             located_at: None,
+            own: None,
+            others: Arc::new(Mutex::new(Vec::new())),
+            resumed: None,
+            session: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// 最近写过的、不是别的 Agent 的会话文件和它的编号。
+    /// Agent 记的可能是解析过链接的真实路径（macOS 上 /var 是 /private/var 的链接），两个都找。
+    fn worktrees(&self) -> Vec<PathBuf> {
+        let real = self.worktree.canonicalize().ok().filter(|real| *real != self.worktree);
+        [Some(self.worktree.clone()), real].into_iter().flatten().collect()
+    }
+
+    /// 恢复会话时，Agent 接着写原来的文件：记下它现在的大小，只读之后写的（时间上留的余量会把上次最后几句再读一遍）。
+    fn find_resumed(&mut self) {
+        let Some(id) = &self.own else { return };
+        let found = self.worktrees().iter().find_map(|worktree| self.format.find(&self.data, worktree, id));
+        self.resumed = found.map(|path| {
+            let size = fs::metadata(&path).map_or(0, |m| m.len());
+            (path, size)
+        });
+    }
+
+    fn locate(&mut self) -> Option<(PathBuf, Option<String>)> {
+        let mut paths = Vec::new();
+        for worktree in self.worktrees() {
+            for path in self.format.locate(&self.data, &worktree, self.since_time) {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+        }
+        if let Some((path, _)) = &self.resumed {
+            if !paths.contains(path) {
+                paths.push(path.clone());
+            }
+        }
+        let mut found: Vec<(SystemTime, PathBuf)> =
+            paths.into_iter().filter_map(|p| modified(&p).filter(|m| *m >= self.since_time).map(|m| (m, p))).collect();
+        found.sort_by(|a, b| b.0.cmp(&a.0));
+        let others = self.others.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        found.into_iter().map(|(_, p)| (self.format.session_id(&p).filter(|id| is_session_id(id)), p)).find_map(
+            |(id, p)| match &id {
+                Some(id) if others.contains(id) => None,
+                _ => Some((p, id)),
+            },
+        )
+    }
+
+    /// 改读另一个会话文件，从上次读到的地方接着读。
+    fn switch_to(&mut self, file: PathBuf, id: Option<String>) {
+        if let Some(old) = self.file.take() {
+            self.offsets.insert(old, self.offset);
+        }
+        self.offset = match (self.offsets.get(&file), &self.resumed) {
+            (Some(offset), _) => *offset,
+            (None, Some((resumed, size))) if *resumed == file => *size,
+            _ => 0,
+        };
+        self.file = Some(file);
+        self.partial.clear();
+        *self.session.lock().unwrap_or_else(|p| p.into_inner()) = id;
     }
 
     /// 新写进会话记录的内容。
@@ -151,11 +261,15 @@ impl Reader {
         let due = self.located_at.is_none_or(|t| t.elapsed().unwrap_or_default() >= LOCATE_EVERY);
         if due {
             self.located_at = Some(SystemTime::now());
-            let found = self.format.locate(&self.data, &self.worktree, self.since_time);
-            if found.is_some() && found != self.file {
-                self.file = found;
-                self.offset = 0;
-                self.partial.clear();
+            match self.locate() {
+                Some((file, _)) if Some(&file) == self.file.as_ref() => self.pending = None,
+                // 换到另一个文件要再确认一次：可能是同一个目录里别的 Agent 刚建的，等它先认领。
+                Some((file, id)) if self.file.is_none() || self.pending.as_ref() == Some(&file) => {
+                    self.pending = None;
+                    self.switch_to(file, id);
+                }
+                Some((file, _)) => self.pending = Some(file),
+                None => self.pending = None,
             }
         }
         let Some(file) = &self.file else { return Vec::new() };
@@ -225,8 +339,10 @@ fn short(s: &str) -> String {
     duolo_core::text::truncate_chars(line, 160)
 }
 
-fn newest(paths: impl Iterator<Item = PathBuf>) -> Option<PathBuf> {
-    paths.filter_map(|p| modified(&p).map(|m| (m, p))).max_by_key(|(m, _)| *m).map(|(_, p)| p)
+/// 会话编号会作为参数交给 Agent：只认字母、数字、`-`、`_`，不能以 `-` 开头（会被当成选项）。
+fn is_session_id(id: &str) -> bool {
+    let ok = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
+    !id.is_empty() && id.len() <= 128 && !id.starts_with('-') && id.chars().all(ok)
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {
@@ -341,6 +457,104 @@ mod tests {
     }
 
     #[test]
+    fn knows_the_session_and_leaves_others_alone() {
+        let data = tempfile::tempdir().unwrap();
+        let dir = data.path().join("projects").join(claude::dir_name(Path::new("/w/shop/1-x")));
+        fs::create_dir_all(&dir).unwrap();
+        let now = soon();
+        let session = |id: &str, text: &str| {
+            let mut f = File::create(dir.join(format!("{id}.jsonl"))).unwrap();
+            writeln!(f, r#"{{"type":"user","timestamp":"{now}Z","message":{{"content":"{text}"}}}}"#).unwrap();
+        };
+        session("aaa-111", "writer");
+        thread::sleep(Duration::from_millis(20));
+        // 后开始的是另一个 Agent（例如在终端里审阅的），它的编号已经知道了。
+        session("bbb-222", "reviewer");
+        let mut r = reader("claude", "/w/shop/1-x", data.path());
+        *r.others.lock().unwrap() = vec!["bbb-222".into()];
+        assert_eq!(r.poll(), vec![Entry::User("writer".into())]);
+        assert_eq!(r.session.lock().unwrap().as_deref(), Some("aaa-111"));
+
+        // 不像编号的（会被当成选项）不交出去。
+        thread::sleep(Duration::from_millis(20));
+        session("-rf", "odd");
+        let mut r = reader("claude", "/w/shop/1-x", data.path());
+        assert_eq!(r.poll(), vec![Entry::User("odd".into())]);
+        assert_eq!(*r.session.lock().unwrap(), None);
+    }
+
+    /// 很快又恢复同一次会话：上次最后的几句不再读一遍（它们的时间在留的余量里）。
+    #[test]
+    fn resumed_session_is_read_from_where_it_was() {
+        let data = tempfile::tempdir().unwrap();
+        let dir = data.path().join("projects").join(claude::dir_name(Path::new("/w/shop/1-x")));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("aaa-111.jsonl");
+        let line = |text: &str| {
+            format!(
+                r#"{{"type":"user","timestamp":"{}Z","message":{{"content":"{text}"}}}}"#,
+                utc_stamp(SystemTime::now())
+            )
+        };
+        fs::write(&path, format!("{}\n", line("before"))).unwrap();
+        let mut r = reader("claude", "/w/shop/1-x", data.path());
+        r.own = Some("aaa-111".into());
+        r.find_resumed();
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(format!("{}\n", line("after")).as_bytes())
+            .unwrap();
+        assert_eq!(r.poll(), vec![Entry::User("after".into())]);
+    }
+
+    /// Agent 记的是解析过链接的真实路径，Duolo 手里的是带链接的。
+    #[cfg(unix)]
+    #[test]
+    fn finds_sessions_recorded_under_the_real_path() {
+        let data = tempfile::tempdir().unwrap();
+        let place = tempfile::tempdir().unwrap();
+        let real = place.path().canonicalize().unwrap().join("real");
+        fs::create_dir(&real).unwrap();
+        let link = place.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let dir = data.path().join("projects").join(claude::dir_name(&real));
+        fs::create_dir_all(&dir).unwrap();
+        let line = format!(r#"{{"type":"user","timestamp":"{}Z","message":{{"content":"hello"}}}}"#, soon());
+        fs::write(dir.join("s.jsonl"), format!("{line}\n")).unwrap();
+        let mut r = Reader::new(super::format("claude").unwrap(), &link, data.path().to_path_buf(), SystemTime::now());
+        assert_eq!(r.poll(), vec![Entry::User("hello".into())]);
+    }
+
+    #[test]
+    fn codex_finds_an_old_session_it_resumes() {
+        let data = tempfile::tempdir().unwrap();
+        // 很久以前建的，不在最近几天的目录里。
+        let old = data.path().join("sessions/2025/01/02");
+        fs::create_dir_all(&old).unwrap();
+        for day in ["2026/11/20", "2026/11/21", "2026/11/22"] {
+            fs::create_dir_all(data.path().join("sessions").join(day)).unwrap();
+        }
+        let path = old.join("rollout-2025-01-02T10-00-00-01a2-7d60.jsonl");
+        let now = soon();
+        let head = r#"{"type":"session_meta","payload":{"id":"01a2-7d60","cwd":"/w/shop/2-y","source":"cli"}}"#;
+        fs::write(&path, format!("{head}\n")).unwrap();
+        let codex = super::format("codex").unwrap();
+        assert_eq!(codex.session_id(&path).as_deref(), Some("01a2-7d60"));
+
+        let mut r = reader("codex", "/w/shop/2-y", data.path());
+        r.own = Some("01a2-7d60".into());
+        r.find_resumed();
+        let line = format!(
+            r#"{{"timestamp":"{now}Z","type":"response_item","payload":{{"type":"message","role":"assistant","content":[{{"type":"output_text","text":"back"}}]}}}}"#
+        );
+        fs::OpenOptions::new().append(true).open(&path).unwrap().write_all(format!("{line}\n").as_bytes()).unwrap();
+        assert_eq!(r.poll(), vec![Entry::Agent("back".into())]);
+        assert_eq!(r.session.lock().unwrap().as_deref(), Some("01a2-7d60"));
+    }
+
+    #[test]
     fn codex_skips_background_runs() {
         let data = tempfile::tempdir().unwrap();
         let day = data.path().join("sessions/2026/11/21");
@@ -374,7 +588,12 @@ mod tests {
     #[test]
     fn watching_stops_when_dropped() {
         let data = tempfile::tempdir().unwrap();
-        let watch = Watch::start(super::format("claude").unwrap(), Path::new("/w/x"), data.path().to_path_buf());
+        let watch = Watch::start(
+            super::format("claude").unwrap(),
+            Path::new("/w/x"),
+            data.path().to_path_buf(),
+            Sessions::default(),
+        );
         let stop = Arc::clone(&watch.stop);
         assert!(watch.take().is_empty());
         drop(watch);

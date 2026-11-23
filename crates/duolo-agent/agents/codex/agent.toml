@@ -11,6 +11,7 @@ default = "npm install -g @openai/codex"
 prompt = "argument"
 separator = "--"
 resume_args = ["resume", "--last"]
+resume_session_args = ["resume", "{session}"]
 review_args = ["--sandbox", "read-only"]
 
 [review]

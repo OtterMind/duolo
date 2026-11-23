@@ -102,8 +102,16 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 ## 后台审阅和内置语音
 
-- 审阅：`duolo-engine/src/review.rs` 在任务的 worktree 里运行审阅 Agent 的命令（插件的 `[review]`），
-  结论保存在 `Task.review`，界面一键交给写代码的 Agent。
+- 审阅：`duolo-engine/src/review.rs` 先用 `duolo_git::snapshot` 把任务现在的样子（包括没提交的改动和新文件）
+  检出到临时副本 `~/.duolo/review/<开始时间>-<任务>-<序号>`（一个不在分支上的 worktree，不跑钩子），
+  在副本里运行审阅 Agent 的命令（插件的 `[review]`），结束后删掉副本；没删掉的下次启动时清理。
+  审阅命令本身是只读的，副本再兜一层：用户的设置放开了权限时，改了什么也只在副本里；审阅期间写代码的 Agent 继续改也不影响。
+  结论里的副本路径换回任务的 worktree，保存在 `Task.review`，界面一键交给写代码的 Agent。
+- 换 Agent：`duolo-engine/src/switch.rs`。换写代码的：原来的停下，记进 `Task.retired`（事件里的编号还对得上），
+  新的 `AgentSpec` 用新编号、带着交接说明（`AgentSpec.prompt`：需求、最近 20 条对话、看 `git diff` 的提示）启动。
+  换审阅的只改 `Task.reviewer`。
+- 会话编号：读会话记录时认出 Agent 自己的会话编号，存在 `AgentSpec.session`，恢复时用插件的 `resume_session_args`；
+  同一个目录里别的 Agent 的会话不会认成它的。
 - 语音：内置识别程序输出 `~ 临时结果` / `^ 音量` / `= 最终结果` 行，`duolo-voice::Recorder` 读取，
   结束录音时 macOS / Linux 发 SIGINT，Windows 往标准输入写一行 `stop`。
   - macOS：`duolo-app/dictate/main.swift`（Speech 框架），`build.rs` 编译后作为 externalBin 打进应用；
@@ -128,7 +136,7 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 - **来源**：Agent 自己写的会话记录（Claude Code 的 `~/.claude/projects/…/*.jsonl`、Codex 的 `~/.codex/sessions/…`），
   变成"你说的话 / Agent 的回复 / 工具调用"；终端画面变成状态和"等你选"的提示（问题、说明、选项）；
-  引擎自己记任务建好、改名、关闭、审阅、改动统计。见 `duolo-engine/src/live.rs`、`transcript.rs`、`prompt.rs`。
+  引擎自己记任务建好、改名、关闭、审阅、改动统计。见 `duolo-engine/src/live.rs`、`prompt.rs` 和 `duolo-agent/src/transcript/`。
 - **编号**：每个任务从 1 递增，存在 `~/.duolo/events/<任务编号>.jsonl`。断线重连的客户端说"我有到第几条"，
   用 `events_since` 补齐。事件里只有数据（文件路径、命令、状态码），不放句子，客户端按自己的语言显示。
 - **状态**要稳定 1.5 秒才记（Agent 界面重绘时会在"运行中 / 空闲"间来回跳）；"等你确认"和"退出"马上记。

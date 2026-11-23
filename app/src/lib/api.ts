@@ -113,6 +113,8 @@ export type TaskEvent = { task: number; seq: number; at: number } & (
   | { type: "tool"; agent: number; tool: string; target: string }
   | { type: "status"; agent: number; status: Status }
   | { type: "prompt"; agent: number; question: string; detail: string; options: string[] }
+  | { type: "writer_changed"; from: number; to: number; kind: string }
+  | { type: "reviewer_changed"; reviewer: string }
   | { type: "review_started"; reviewer: string }
   | { type: "review_finished"; ok: boolean; verdict: Review["verdict"]; issues: number; summary: string }
   | { type: "diff"; files: number; insertions: number; deletions: number }
@@ -215,6 +217,9 @@ export const api = {
   nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt, branch: null }),
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
+  /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
+  switchWriter: (task: number, kind: string) => invoke<number>("switch_writer", { task, kind }),
+  setReviewer: (task: number, kind: string) => invoke<void>("set_reviewer", { task, kind }),
   startReview: (task: number) => invoke<void>("start_review", { task }),
   cancelReview: (task: number) => invoke<void>("cancel_review", { task }),
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),

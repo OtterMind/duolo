@@ -32,12 +32,13 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 - **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
 - **The real CLIs.** The main pane is Claude Code or Codex itself. Duolo doesn't change how they behave.
 - **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
-- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files, without touching anything. One click sends the findings to Claude.
+- **One writes, one reviews.** Click Review and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews read-only in a temporary copy, so nothing it does can touch your work. One click sends the findings to Claude.
+- **Switch agents mid-task.** Click the agent icon in the task's top bar to change who writes or who reviews. The new writer continues in the same folder: it gets the request and the recent conversation, and looks at the current changes first.
 - **Projects.** A project is a folder: one git repository, or a folder holding several. Add one (`⌘O`) by opening a folder, creating one, cloning from GitHub, or picking a repository found on your computer. You can also drop a folder on the window. New folders and clones go to `~/DuoloProjects`.
 - **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
 - **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
 - **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
-- **Sessions resume.** Reopening a task continues its last conversation (`claude --continue`, `codex resume --last`).
+- **Sessions resume.** Reopening a task continues that agent's own conversation, by session ID (`claude --resume <id>`, `codex resume <id>`).
 - **Keeps working in the background** (macOS). `⌘W` hides the window and agents keep going; `⌘Q` stops them. On Windows and Linux closing the window quits, after asking if agents are running.
 - **14 languages**, in the app, the command line and the terminal UI.
 

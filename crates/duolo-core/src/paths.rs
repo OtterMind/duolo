@@ -15,6 +15,7 @@ pub const HOME_ENV: &str = "DUOLO_HOME";
 ///   state.json    项目和任务
 ///   agents/       用户自己装的 Agent 插件
 ///   wt/           每个任务的 git worktree
+///   review/       审阅时的临时副本，审阅完就删
 /// ```
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -59,6 +60,11 @@ impl Paths {
 
     pub fn worktrees(&self) -> PathBuf {
         self.root.join("wt")
+    }
+
+    /// 审阅时的临时副本：`review/<开始时间>-<任务>-<序号>`。
+    pub fn reviews(&self) -> PathBuf {
+        self.root.join("review")
     }
 
     /// 每个任务的事件流：`events/<任务编号>.jsonl`，一行一个事件。

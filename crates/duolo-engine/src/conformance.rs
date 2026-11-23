@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use duolo_agent::{Entry, Home, Plugin, Registry, Start};
+use duolo_agent::{Entry, Home, Plugin, Registry, Sessions, Start};
 use duolo_core::process::Prompted;
 use duolo_core::{AgentRole, Config};
 use duolo_pty::{classify, AgentState, Rules};
@@ -66,7 +66,8 @@ fn prompt_arrives_whole_and_is_never_an_option() {
     let prompts = ["fix it", "- fix the login\n- add tests", "--help", "@notes do this", "导出订单 \"CSV\" & 100%"];
     for p in builtin().iter() {
         for prompt in prompts {
-            let launch = p.launch(Start { role: AgentRole::Writer, resume: false, prompt: Some(prompt) });
+            let launch =
+                p.launch(Start { role: AgentRole::Writer, resume: false, session: None, prompt: Some(prompt) });
             match launch.paste {
                 Some(paste) => assert_eq!(paste, prompt),
                 None => {
@@ -77,10 +78,12 @@ fn prompt_arrives_whole_and_is_never_an_option() {
                 }
             }
         }
-        let blank = p.launch(Start { role: AgentRole::Writer, resume: false, prompt: None });
+        let blank = p.launch(Start { role: AgentRole::Writer, resume: false, session: None, prompt: None });
         assert!(blank.paste.is_none() && !blank.args.iter().any(|a| a == "--"), "{}: {:?}", p.id(), blank.args);
-        let resumed = p.launch(Start { role: AgentRole::Writer, resume: true, prompt: None });
+        let resumed = p.launch(Start { role: AgentRole::Writer, resume: true, session: None, prompt: None });
         assert_ne!(resumed.args, blank.args, "{} 不能恢复会话", p.id());
+        let by_id = p.launch(Start { role: AgentRole::Writer, resume: true, session: Some(SESSION), prompt: None });
+        assert!(by_id.args.iter().any(|a| a.contains(SESSION)), "{} 不能按编号恢复会话", p.id());
     }
 }
 
@@ -114,11 +117,14 @@ fn background_prompts_are_kept_apart_from_options() {
 /// `fixtures/session.jsonl` 要放在哪里，相对 Agent 的家目录。
 fn session_file(id: &str, worktree: &str) -> PathBuf {
     match id {
-        "claude" => Path::new(".claude/projects").join(worktree.replace('/', "-")).join("s.jsonl"),
-        "codex" => PathBuf::from(".codex/sessions/2026/11/22/rollout-s.jsonl"),
+        "claude" => Path::new(".claude/projects").join(worktree.replace('/', "-")).join(format!("{SESSION}.jsonl")),
+        "codex" => PathBuf::from(format!(".codex/sessions/2026/11/22/rollout-2026-11-22T10-00-00-{SESSION}.jsonl")),
         other => panic!("没写明 {other} 的会话记录放在哪里"),
     }
 }
+
+/// 夹具里的会话编号。
+const SESSION: &str = "0199a213-81c0-7800-8aa1-bbab2f1a1c2b";
 
 #[test]
 fn reads_its_own_conversation() {
@@ -133,7 +139,7 @@ fn reads_its_own_conversation() {
         let text = fixture(p, "session.jsonl").replace("{now}", now).replace("{worktree}", worktree);
         std::fs::write(&file, text).unwrap();
 
-        let watch = p.watch(Path::new(worktree), &Home::At(home.path().to_path_buf())).unwrap();
+        let watch = p.watch(Path::new(worktree), &Home::At(home.path().to_path_buf()), Sessions::default()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         let mut entries = Vec::new();
         while entries.len() < 3 {
@@ -147,6 +153,7 @@ fn reads_its_own_conversation() {
             Entry::Tool { tool: "Edit".into(), target: "src/orders.ts".into() },
         ];
         assert_eq!(entries, expected, "{}", p.id());
+        assert_eq!(watch.session().as_deref(), Some(SESSION), "{}：认不出会话编号，只能恢复最近的一次", p.id());
     }
 }
 

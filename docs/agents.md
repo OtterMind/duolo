@@ -9,8 +9,9 @@ Duolo 里的每一种编程 Agent 都是一个插件：一份声明 `agent.toml`
   写错的会跳过，启动时提示哪里错了。
 - **不从项目目录读**：插件能指定要运行的命令，打开别人的仓库不能就运行它的命令。
 
-`~/.duolo/config.toml` 的 `[agents.<id>]` 可以在插件上改几项（`command`、`args`、`resume_args`、`review_args`、
-`review_command`、`install`），没写的沿用插件的；写成空列表就是空的。
+`~/.duolo/config.toml` 的 `[agents.<id>]` 可以在插件上改几项（`command`、`args`、`resume_args`、`resume_session_args`、
+`review_args`、`review_command`、`install`），没写的沿用插件的；写成空列表就是空的。
+只改了 `resume_args`、没写 `resume_session_args` 时，不再按编号恢复（免得和改过的对不上）。
 没有插件、只在 config.toml 里写一段也能用：按最常见的方式启动，没有恢复、审阅和对话记录。
 
 ## 声明
@@ -31,10 +32,11 @@ args = []                  # 每次都带上
 prompt = "argument"        # 第一句话怎么给：argument（最后一个参数）、flag、paste（准备好后粘贴）
 prompt_flag = "--prompt="  # prompt = "flag" 时，和第一句话拼成一个参数
 separator = "--"           # 放在第一句话前面。不写时，以 - 开头的第一句话前面会加一个空格
-resume_args = ["--continue"]     # 恢复这个目录里上一次会话
+resume_args = ["--continue"]     # 恢复这个目录里上一次会话（还不知道会话编号时用）
+resume_session_args = ["--resume", "{session}"]  # 按编号恢复，{session} 换成从会话记录里读到的编号
 review_args = []           # 作为审阅者在终端里启动时追加
 
-[review]                   # 后台审阅：只读运行，结论打印到 stdout。没有这一段就不能当审阅者
+[review]                   # 后台审阅：在临时副本里只读运行，结论打印到 stdout。没有这一段就不能当审阅者
 args = ["-p"]
 separator = "--"
 stdin_args = []            # 提示词改从标准输入给时追加（Windows 的 .cmd 带不了换行）
@@ -68,7 +70,7 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
 1. 在 `crates/duolo-agent/agents/<id>/` 放 `agent.toml` 和 `icon.svg`，在 `registry.rs` 的 `builtin!` 里加上它。
 2. 在 `fixtures/` 放**真实**的画面和会话记录：`approval.txt`（确认框）、`dialog.txt`（启动时的对话框）、
    `busy.txt`、`idle.txt`、`session.jsonl`（`{now}`、`{worktree}` 会被替换）。
-3. 会话记录是新格式时，在 `src/transcript/` 实现 `Format`。
+3. 会话记录是新格式时，在 `src/transcript/` 实现 `Format`：找会话文件、读出对话，还要认出会话编号（按编号恢复用）。
 4. 跑 `cargo test -p duolo-engine conformance`，每个内置插件都要通过；装好了真实的 CLI 再跑
    `cargo test -p duolo-engine real_commands -- --ignored --nocapture`，确认参数都认得。
 
@@ -77,11 +79,12 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
 - **审阅必须只读**。看清楚参数是"只给这些"还是"在用户设置上追加"：Claude Code 的 `--allowedTools` 是追加，
   用户自己放开过写权限时审阅就能改文件，所以还要用 `--disallowedTools` 和 `--permission-mode dontAsk`。
 - **会吞参数的选项**（`--allowedTools <tools...>`）后面一定要有 `--`，不然提示词会被当成它的值。
-- **后台运行不要留会话**，也不要被当成写代码的会话：恢复会话和对话记录都按目录找最近的一个。
+- **后台运行不要留会话**，也不要被当成写代码的会话：还不知道会话编号时，恢复会话和对话记录都按目录找最近的一个。
+- **会话记录里的路径**可能是解析过链接的真实路径（macOS 上 `/var` → `/private/var`），Duolo 两个都找。
 - **对话框的默认选项可能有危险**（例如"现在升级"）。`approval` 和 `choosing` 写全了，Duolo 才不会在这时发消息、替用户按回车。
 
 ## 现在还做不到的
 
 - 没有终端界面的 Agent（只有网页或 ACP 协议的）。
-- 任务中途换写代码的 Agent；按会话编号恢复（现在是"这个目录里最近的一个"）。
 - 没有编号的确认框不能在手机上回答。
+- 中途换写代码的 Agent 只在桌面应用里能做（命令行和终端界面还不行）；换回原来的那种 Agent 时是新开一次会话，带着新的交接说明。

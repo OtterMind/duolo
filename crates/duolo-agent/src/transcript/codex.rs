@@ -6,13 +6,13 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
-use super::{first_lines, newest, recent_sessions, short, sorted_dirs, tool_target, user_text, Entry, Format};
+use super::{first_lines, recent_sessions, short, sorted_dirs, tool_target, user_text, Entry, Format};
 
 #[derive(Debug)]
 pub(super) struct Codex;
 
 impl Format for Codex {
-    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Option<PathBuf> {
+    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Vec<PathBuf> {
         // 最近几天的目录就够了：会话是 Agent 这次启动后才建的。
         let mut days = Vec::new();
         for year in sorted_dirs(&data.join("sessions")).into_iter().rev().take(2) {
@@ -21,7 +21,34 @@ impl Format for Codex {
             }
         }
         let sessions = days.iter().flat_map(|day| recent_sessions(day, since));
-        newest(sessions.filter(|p| matches(p, worktree)))
+        sessions.filter(|p| matches(p, worktree)).collect()
+    }
+
+    /// 恢复的会话可能是很多天以前建的：文件名以编号结尾。
+    fn find(&self, data: &Path, _worktree: &Path, id: &str) -> Option<PathBuf> {
+        let suffix = format!("-{id}.jsonl");
+        for year in sorted_dirs(&data.join("sessions")).into_iter().rev() {
+            for month in sorted_dirs(&year).into_iter().rev() {
+                for day in sorted_dirs(&month).into_iter().rev() {
+                    let found = std::fs::read_dir(&day)
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .map(|e| e.path())
+                        .find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().ends_with(&suffix)));
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// 第一行的 `payload.id`。
+    fn session_id(&self, path: &Path) -> Option<String> {
+        let first: Value = serde_json::from_str(&first_lines(path).next()?).ok()?;
+        first["payload"]["id"].as_str().map(str::to_string)
     }
 
     fn parse(&self, v: &Value) -> Vec<Entry> {

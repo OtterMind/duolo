@@ -7,8 +7,8 @@ use std::process::ExitCode;
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{i18n, t, tf, Paths, ProjectId, Settings};
-use duolo_engine::{check_environment, Engine};
+use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings};
+use duolo_engine::{check_environment, Engine, TaskOptions};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -38,6 +38,10 @@ enum Cmd {
         prompt: Vec<String>,
         #[arg(short, long)]
         project: Option<String>,
+        #[arg(short, long)]
+        writer: Option<String>,
+        #[arg(short, long)]
+        reviewer: Option<String>,
     },
     Ls,
     Doctor,
@@ -109,6 +113,8 @@ fn localized_command() -> clap::Command {
             c.about(t("cli.help.new"))
                 .mut_arg("prompt", |a| a.help(t("cli.help.prompt")))
                 .mut_arg("project", |a| a.help(t("cli.help.project")))
+                .mut_arg("writer", |a| a.help(t("cli.help.writer")))
+                .mut_arg("reviewer", |a| a.help(t("cli.help.reviewer")))
         })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
@@ -164,7 +170,7 @@ fn run(cli: Cli) -> Result<()> {
             println!("{}", tf("cli.projectAdded", &[("id", &id)]));
             Ok(())
         }
-        Some(Cmd::New { prompt, project }) => {
+        Some(Cmd::New { prompt, project, writer, reviewer }) => {
             let mut engine = open_engine(paths)?;
             let project = match project {
                 Some(id) => {
@@ -176,7 +182,9 @@ fn run(cli: Cli) -> Result<()> {
                 }
                 None => engine.add_project(&cwd)?,
             };
-            let id = engine.create_task(&project, &prompt.join(" "))?;
+            let opts =
+                TaskOptions { writer: writer.map(AgentKind), reviewer: reviewer.map(AgentKind), ..Default::default() };
+            let id = engine.create_task_with(&project, &prompt.join(" "), &opts)?;
             let task = engine.state().task(id).expect("task was just created");
             println!("{}", tf("cli.taskCreated", &[("id", &id), ("title", &task.title)]));
             println!("  {}", tf("cli.taskBranch", &[("branch", &task.branch)]));

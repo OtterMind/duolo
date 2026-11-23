@@ -5,15 +5,25 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
-use super::{first_lines, newest, recent_sessions, tool_target, user_text, Entry, Format};
+use super::{first_lines, recent_sessions, tool_target, user_text, Entry, Format};
 
 #[derive(Debug)]
 pub(super) struct Claude;
 
 impl Format for Claude {
-    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Option<PathBuf> {
+    fn locate(&self, data: &Path, worktree: &Path, since: SystemTime) -> Vec<PathBuf> {
         let sessions = recent_sessions(&data.join("projects").join(dir_name(worktree)), since);
-        newest(sessions.into_iter().filter(|p| !is_headless(p)))
+        sessions.into_iter().filter(|p| !is_headless(p)).collect()
+    }
+
+    /// 文件名就是会话编号。
+    fn session_id(&self, path: &Path) -> Option<String> {
+        path.file_stem().map(|s| s.to_string_lossy().into_owned())
+    }
+
+    fn find(&self, data: &Path, worktree: &Path, id: &str) -> Option<PathBuf> {
+        let path = data.join("projects").join(dir_name(worktree)).join(format!("{id}.jsonl"));
+        path.is_file().then_some(path)
     }
 
     fn parse(&self, v: &Value) -> Vec<Entry> {

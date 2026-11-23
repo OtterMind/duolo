@@ -12,4 +12,4 @@ mod transcript;
 pub use manifest::{Keys, Manifest, PromptVia, Screen};
 pub use plugin::{Launch, Plugin, Start};
 pub use registry::Registry;
-pub use transcript::{Entry, Home, Watch};
+pub use transcript::{Entry, Home, Sessions, Watch};

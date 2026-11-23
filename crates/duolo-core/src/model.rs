@@ -90,6 +90,18 @@ pub struct AgentSpec {
     /// 是否已经启动过。第一次启动带上需求，之后用恢复会话的参数启动。
     #[serde(default)]
     pub launched: bool,
+    /// Agent 自己的会话编号（从它的会话记录里读到的），恢复时按它找回这一次会话。
+    #[serde(default)]
+    pub session: Option<String>,
+    /// 第一次启动时交给它的话；没有时用任务的需求。中途接手的 Agent 用它拿到交接说明。
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
+impl AgentSpec {
+    pub fn new(id: u32, kind: AgentKind, role: AgentRole) -> Self {
+        Self { id, kind, role, launched: false, session: None, prompt: None }
+    }
 }
 
 /// 一个任务：一段需求、一个独立的 worktree，以及在里面工作的若干 Agent。
@@ -116,6 +128,9 @@ pub struct Task {
     /// 最近一次后台审阅的结果。
     #[serde(default)]
     pub review: Option<Review>,
+    /// 中途换下来的 Agent。事件里的 Agent 编号还指着它们，编号也不再分给新的。
+    #[serde(default)]
+    pub retired: Vec<AgentSpec>,
 }
 
 /// 一次后台审阅的结果。
@@ -188,7 +203,7 @@ impl Task {
     }
 
     pub fn next_agent_id(&self) -> u32 {
-        self.agents.iter().map(|a| a.id + 1).max().unwrap_or(0)
+        self.agents.iter().chain(&self.retired).map(|a| a.id + 1).max().unwrap_or(0)
     }
 
     pub fn key(&self, agent: u32) -> AgentKey {

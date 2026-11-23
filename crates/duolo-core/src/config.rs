@@ -88,6 +88,8 @@ pub struct AgentOverride {
     pub args: Option<Vec<String>>,
     /// 恢复上一次会话时追加的参数，例如 `--continue`。
     pub resume_args: Option<Vec<String>>,
+    /// 按编号恢复某一次会话的参数，`{session}` 换成会话编号，例如 `["--resume", "{session}"]`。
+    pub resume_session_args: Option<Vec<String>>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
     pub review_args: Option<Vec<String>>,
     /// 后台审阅用的整条命令：在任务的 worktree 里只读运行，提示词作为最后一个参数，结论从 stdout 读取。

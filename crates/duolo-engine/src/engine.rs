@@ -166,10 +166,10 @@ pub struct Engine {
     notices: Vec<UserError>,
     pub(crate) sessions: HashMap<AgentKey, Session>,
     /// 每次启动进程都分配一个新编号，界面据此判断要不要重新订阅输出。
-    session_ids: HashMap<AgentKey, u64>,
+    pub(crate) session_ids: HashMap<AgentKey, u64>,
     next_session_id: u64,
     /// 以"恢复会话"方式启动、还在观察期内的 Agent。
-    resuming: HashSet<AgentKey>,
+    pub(crate) resuming: HashSet<AgentKey>,
     reviews: HashMap<TaskId, ReviewJob>,
     /// 审阅结论使用的语言（英文名），跟随界面语言。
     reply_language: String,
@@ -229,6 +229,7 @@ impl Engine {
             (state, store.stamp())
         };
         remove_leftovers(&paths.worktrees());
+        crate::review::remove_leftovers(&paths.reviews());
         Ok(Self {
             paths,
             config,
@@ -294,7 +295,7 @@ impl Engine {
     /// 修改状态并保存。桌面应用、终端界面和 `duolo new` 可能同时在运行，所以独占 `state.json`，
     /// 在最新的内容上改；`change` 报错或保存失败时什么都不变。
     /// `change` 里只改状态，不做 git 操作之类费时间的事，也不再调用会修改状态的方法。
-    fn update<R>(&mut self, change: impl FnOnce(&mut State) -> Result<R>) -> Result<R> {
+    pub(crate) fn update<R>(&mut self, change: impl FnOnce(&mut State) -> Result<R>) -> Result<R> {
         let lock = self.store.lock()?;
         let mut state = self.store.reload()?.unwrap_or_else(|| self.state.clone());
         let result = change(&mut state)?;
@@ -458,7 +459,7 @@ impl Engine {
             None => slug(&title),
         };
         let worktree = self.paths.worktrees().join(&project.id.0).join(format!("{id}-{label}"));
-        let writer = AgentSpec { id: 0, kind: writer, role: AgentRole::Writer, launched: false };
+        let writer = AgentSpec::new(0, writer, AgentRole::Writer);
         let task = Task {
             id,
             project: project.id,
@@ -472,6 +473,7 @@ impl Engine {
             repo: Some(repo.clone()),
             reviewer: Some(reviewer),
             review: None,
+            retired: Vec::new(),
         };
         Ok(NewTask { task, repo })
     }
@@ -615,7 +617,7 @@ impl Engine {
                 return Ok(existing.id);
             }
             let id = t.next_agent_id();
-            t.agents.push(AgentSpec { id, kind: reviewer_kind, role: AgentRole::Reviewer, launched: false });
+            t.agents.push(AgentSpec::new(id, reviewer_kind, AgentRole::Reviewer));
             Ok(id)
         })?;
         let key = AgentKey { task, agent: agent_id };
@@ -639,7 +641,8 @@ impl Engine {
             custom if !custom.is_empty() => self.agents.clean(custom.clone().into()),
             _ => self.agents.review(&reviewer)?,
         };
-        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone())?;
+        let copy = crate::review::copy_dir(&self.paths.reviews(), id.0);
+        let job = ReviewJob::spawn(&command, &prompt, task.worktree.clone(), copy)?;
         self.reviews.insert(id, job);
         self.record(id, EventKind::ReviewStarted { reviewer: reviewer.0 });
         Ok(())
@@ -754,14 +757,14 @@ impl Engine {
     }
 
     /// 正在关闭的任务不能再启动东西。
-    fn check_open(&self, id: TaskId) -> Result<()> {
+    pub(crate) fn check_open(&self, id: TaskId) -> Result<()> {
         if self.closing.contains(&id) {
             return Err(UserError::TaskClosing.into());
         }
         Ok(())
     }
 
-    fn review_prompt(&self, task: &Task) -> String {
+    pub(crate) fn review_prompt(&self, task: &Task) -> String {
         let commit = duolo_git::fork_point(&task.worktree, &task.base).unwrap_or_else(|_| task.base.clone());
         self.config.review_prompt_for(&task.base, &commit, &self.reply_language)
     }
@@ -782,7 +785,7 @@ impl Engine {
             self.queue_message(key, text);
         }
         self.unsettle(key);
-        self.watch_transcript(key);
+        self.watch_transcript(key, resumed);
         self.session_ids.insert(key, self.next_session_id);
         self.next_session_id += 1;
         if resumed {
@@ -790,11 +793,19 @@ impl Engine {
         } else {
             self.resuming.remove(&key);
         }
-        let launched = self.state.task(key.task).and_then(|t| t.agent(key.agent)).is_some_and(|a| a.launched);
-        if !launched {
+        // 重新开始的不再是以前那次会话，编号等读到新的会话记录再记。
+        let stale = self
+            .state
+            .task(key.task)
+            .and_then(|t| t.agent(key.agent))
+            .is_some_and(|a| !a.launched || (!resumed && a.session.is_some()));
+        if stale {
             self.update(|state| {
                 if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
                     agent.launched = true;
+                    if !resumed {
+                        agent.session = None;
+                    }
                 }
                 Ok(())
             })?;
@@ -883,10 +894,12 @@ impl Engine {
         let resume = agent.launched && !fresh;
         let prompt = match agent.role {
             _ if resume => None,
+            _ if agent.prompt.is_some() => agent.prompt.clone(),
             AgentRole::Writer => Some(task.prompt.clone()).filter(|p| !p.is_empty()),
             AgentRole::Reviewer => Some(self.review_prompt(task)),
         };
-        let launch = plugin.launch(Start { role: agent.role, resume, prompt: prompt.as_deref() });
+        let start = Start { role: agent.role, resume, session: agent.session.as_deref(), prompt: prompt.as_deref() };
+        let launch = plugin.launch(start);
         let screen = plugin.screen();
         let spec = SessionSpec {
             program: launch.program,
@@ -1267,6 +1280,57 @@ mod tests {
         assert!(review.ok, "{}", review.output);
         assert_eq!(review.summary(), "No issues found");
         assert!(engine.review_started_at(id).is_none());
+    }
+
+    /// 审阅在一份副本里：看得到没提交的改动，写了文件也不影响任务的 worktree，结束后副本删掉。
+    #[cfg(unix)]
+    #[test]
+    fn review_runs_in_a_copy() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let worktree = engine.state().task(id).unwrap().worktree.clone();
+        std::fs::write(worktree.join("orders.csv"), "id;total\n").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        let script = "cat orders.csv && echo scribbled > orders.csv && touch junk && pwd";
+        std::fs::write(home.join("config.toml"), format!("review_command = [\"sh\", \"-c\", {script:?}]\n")).unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_review(id).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while engine.poll_reviews().is_empty() {
+            assert!(Instant::now() < deadline, "review timed out");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let review = engine.state().task(id).unwrap().review.clone().unwrap();
+        assert!(review.ok, "{}", review.output);
+        assert!(review.output.starts_with("id;total"), "{}", review.output);
+        // 结论里的路径换回任务的 worktree。
+        assert!(review.output.ends_with(&*worktree.to_string_lossy()), "{}", review.output);
+        assert_eq!(std::fs::read_to_string(worktree.join("orders.csv")).unwrap(), "id;total\n");
+        assert!(!worktree.join("junk").exists());
+        let left: Vec<_> = std::fs::read_dir(home.join("review")).unwrap().collect();
+        assert!(left.is_empty(), "{left:?}");
+    }
+
+    #[test]
+    fn cancelled_review_leaves_no_copy() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        std::fs::write(home.join("config.toml"), "review_command = [\"sh\", \"-c\", \"sleep 30\"]\n").unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        engine.start_review(id).unwrap();
+        thread::sleep(Duration::from_millis(300));
+        engine.cancel_review(id);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while std::fs::read_dir(home.join("review")).is_ok_and(|mut d| d.next().is_some()) {
+            assert!(Instant::now() < deadline, "副本没有删掉");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let repo = engine.state().projects[0].root.clone();
+        let list = std::process::Command::new("git").arg("-C").arg(&repo).args(["worktree", "list"]).output().unwrap();
+        assert!(!String::from_utf8_lossy(&list.stdout).contains("review"), "登记也删了");
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub mod ops;
 mod prompt;
 mod review;
 mod status;
+mod switch;
 
 pub use duolo_agent::{Plugin, Registry};
 pub use duolo_git::DiffStat;

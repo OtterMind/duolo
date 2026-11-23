@@ -10,6 +10,9 @@ use crate::transcript;
 /// 这个版本认识的声明格式。
 pub const SCHEMA: u32 = 1;
 
+/// `resume_session_args` 里换成会话编号的占位符。
+pub(crate) const SESSION: &str = "{session}";
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -94,6 +97,9 @@ pub struct StartSpec {
     pub separator: Option<String>,
     /// 恢复这个目录里上一次会话的参数。
     pub resume_args: Vec<String>,
+    /// 按编号恢复某一次会话的参数，`{session}` 换成会话编号（从会话记录里读到的）。
+    /// 没写或者还不知道编号时用 `resume_args`。
+    pub resume_session_args: Vec<String>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
     pub review_args: Vec<String>,
 }
@@ -210,6 +216,11 @@ impl Manifest {
         if self.start.prompt == PromptVia::Flag {
             ensure!(!self.start.prompt_flag.is_empty(), "prompt = \"flag\" needs prompt_flag");
         }
+        let args = &self.start.resume_session_args;
+        ensure!(
+            args.is_empty() || args.iter().any(|a| a.contains(SESSION)),
+            "resume_session_args must contain {SESSION}"
+        );
         if let Some(color) = &self.icon_color {
             let hex = color.strip_prefix('#').unwrap_or_default();
             let ok = matches!(hex.len(), 3 | 6) && hex.chars().all(|c| c.is_ascii_hexdigit());
@@ -260,6 +271,7 @@ mod tests {
         fails(&MINIMAL.replace("id = \"aider\"", "id = \"../aider\""), "invalid id");
         fails(&MINIMAL.replace("command = \"aider\"", "command = \" \""), "command is empty");
         fails(&format!("{MINIMAL}[start]\nprompt = \"flag\"\n"), "prompt_flag");
+        fails(&format!("{MINIMAL}[start]\nresume_session_args = [\"-r\"]\n"), "must contain {session}");
         fails(&format!("{MINIMAL}icon_color = \"red;}}\"\n"), "icon_color");
         fails(&format!("{MINIMAL}[transcript]\nformat = \"nope\"\nhome = \".x\"\n"), "transcript format");
         fails(&format!("{MINIMAL}[transcript]\nformat = \"claude\"\nhome = \"../x\"\n"), "home directory");

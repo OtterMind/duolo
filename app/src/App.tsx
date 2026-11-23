@@ -10,7 +10,7 @@ import { disposeTask, setInputListener } from "./lib/terminals";
 import { useVoice, type VoiceTarget } from "./lib/voice";
 import { useProjectAdder } from "./lib/projects";
 import { AddProjectDialog } from "./components/AddProject";
-import { isInstalled, type AgentChoice } from "./lib/agents";
+import { agentOptions, isInstalled, type AgentChoice } from "./lib/agents";
 import { Sidebar } from "./components/Sidebar";
 import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
@@ -418,7 +418,9 @@ export function App() {
             voice={voice}
             reviewOpen={reviewOpen === current.task.id}
             reviewerInstalled={isInstalled(env, current.task.reviewer.kind)}
+            agents={agentOptions(env)}
             onReviewOpenChange={(open) => setReviewOpen(open ? current.task.id : null)}
+            onConfirm={setConfirm}
             onClose={() => requestClose(view.task)}
             onError={fail}
           />

@@ -20,11 +20,17 @@ const REPO_VARS: [&str; 8] = [
 ];
 
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
+    git_with(dir, args, &[])
+}
+
+/// 带上环境变量运行 git（在 [`REPO_VARS`] 去掉之后设置）。
+fn git_with(dir: &Path, args: &[&str], env: &[(&str, &std::ffi::OsStr)]) -> Result<String> {
     let mut cmd = duolo_core::process::command("git");
     cmd.arg("-C").arg(dir).args(args);
     for var in REPO_VARS {
         cmd.env_remove(var);
     }
+    cmd.envs(env.iter().copied());
     let output = cmd.output().map_err(|_| UserError::GitMissing)?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -187,6 +193,51 @@ pub fn remove_worktree(root: &Path, path: &Path, force: bool) -> Result<()> {
     }
     git(root, &args)?;
     Ok(())
+}
+
+/// 把 worktree 现在的样子（包括没提交的改动和新文件，不包括被 git 忽略的）检出到 `dest`，给审阅这样只读的事用。
+/// 原来的 worktree、分支和暂存区都不动；`dest` 是一个不在任何分支上的 worktree，比原来的多一个提交，
+/// 里面是全部改动。用完调用 [`remove_snapshot`]。
+pub fn snapshot(worktree: &Path, dest: &Path) -> Result<()> {
+    let parent = dest.parent().context("snapshot path has no parent")?;
+    std::fs::create_dir_all(parent)?;
+    let dest_str = dest.to_str().context("snapshot path is not valid UTF-8")?;
+    let index = parent.join(format!("{}.index", dest.file_name().unwrap_or_default().to_string_lossy()));
+    // 从现在的暂存区开始，git 已经算好的文件信息不用重算。
+    let current = worktree.join(git(worktree, &["rev-parse", "--git-path", "index"])?);
+    if std::fs::copy(current, &index).is_err() {
+        let _ = std::fs::remove_file(&index);
+    }
+    let commit = (|| {
+        let env = [("GIT_INDEX_FILE", index.as_os_str())];
+        git_with(worktree, &["add", "-A"], &env)?;
+        let tree = git_with(worktree, &["write-tree"], &env)?;
+        let mut args = identity(worktree);
+        args.extend(["commit-tree", &tree, "-p", "HEAD", "-m", "Duolo snapshot"]);
+        git(worktree, &args)
+    })();
+    let _ = std::fs::remove_file(&index);
+    // 不跑钩子；大文件（LFS）不下载，审阅看的是改动。
+    let env = [("GIT_LFS_SKIP_SMUDGE", std::ffi::OsStr::new("1"))];
+    git_with(
+        worktree,
+        &["-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", "--quiet", dest_str, &commit?],
+        &env,
+    )?;
+    Ok(())
+}
+
+/// 删掉 [`snapshot`] 建的 worktree 和它的登记。里面被改过、多了文件也照样删。
+pub fn remove_snapshot(dest: &Path) -> Result<()> {
+    let dest_str = dest.to_str().context("snapshot path is not valid UTF-8")?;
+    if is_worktree(dest) && git(dest, &["worktree", "remove", "--force", dest_str]).is_ok() {
+        return Ok(());
+    }
+    // 登记已经坏了：只删目录，登记由 git 自己以后清理（`git worktree prune`）。
+    match std::fs::remove_dir_all(dest) {
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err.into()),
+        _ => Ok(()),
+    }
 }
 
 /// `path` 现在还是不是一个能用的 worktree（它的 `.git` 文件还在，主仓库也还在）。
@@ -525,6 +576,44 @@ mod tests {
         let wt = dir.path().join("wt");
         add_worktree(&repo, &wt, "feat", "HEAD").unwrap();
         (dir, repo, wt)
+    }
+
+    #[test]
+    fn snapshot_has_every_change_and_leaves_the_worktree_alone() {
+        let (dir, repo, wt) = repo_with_worktree();
+        std::fs::write(wt.join("a.txt"), "changed\n").unwrap();
+        std::fs::write(wt.join("staged.txt"), "staged\n").unwrap();
+        git(&wt, &["add", "staged.txt"]).unwrap();
+        std::fs::write(wt.join("新文件.txt"), "new\n").unwrap();
+        std::fs::write(wt.join("debug.log"), "noise\n").unwrap();
+        // 检出时的钩子不跑。
+        let hook = repo.join(".git/hooks/post-checkout");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, "#!/bin/sh\ntouch hook-ran\n").unwrap();
+        #[cfg(unix)]
+        std::fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let status = || git(&wt, &["status", "--porcelain"]).unwrap();
+        let before = (status(), git(&wt, &["rev-parse", "HEAD"]).unwrap());
+
+        let copy = dir.path().join("snap/1-review");
+        snapshot(&wt, &copy).unwrap();
+        assert_eq!(std::fs::read_to_string(copy.join("a.txt")).unwrap(), "changed\n");
+        assert_eq!(std::fs::read_to_string(copy.join("新文件.txt")).unwrap(), "new\n");
+        assert!(copy.join("staged.txt").exists() && !copy.join("debug.log").exists());
+        assert!(!copy.join("hook-ran").exists());
+        let diff = git(&copy, &["diff", "--name-only", &before.1]).unwrap();
+        assert_eq!(diff.lines().count(), 3, "{diff}");
+        assert_eq!((status(), git(&wt, &["rev-parse", "HEAD"]).unwrap()), before, "原来的没动");
+        assert!(!dir.path().join("snap/1-review.index").exists());
+
+        // 审阅时被写了东西也照样删掉，登记也不留下。
+        std::fs::write(copy.join("a.txt"), "scribbled\n").unwrap();
+        std::fs::write(copy.join("junk.txt"), "x\n").unwrap();
+        remove_snapshot(&copy).unwrap();
+        assert!(!copy.exists());
+        assert!(!git(&repo, &["worktree", "list"]).unwrap().contains("1-review"));
+        assert_eq!(std::fs::read_to_string(wt.join("a.txt")).unwrap(), "changed\n");
+        remove_snapshot(&copy).unwrap();
     }
 
     #[test]

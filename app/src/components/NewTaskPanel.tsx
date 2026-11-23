@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
-  Copy,
   Folder,
   FolderGit2,
   FolderPlus,
@@ -32,6 +31,7 @@ import type { Voice, VoiceTarget } from "../lib/voice";
 import { useModalFocus } from "../lib/modal";
 import { pluginName } from "../lib/plugins";
 import { AgentIcon } from "./AgentIcon";
+import { AgentMenu, CopyCommand, Popover } from "./AgentMenu";
 import { Waveform } from "./VoiceBar";
 import { TALK_KEY } from "../lib/platform";
 
@@ -497,7 +497,6 @@ function BranchField({ branch }: { branch: BranchNameState }) {
   );
 }
 
-
 /** 选项目：已添加的项目，最下面是"添加项目…"。 */
 function ProjectMenu({
   snap,
@@ -695,48 +694,6 @@ function BranchMenu({
   );
 }
 
-/** 选谁写或谁审：列出配置里的所有 Agent，没装的不能选，给出安装命令。 */
-function AgentMenu({
-  title,
-  agents,
-  selected,
-  onPick,
-  onClose,
-}: {
-  title: string;
-  agents: AgentOption[];
-  selected: string;
-  onPick(id: string): void;
-  onClose(): void;
-}) {
-  const t = useT();
-  return (
-    <Popover onClose={onClose}>
-      <div className="menu-title">{title}</div>
-      <div className="menu-list">
-        {agents.map((a) =>
-          a.installed ? (
-            <button key={a.id} className="menu-item" onClick={() => onPick(a.id)}>
-              <AgentIcon kind={a.id} size={14} />
-              <span>{a.name}</span>
-              <span className="grow" />
-              {a.id === selected && <Check size={13} strokeWidth={2} />}
-            </button>
-          ) : (
-            <div key={a.id} className="menu-item is-disabled" title={t("newTask.notInstalled")}>
-              <AgentIcon kind={a.id} size={14} />
-              <span>{a.name}</span>
-              <span className="meta">{t("newTask.notInstalled")}</span>
-              <span className="grow" />
-              {a.install && <CopyCommand command={a.install} />}
-            </div>
-          ),
-        )}
-      </div>
-    </Popover>
-  );
-}
-
 /** 本机一个 Agent 都没装：说明要装什么，给出可以复制的安装命令。 */
 function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck(): void }) {
   const t = useT();
@@ -762,43 +719,3 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
   );
 }
 
-function CopyCommand({ command }: { command: string }) {
-  const t = useT();
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      className="icon-btn"
-      title={copied ? t("newTask.copied") : t("newTask.copyInstall", { command })}
-      onClick={(e) => {
-        e.stopPropagation();
-        void navigator.clipboard.writeText(command).then(() => setCopied(true));
-      }}
-    >
-      {copied ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.75} />}
-    </button>
-  );
-}
-
-/** 挂在按钮下面的下拉框，点别处或按 Esc 关闭。 */
-function Popover({ children, onClose }: { children: React.ReactNode; onClose(): void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const close = (e: MouseEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
-    window.addEventListener("mousedown", close, true);
-    return () => window.removeEventListener("mousedown", close, true);
-  }, [onClose]);
-  return (
-    <div
-      ref={ref}
-      className="menu dropdown"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      {children}
-    </div>
-  );
-}

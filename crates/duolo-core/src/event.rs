@@ -66,6 +66,16 @@ pub enum EventKind {
         detail: String,
         options: Vec<String>,
     },
+    /// 换了写代码的 Agent：`from` 换下来，`to`（`kind` 插件）接手。
+    WriterChanged {
+        from: u32,
+        to: u32,
+        kind: String,
+    },
+    /// 换了审阅的 Agent（插件 id）。
+    ReviewerChanged {
+        reviewer: String,
+    },
     /// 后台审阅开始。
     ReviewStarted {
         reviewer: String,

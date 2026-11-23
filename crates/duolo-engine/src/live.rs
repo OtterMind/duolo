@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use duolo_agent::{Entry, Home, Watch};
-use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, TaskEvent, TaskId, UserError};
+use duolo_agent::{Entry, Home, Sessions, Watch};
+use duolo_core::{AgentKey, AgentRole, EventKind, Speaker, State, TaskEvent, TaskId, UserError};
 
 use crate::engine::Engine;
 use crate::events::EventLog;
@@ -79,10 +79,14 @@ impl Engine {
         }
     }
 
-    /// Agent 启动后开始跟着它的会话记录。
-    pub(crate) fn watch_transcript(&mut self, key: AgentKey) {
+    /// Agent 启动后开始跟着它的会话记录。`resumed` 时接着读它原来的那次会话。
+    pub(crate) fn watch_transcript(&mut self, key: AgentKey, resumed: bool) {
         let Some(task) = self.state.task(key.task) else { return };
-        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.live.home)) {
+        let own = task.agent(key.agent).and_then(|a| a.session.clone()).filter(|_| resumed);
+        let others =
+            task.agents.iter().chain(&task.retired).filter(|a| a.id != key.agent).filter_map(|a| a.session.clone());
+        let sessions = Sessions { own, others: others.collect() };
+        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.live.home, sessions)) {
             Some(watch) => self.live.watchers.insert(key, watch),
             None => self.live.watchers.remove(&key),
         };
@@ -95,9 +99,14 @@ impl Engine {
 
     fn poll_transcripts(&mut self) {
         let mut found = Vec::new();
+        let mut sessions = Vec::new();
         for (key, watch) in &self.live.watchers {
             found.extend(watch.take().into_iter().map(|entry| (*key, entry)));
+            if let Some(id) = watch.session() {
+                sessions.push((*key, id));
+            }
         }
+        self.remember_sessions(sessions);
         for (key, entry) in found {
             let kind = match entry {
                 Entry::User(text) => EventKind::Message { speaker: Speaker::User, agent: key.agent, text },
@@ -105,6 +114,54 @@ impl Engine {
                 Entry::Tool { tool, target } => EventKind::Tool { agent: key.agent, tool, target },
             };
             self.record(key.task, kind);
+        }
+    }
+
+    /// 记下 Agent 的会话编号，下次按编号恢复。同一个任务里别的 Agent 已经认领的编号不抢，
+    /// 并告诉同一个任务里的其他 Agent：这个会话不是它们的。
+    fn remember_sessions(&mut self, mut found: Vec<(AgentKey, String)>) {
+        let claimed = |state: &State, key: AgentKey, id: &String| {
+            state.task(key.task).is_some_and(|t| {
+                t.agents.iter().chain(&t.retired).any(|a| a.id != key.agent && a.session.as_ref() == Some(id))
+            })
+        };
+        let known = |state: &State, key: AgentKey| state.task(key.task).and_then(|t| t.agent(key.agent)).cloned();
+        // 已经有会话的 Agent 又认出一个新的：同一个任务里还有正在运行、还没认出自己会话的 Agent 时先不认，
+        // 那多半是它的。
+        let unsure = |state: &State, key: AgentKey| {
+            state.task(key.task).is_some_and(|t| {
+                t.agents
+                    .iter()
+                    .any(|a| a.id != key.agent && a.session.is_none() && self.sessions.contains_key(&t.key(a.id)))
+            })
+        };
+        found.retain(|(key, id)| {
+            let Some(agent) = known(&self.state, *key) else { return false };
+            agent.session.as_ref() != Some(id)
+                && !claimed(&self.state, *key, id)
+                && (agent.session.is_none() || !unsure(&self.state, *key))
+        });
+        // 两个 Agent 同时认出同一个会话：给还没有会话的那个（另一个是看到了别人新建的文件）。
+        found.sort_by_key(|(key, _)| known(&self.state, *key).is_some_and(|a| a.session.is_some()));
+        let mut taken = HashSet::new();
+        found.retain(|(key, id)| taken.insert((key.task, id.clone())));
+        if found.is_empty() {
+            return;
+        }
+        // 没存上只是下次恢复最近的一次会话。
+        let _ = self.update(|state| {
+            for (key, id) in &found {
+                if let Some(agent) = state.task_mut(key.task).and_then(|t| t.agent_mut(key.agent)) {
+                    agent.session = Some(id.clone());
+                }
+            }
+            Ok(())
+        });
+        let tasks: HashSet<TaskId> = found.iter().map(|(key, _)| key.task).collect();
+        for (key, watch) in &self.live.watchers {
+            let Some(task) = self.state.task(key.task).filter(|t| tasks.contains(&t.id)) else { continue };
+            let others = task.agents.iter().chain(&task.retired).filter(|a| a.id != key.agent);
+            watch.set_others(others.filter_map(|a| a.session.clone()).collect());
         }
     }
 
@@ -278,6 +335,18 @@ impl Engine {
         let t = self.state.task(task).ok_or(UserError::TaskNotFound)?;
         let agent = t.agent_with_role(AgentRole::Writer).ok_or(UserError::AgentNotRunning)?;
         Ok(t.key(agent.id))
+    }
+
+    /// 换下来的 Agent：不再跟着它，没发出去的消息交给 `successor`。
+    pub(crate) fn hand_over(&mut self, key: AgentKey, successor: AgentKey) {
+        self.live.watchers.remove(&key);
+        self.live.status.remove(&key);
+        self.live.settling.remove(&key);
+        self.live.prompt.remove(&key);
+        self.live.settled.remove(&key);
+        if let Some(queued) = self.live.pending.remove(&key) {
+            self.live.pending.entry(successor).or_default().extend(queued);
+        }
     }
 
     /// 任务关闭后不再跟着它的 Agent。
@@ -580,6 +649,77 @@ mod tests {
         let review = engine.state().task(task).unwrap().review.clone().unwrap();
         assert_eq!((review.ok, review.output.as_str()), (true, "[PASS] 3 args"), "review -- <提示词>");
         engine.close_task(task).unwrap();
+    }
+
+    /// 读到会话编号后记下来，下次按编号恢复（同一个目录里可能还有别的 Agent 的会话）。
+    #[test]
+    fn resumes_the_session_it_read() {
+        let (dir, mut engine, project) = engine("echo \"args:$*\"; cat");
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:-- Export orders");
+
+        let worktree = engine.state().task(task).unwrap().worktree.display().to_string();
+        let folder: String =
+            worktree.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+        let sessions = dir.path().join("user-home/.claude/projects").join(folder);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let line = r#"{"type":"user","timestamp":"2100-01-01T00:00:00Z","message":{"content":"Export orders"}}"#;
+        std::fs::write(sessions.join("5b4c8a2e-0000-4000-8000-000000000001.jsonl"), format!("{line}\n")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while engine.state().task(task).unwrap().agents[0].session.is_none() {
+            assert!(Instant::now() < deadline, "没有记下会话编号");
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        engine.stop_agent(key);
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, "args:--resume 5b4c8a2e-0000-4000-8000-000000000001");
+        engine.shutdown();
+    }
+
+    /// 同一个 worktree 里两个同种的 Agent（终端里审阅的那个后启动）：各认各的会话。
+    #[test]
+    fn agents_in_one_folder_keep_their_own_sessions() {
+        let (dir, mut engine, project) = engine("cat");
+        let claude = duolo_core::AgentKind("claude".into());
+        let opts = crate::TaskOptions { writer: Some(claude.clone()), reviewer: Some(claude), ..Default::default() };
+        let task = engine.create_task_with(&project, "Export orders", &opts).unwrap();
+        let writer = engine.writer_key(task).unwrap();
+        engine.start_agent(writer).unwrap();
+        let worktree = engine.state().task(task).unwrap().worktree.display().to_string();
+        let folder: String =
+            worktree.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+        let sessions = dir.path().join("user-home/.claude/projects").join(folder);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let line = r#"{"type":"user","timestamp":"2100-01-01T00:00:00Z","message":{"content":"hi"}}"#;
+        let session_of = |engine: &Engine, key: AgentKey| {
+            engine.state().task(key.task).unwrap().agent(key.agent).unwrap().session.clone()
+        };
+        let wait = |engine: &mut Engine, key: AgentKey, want: &str| {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while session_of(engine, key).as_deref() != Some(want) {
+                assert!(Instant::now() < deadline, "{key:?}: {:?}", session_of(engine, key));
+                engine.poll_events();
+                thread::sleep(Duration::from_millis(50));
+            }
+        };
+        std::fs::write(sessions.join("aaaa-1.jsonl"), format!("{line}\n")).unwrap();
+        wait(&mut engine, writer, "aaaa-1");
+
+        let reviewer = engine.start_reviewer(task).unwrap();
+        thread::sleep(Duration::from_millis(50));
+        std::fs::write(sessions.join("bbbb-2.jsonl"), format!("{line}\n")).unwrap();
+        wait(&mut engine, reviewer, "bbbb-2");
+        // 写代码的那个也会看到这个更新的文件，但它不是它的。
+        for _ in 0..60 {
+            engine.poll_events();
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(session_of(&engine, writer).as_deref(), Some("aaaa-1"));
+        engine.shutdown();
     }
 
     #[test]

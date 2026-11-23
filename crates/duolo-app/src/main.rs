@@ -186,6 +186,8 @@ fn main() {
             commands::close_task,
             commands::start_agent,
             commands::start_reviewer,
+            commands::switch_writer,
+            commands::set_reviewer,
             commands::start_review,
             commands::cancel_review,
             commands::attach,

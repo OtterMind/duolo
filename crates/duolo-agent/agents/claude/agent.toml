@@ -12,6 +12,9 @@ default = "npm install -g @anthropic-ai/claude-code"
 prompt = "argument"
 separator = "--"
 resume_args = ["--continue"]
+resume_session_args = ["--resume", "{session}"]
+# 在终端里审阅时用计划模式：只看不改，要改文件得先让用户同意。
+review_args = ["--permission-mode", "plan"]
 
 # 只读：只有读文件和运行命令的工具，命令只放行看 git 改动的，其他的一律拒绝，不会停下来问。
 # `--allowedTools` 是在用户自己的设置上追加，所以还要用 `--disallowedTools` 拦住写文件的工具。

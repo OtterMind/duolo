@@ -3,8 +3,8 @@
 use duolo_core::process::{self, OneShot};
 use duolo_core::{AgentKind, AgentOverride, AgentRole};
 
-use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen};
-use crate::transcript::{self, Home, Watch};
+use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, SESSION};
+use crate::transcript::{self, Home, Sessions, Watch};
 
 #[derive(Debug, Clone)]
 pub struct Plugin {
@@ -20,6 +20,8 @@ pub struct Start<'a> {
     pub role: AgentRole,
     /// 恢复上一次会话；这时不带 `prompt`。
     pub resume: bool,
+    /// 要恢复的会话编号；不知道时恢复这个目录里最近的一次。
+    pub session: Option<&'a str>,
     pub prompt: Option<&'a str>,
 }
 
@@ -47,6 +49,12 @@ impl Plugin {
         set(&mut self.manifest.command, &changes.command);
         set(&mut self.manifest.start.args, &changes.args);
         set(&mut self.manifest.start.resume_args, &changes.resume_args);
+        // 自己改了怎么恢复会话、又没说按编号怎么恢复：按编号的也不用插件的了，免得和改过的对不上。
+        match &changes.resume_session_args {
+            Some(args) => self.manifest.start.resume_session_args.clone_from(args),
+            None if changes.resume_args.is_some() => self.manifest.start.resume_session_args.clear(),
+            None => {}
+        }
         set(&mut self.manifest.start.review_args, &changes.review_args);
         if let Some(install) = &changes.install {
             self.manifest.install = crate::manifest::Install { default: install.clone(), ..Default::default() };
@@ -116,7 +124,10 @@ impl Plugin {
             args.extend(spec.review_args.iter().cloned());
         }
         if start.resume {
-            args.extend(spec.resume_args.iter().cloned());
+            match start.session.filter(|_| !spec.resume_session_args.is_empty()) {
+                Some(id) => args.extend(spec.resume_session_args.iter().map(|a| a.replace(SESSION, id))),
+                None => args.extend(spec.resume_args.iter().cloned()),
+            }
         } else if let Some(prompt) = start.prompt {
             match spec.prompt {
                 _ if batch => paste = Some(prompt.to_string()),
@@ -148,10 +159,10 @@ impl Plugin {
     }
 
     /// 开始跟着它在 `worktree` 里的会话记录；读不了它的记录时为 None。
-    pub fn watch(&self, worktree: &std::path::Path, home: &Home) -> Option<Watch> {
+    pub fn watch(&self, worktree: &std::path::Path, home: &Home, sessions: Sessions) -> Option<Watch> {
         let spec = self.manifest.transcript.as_ref()?;
         let format = transcript::format(&spec.format)?;
-        Some(Watch::start(format, worktree, home.data_dir(&spec.home, spec.home_env.as_deref())))
+        Some(Watch::start(format, worktree, home.data_dir(&spec.home, spec.home_env.as_deref()), sessions))
     }
 }
 
@@ -165,7 +176,7 @@ mod tests {
     }
 
     fn write(prompt: &str) -> Start<'_> {
-        Start { role: AgentRole::Writer, resume: false, prompt: Some(prompt) }
+        Start { role: AgentRole::Writer, resume: false, session: None, prompt: Some(prompt) }
     }
 
     #[test]
@@ -192,8 +203,21 @@ mod tests {
     #[test]
     fn resuming_does_not_repeat_the_prompt() {
         let p = plugin("resume_args = [\"-c\"]\nreview_args = [\"--ro\"]");
-        let start = Start { role: AgentRole::Reviewer, resume: true, prompt: Some("again") };
+        let start = Start { role: AgentRole::Reviewer, resume: true, session: None, prompt: Some("again") };
         assert_eq!(p.launch_as(start, false).args, ["--ro", "-c"]);
+    }
+
+    #[test]
+    fn resumes_the_known_session() {
+        let p = plugin("resume_args = [\"-c\"]\nresume_session_args = [\"-r\", \"{session}\"]");
+        let start = |session| Start { role: AgentRole::Writer, resume: true, session, prompt: None };
+        assert_eq!(p.launch_as(start(Some("ab-12")), false).args, ["-r", "ab-12"]);
+        assert_eq!(p.launch_as(start(None), false).args, ["-c"], "还不知道编号时恢复最近的");
+        // 没写按编号怎么恢复的插件，有编号也只能恢复最近的。
+        assert_eq!(plugin("resume_args = [\"-c\"]").launch_as(start(Some("ab-12")), false).args, ["-c"]);
+        // config.toml 里只改了 resume_args：按编号的不再用插件的。
+        let changed = p.with(&AgentOverride { resume_args: Some(vec!["--last".into()]), ..Default::default() });
+        assert_eq!(changed.launch_as(start(Some("ab-12")), false).args, ["--last"]);
     }
 
     #[test]

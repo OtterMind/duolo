@@ -28,6 +28,7 @@ use serde::Serialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_window_state::StateFlags;
 
 /// 界面多久没回应退出请求，就当作它坏了。
 const QUIT_REPLY: Duration = Duration::from_secs(3);
@@ -133,6 +134,13 @@ fn main() {
             show_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
+        // 记住窗口的大小、位置和是否最大化，下次照原样打开（Warp、Orca 都这样）。
+        // 不记"是否可见"：macOS 上关窗口只是隐藏，记下来下次启动窗口就出不来了。
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
+                .build(),
+        )
         .manage(state);
     // 原生菜单只在 macOS 上用（菜单在屏幕顶部）。Windows / Linux 上菜单会出现在窗口里，
     // 而且它的 Ctrl 快捷键会抢走终端的按键，所以那边的快捷键由界面自己处理（见 app/src/lib/platform.ts）。
@@ -152,6 +160,7 @@ fn main() {
             if let Ok(dir) = app.path().resource_dir() {
                 let _ = platform::RESOURCES.set(dir);
             }
+            first_launch_size(app);
             spawn_snapshot_loop(app.handle().clone());
             fnkey::start(app.handle().clone());
             Ok(())
@@ -236,6 +245,20 @@ fn main() {
 /// `generate_context!` 会把界面文件和 Info.plist 嵌进程序，只能展开一次。
 fn context() -> tauri::Context {
     tauri::generate_context!()
+}
+
+/// 第一次打开（还没记过窗口大小）时铺满屏幕的可用区域（不含菜单栏、Dock、任务栏），和 Orca 一样；
+/// 以后按上次关闭时的大小打开。屏幕信息拿不到时保持配置里的 1280×820（和 Warp 的默认差不多）。
+fn first_launch_size(app: &tauri::App) {
+    let saved = app.path().app_config_dir().map(|dir| dir.join(tauri_plugin_window_state::DEFAULT_FILENAME));
+    if saved.is_ok_and(|file| file.exists()) {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Ok(Some(monitor)) = window.primary_monitor() else { return };
+    let area = monitor.work_area();
+    let _ = window.set_size(area.size);
+    let _ = window.set_position(area.position);
 }
 
 /// 打不开数据目录（没有权限、磁盘只读……）：弹窗说明原因再退出，不然双击图标会毫无反应。

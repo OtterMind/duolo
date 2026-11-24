@@ -62,6 +62,21 @@ interface Entry {
 
 const pool = new Map<string, Entry>();
 
+/**
+ * xterm 按下鼠标开始拖选，等 document 收到 mouseup 才结束。macOS 的 WebView 有时收不到这个 mouseup
+ * （比如从别的应用点回来、在窗口外松开），xterm 就一直以为还在拖：之后鼠标一动、内容一滚，选区就跟着变大，
+ * 鼠标移到终端上下边外面时还会自动滚动着往下选。这里在鼠标移动或滚动时看一眼：键其实已经松开了，就补一个 mouseup。
+ */
+let pressedInTerminal = false;
+const releaseIfUp = (e: MouseEvent) => {
+  if (!pressedInTerminal || e.buttons !== 0) return;
+  pressedInTerminal = false;
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: e.clientX, clientY: e.clientY }));
+};
+window.addEventListener("mousemove", releaseIfUp, true);
+window.addEventListener("wheel", releaseIfUp, { capture: true, passive: true });
+window.addEventListener("mouseup", () => (pressedInTerminal = false), true);
+
 /** 用户在终端里的输入（发给 Agent 之前），App 用它给新任务起名。 */
 let inputListener: ((ref: AgentRef, data: string) => void) | null = null;
 export function setInputListener(listener: typeof inputListener) {
@@ -117,6 +132,7 @@ function create(ref: AgentRef): Entry {
 
   const el = document.createElement("div");
   el.className = "xterm-host";
+  el.addEventListener("mousedown", () => (pressedInTerminal = true), true);
   const block = document.createElement("div");
   block.className = "input-block";
   el.appendChild(block);

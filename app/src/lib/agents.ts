@@ -18,9 +18,9 @@ export interface AgentOption {
   tooOld: { version: string; minimum: string } | null;
 }
 
+/** 新建任务时选的：谁来写。审阅不在这里选，要的时候在任务里随时叫（见 TaskView 的审阅按钮）。 */
 export interface AgentChoice {
   writer: string;
-  reviewer: string;
 }
 
 const LAST_KEY = "duolo.lastAgents";
@@ -48,18 +48,13 @@ export function isInstalled(env: Check[] | null, id: string) {
   return env === null || option?.installed === true;
 }
 
-export function defaultChoice(env: Check[] | null, configured: AgentChoice | null): AgentChoice {
+export function defaultChoice(env: Check[] | null, configured: { writer: string } | null): AgentChoice {
   const options = agentOptions(env);
   const installed = options.filter((a) => a.installed).map((a) => a.id);
   const usable = (id: string | undefined) => !!id && (env === null || installed.includes(id));
   const last = loadLast();
   const writer = [last?.writer, configured?.writer, installed[0], options[0]?.id].find(usable) ?? configured?.writer ?? "";
-  const reviewers = options.filter((a) => a.installed && a.reviews).map((a) => a.id);
-  const canReview = (id: string | undefined) => !!id && (env === null || reviewers.includes(id));
-  const others = reviewers.filter((id) => id !== writer);
-  const reviewer =
-    [last?.reviewer, configured?.reviewer, others[0], writer].find(canReview) ?? configured?.reviewer ?? "";
-  return { writer, reviewer };
+  return { writer };
 }
 
 export function rememberChoice(choice: AgentChoice) {

@@ -19,11 +19,13 @@ pub struct Settings {
     pub language: String,
     /// 说完后是否整理成指令；没有设置过时用 `config.toml` 里的 `voice.organize`。
     pub voice_organize: Option<bool>,
+    /// 上次叫来审阅的 Agent（插件 id）。任务自己没选过时用它，再没有就用 `config.toml` 的 `reviewer`。
+    pub reviewer: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: LANGUAGE_AUTO.into(), voice_organize: None }
+        Self { language: LANGUAGE_AUTO.into(), voice_organize: None, reviewer: None }
     }
 }
 

@@ -9,8 +9,8 @@ use duolo_core::hook::HOOK_DIR_ENV;
 use duolo_core::process::OneShot;
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
-    AgentKey, AgentKind, AgentRole, AgentSpec, Config, EventKind, Paths, Project, ProjectId, Review, Stamp, State,
-    Store, Task, TaskId, UserError, Verdict,
+    AgentKey, AgentKind, AgentRole, AgentSpec, Config, EventKind, Paths, Project, ProjectId, Review, Settings, Stamp,
+    State, Store, Task, TaskId, UserError, Verdict,
 };
 use duolo_git::DiffStat;
 use duolo_pty::{OutputHook, OutputSink, Rules, Session, SessionSpec, Size};
@@ -181,6 +181,8 @@ pub struct Engine {
     reviews: HashMap<TaskId, ReviewJob>,
     /// 审阅结论使用的语言（英文名），跟随界面语言。
     reply_language: String,
+    /// 上次叫来审阅的 Agent（`settings.json` 的 `reviewer`）。
+    last_reviewer: Option<AgentKind>,
     pane: Size,
     on_output: Option<OutputHook>,
     diffs: Diffs,
@@ -238,6 +240,7 @@ impl Engine {
         };
         remove_leftovers(&paths.worktrees());
         crate::review::remove_leftovers(&paths.reviews());
+        let last_reviewer = Settings::load(&paths.settings_file()).ok().and_then(|s| s.reviewer).map(AgentKind);
         Ok(Self {
             paths,
             config,
@@ -255,6 +258,7 @@ impl Engine {
             no_session_ids: HashSet::new(),
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
+            last_reviewer,
             pane: Size::new(24, 80),
             on_output: None,
             diffs: Diffs::default(),
@@ -440,8 +444,9 @@ impl Engine {
     pub fn prepare_task(&mut self, project: &ProjectId, prompt: &str, opts: &TaskOptions) -> Result<NewTask> {
         let prompt = prompt.trim();
         let writer = opts.writer.clone().unwrap_or_else(|| self.config.writer.clone());
-        let reviewer = opts.reviewer.clone().unwrap_or_else(|| self.config.reviewer.clone());
-        for kind in [&writer, &reviewer] {
+        // 审阅者只在明确选了时记在任务上；没选的用时再定（上次叫的、配置的默认），见 `reviewer_of`。
+        let reviewer = opts.reviewer.clone();
+        for kind in std::iter::once(&writer).chain(reviewer.as_ref()) {
             self.agents.get(kind)?;
         }
         let repo = match &opts.repo {
@@ -491,7 +496,7 @@ impl Engine {
             created_at: now_secs(),
             agents: vec![writer],
             repo: Some(repo.clone()),
-            reviewer: Some(reviewer),
+            reviewer,
             review: None,
             retired: Vec::new(),
         };
@@ -680,10 +685,23 @@ impl Engine {
         Ok(())
     }
 
-    /// 任务的审阅 Agent：新建任务时选的，旧任务按配置默认。
+    /// 任务的审阅 Agent：这个任务上次叫的，没有就是上次在任何任务里叫的，再没有按配置默认。
     pub fn reviewer_of(&self, id: TaskId) -> Result<AgentKind> {
         let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
-        Ok(task.reviewer.clone().unwrap_or_else(|| self.config.reviewer.clone()))
+        Ok(task.reviewer.clone().or_else(|| self.last_reviewer.clone()).unwrap_or_else(|| self.config.reviewer.clone()))
+    }
+
+    /// 叫 `kind` 来审阅任务的改动，并记下这次的选择（这个任务和以后的新任务都先用它）。
+    pub fn review_with(&mut self, id: TaskId, kind: AgentKind) -> Result<()> {
+        self.set_reviewer(id, kind.clone())?;
+        if self.last_reviewer.as_ref() != Some(&kind) {
+            let path = self.paths.settings_file();
+            let mut settings = Settings::load(&path)?;
+            settings.reviewer = Some(kind.0.clone());
+            settings.save(&path)?;
+            self.last_reviewer = Some(kind);
+        }
+        self.start_review(id)
     }
 
     pub fn cancel_review(&mut self, id: TaskId) {
@@ -1415,6 +1433,33 @@ mod tests {
         assert!(review.ok, "{}", review.output);
         assert_eq!(review.summary(), "No issues found");
         assert!(engine.review_started_at(id).is_none());
+    }
+
+    /// 叫谁来审阅随时选：记在任务上，也成为以后新任务的默认，重开引擎也记得。
+    #[cfg(unix)]
+    #[test]
+    fn review_with_remembers_the_choice() {
+        let (dir, mut engine, project) = engine_with_repo();
+        let first = engine.create_task(&project, "Export orders as CSV").unwrap();
+        drop(engine);
+        let home = dir.path().join("home");
+        // 换掉了审阅命令时谁都可以审；结论马上出来。
+        std::fs::write(
+            home.join("config.toml"),
+            "reviewer = \"codex\"\nreview_command = [\"sh\", \"-c\", \"echo ok\"]\n",
+        )
+        .unwrap();
+        let mut engine = Engine::open(Paths::at(&home)).unwrap();
+        assert_eq!(engine.reviewer_of(first).unwrap().0, "codex");
+        engine.review_with(first, AgentKind("claude".into())).unwrap();
+        assert!(engine.review_started_at(first).is_some());
+        assert_eq!(engine.reviewer_of(first).unwrap().0, "claude");
+        let second = engine.create_task(&project, "Import orders").unwrap();
+        assert_eq!(engine.reviewer_of(second).unwrap().0, "claude", "新任务先用上次选的");
+        engine.cancel_review(first);
+        drop(engine);
+        let engine = Engine::open(Paths::at(&home)).unwrap();
+        assert_eq!(engine.reviewer_of(second).unwrap().0, "claude", "重开也记得");
     }
 
     /// 审阅在一份副本里：看得到没提交的改动，写了文件也不影响任务的 worktree，结束后副本删掉。

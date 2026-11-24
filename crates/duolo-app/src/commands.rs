@@ -297,10 +297,15 @@ pub async fn set_reviewer(state: State<'_, AppState>, task: u64, kind: String) -
     Ok(state.engine().set_reviewer(TaskId(task), AgentKind(kind))?)
 }
 
-/// 在后台审阅任务的改动。
+/// 在后台审阅任务的改动。`reviewer` 是这次叫谁来审（会记住），不给就用上次叫的。
 #[tauri::command]
-pub async fn start_review(state: State<'_, AppState>, task: u64) -> Res<()> {
-    Ok(state.engine().start_review(TaskId(task))?)
+pub async fn start_review(state: State<'_, AppState>, task: u64, reviewer: Option<String>) -> Res<()> {
+    let mut engine = state.engine();
+    match reviewer {
+        Some(kind) => engine.review_with(TaskId(task), AgentKind(kind))?,
+        None => engine.start_review(TaskId(task))?,
+    }
+    Ok(())
 }
 
 #[tauri::command]

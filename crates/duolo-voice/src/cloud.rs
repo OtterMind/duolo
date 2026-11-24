@@ -374,7 +374,9 @@ mod tests {
         let m: ServerMessage = serde_json::from_str(r#"{"type":"partial","text":"hi"}"#).unwrap();
         assert!(matches!(m, ServerMessage::Partial { text } if text == "hi"));
         let m: ServerMessage = serde_json::from_str(r#"{"type":"final","text":"a","organized":"b"}"#).unwrap();
-        assert!(matches!(m, ServerMessage::Final { text, organized } if text == "a" && organized.as_deref() == Some("b")));
+        assert!(
+            matches!(m, ServerMessage::Final { text, organized } if text == "a" && organized.as_deref() == Some("b"))
+        );
         let m: ServerMessage = serde_json::from_str(r#"{"type":"final","text":"a"}"#).unwrap();
         assert!(matches!(m, ServerMessage::Final { organized: None, .. }));
         let m: ServerMessage = serde_json::from_str(r#"{"type":"error","error":"voiceUnavailable"}"#).unwrap();

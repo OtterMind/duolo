@@ -21,7 +21,6 @@ interface Props {
   voice: Voice;
   reviewOpen: boolean;
   /** 这个任务的审阅 Agent 本机装了没有。 */
-  reviewerInstalled: boolean;
   /** 可以换成的 Agent。 */
   agents: AgentOption[];
   onReviewOpenChange(open: boolean): void;
@@ -32,7 +31,7 @@ interface Props {
 
 /** 任务页：顶部一行任务信息和审阅入口，下面就是写代码的 Agent 自己的命令行。 */
 export function TaskView(props: Props) {
-  const { task, voice, reviewOpen, reviewerInstalled, agents, onReviewOpenChange, onClose, onError } = props;
+  const { task, voice, reviewOpen, agents, onReviewOpenChange, onClose, onError } = props;
   const t = useT();
   const agent = writerOf(task) ?? task.agents[0];
   const ref = { task: task.id, agent: agent.id };
@@ -41,9 +40,10 @@ export function TaskView(props: Props) {
   const [agentMenu, setAgentMenu] = useState(false);
   const focusTerminal = () => terminals.terminalFor(ref).term.focus();
 
-  const startReview = () => {
+  /** 叫 `reviewer`（不给就是上次叫的那个）来审阅。 */
+  const startReview = (reviewer?: string) => {
     onReviewOpenChange(true);
-    api.startReview(task.id).catch(onError);
+    api.startReview(task.id, reviewer).catch(onError);
   };
   const sendReview = () => {
     if (!task.review) return;
@@ -59,7 +59,7 @@ export function TaskView(props: Props) {
         <div className="dropdown-anchor">
           <button
             className={`icon-btn agent-switch ${agentMenu ? "is-open" : ""}`}
-            title={t("task.agents", { writer: agent.name, reviewer: task.reviewer.name })}
+            title={t("task.writer", { agent: agent.name })}
             onClick={() => setAgentMenu((m) => !m)}
           >
             <AgentIcon kind={agent.kind} />
@@ -71,7 +71,6 @@ export function TaskView(props: Props) {
               agents={agents}
               onConfirm={props.onConfirm}
               onClose={() => setAgentMenu(false)}
-              onError={onError}
             />
           )}
         </div>
@@ -94,7 +93,7 @@ export function TaskView(props: Props) {
         <ReviewButton
           task={task}
           open={reviewOpen}
-          installed={reviewerInstalled}
+          agents={agents}
           onStart={startReview}
           onToggle={() => onReviewOpenChange(!reviewOpen)}
         />
@@ -125,6 +124,7 @@ export function TaskView(props: Props) {
         {reviewOpen && (
           <ReviewPanel
             task={task}
+            agents={agents}
             onRerun={startReview}
             onCancel={() => void api.cancelReview(task.id)}
             onSend={sendReview}
@@ -139,21 +139,19 @@ export function TaskView(props: Props) {
   );
 }
 
-/** 换谁写、谁审。换写代码的要先确认：原来的会停下，新的接着做。 */
+/** 换谁来写：要先确认，原来的会停下，新的接着做。 */
 function SwitchMenu({
   task,
   writer,
   agents,
   onConfirm,
   onClose,
-  onError,
 }: {
   task: Task;
   writer: Agent;
   agents: AgentOption[];
   onConfirm(spec: ConfirmSpec): void;
   onClose(): void;
-  onError(err: unknown): void;
 }) {
   const t = useT();
   const pickWriter = (id: string) => {
@@ -169,39 +167,29 @@ function SwitchMenu({
       },
     });
   };
-  const pickReviewer = (id: string) => {
-    onClose();
-    if (id !== task.reviewer.kind) api.setReviewer(task.id, id).catch(onError);
-  };
   return (
     <Popover onClose={onClose}>
       <AgentList title={t("newTask.writerTitle")} agents={agents} selected={writer.kind} onPick={pickWriter} />
-      <div className="menu-sep" />
-      <AgentList
-        title={t("newTask.reviewerTitle")}
-        agents={agents.filter((a) => a.reviews)}
-        selected={task.reviewer.kind}
-        onPick={pickReviewer}
-      />
     </Popover>
   );
 }
 
-/** 顶部的审阅入口：平时是一个小按钮，审阅中显示用时，有结论时显示摘要。 */
+/** 顶部的审阅入口：平时是一个小按钮，点开选谁来审（上次叫的排在最前）；审阅中显示用时，有结论时显示摘要。 */
 function ReviewButton({
   task,
   open,
-  installed,
+  agents,
   onStart,
   onToggle,
 }: {
   task: Task;
   open: boolean;
-  installed: boolean;
-  onStart(): void;
+  agents: AgentOption[];
+  onStart(reviewer: string): void;
   onToggle(): void;
 }) {
   const t = useT();
+  const [picking, setPicking] = useState(false);
   const now = useNow(task.reviewingSince != null);
   if (task.reviewingSince != null) {
     return (
@@ -224,31 +212,40 @@ function ReviewButton({
     );
   }
   return (
-    <button
-      className="review-btn"
-      onClick={onStart}
-      disabled={!installed}
-      title={
-        installed
-          ? t("review.buttonTitle", { agent: task.reviewer.name })
-          : t("review.unavailable", { agent: task.reviewer.name })
-      }
-    >
-      <AgentIcon kind={task.reviewer.kind} size={13} />
-      {t("review.button")}
-    </button>
+    <div className="dropdown-anchor">
+      <button
+        className={`review-btn ${picking ? "is-open" : ""}`}
+        onClick={() => setPicking((p) => !p)}
+        title={t("review.buttonTitle", { agent: task.reviewer.name })}
+      >
+        {t("review.button")}
+      </button>
+      {picking && (
+        <ReviewerPicker
+          task={task}
+          agents={agents}
+          onPick={(id) => {
+            setPicking(false);
+            onStart(id);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </div>
   );
 }
 
 function ReviewPanel({
   task,
+  agents,
   onRerun,
   onCancel,
   onSend,
   onClose,
 }: {
   task: Task;
-  onRerun(): void;
+  agents: AgentOption[];
+  onRerun(reviewer: string): void;
   onCancel(): void;
   onSend(): void;
   onClose(): void;
@@ -257,6 +254,7 @@ function ReviewPanel({
   const writerName = writerOf(task)?.name ?? "";
   const running = task.reviewingSince != null;
   const now = useNow(running);
+  const [picking, setPicking] = useState(false);
   return (
     <aside className="review-panel">
       <div className="review-head">
@@ -302,13 +300,48 @@ function ReviewPanel({
                 {t("review.sendToWriter", { agent: writerName })}
               </button>
             )}
-            <button className="btn" onClick={onRerun}>
-              {task.review ? t("review.rerun") : t("review.start")}
-            </button>
+            <div className="dropdown-anchor">
+              <button className="btn" onClick={() => setPicking((p) => !p)}>
+                {task.review ? t("review.rerun") : t("review.start")}
+              </button>
+              {picking && (
+                <ReviewerPicker
+                  task={task}
+                  agents={agents}
+                  onPick={(id) => {
+                    setPicking(false);
+                    onRerun(id);
+                  }}
+                  onClose={() => setPicking(false)}
+                />
+              )}
+            </div>
           </>
         )}
       </div>
     </aside>
+  );
+}
+
+/** 选谁来审：能审阅的 Agent，上次叫的排在最前并打勾。 */
+function ReviewerPicker({
+  task,
+  agents,
+  onPick,
+  onClose,
+}: {
+  task: Task;
+  agents: AgentOption[];
+  onPick(id: string): void;
+  onClose(): void;
+}) {
+  const t = useT();
+  const reviewers = agents.filter((a) => a.reviews);
+  const ordered = [...reviewers.filter((a) => a.id === task.reviewer.kind), ...reviewers.filter((a) => a.id !== task.reviewer.kind)];
+  return (
+    <Popover onClose={onClose}>
+      <AgentList title={t("newTask.reviewerTitle")} agents={ordered} selected={task.reviewer.kind} onPick={onPick} />
+    </Popover>
   );
 }
 

@@ -239,7 +239,8 @@ export const api = {
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
   switchWriter: (task: number, kind: string) => invoke<number>("switch_writer", { task, kind }),
   setReviewer: (task: number, kind: string) => invoke<void>("set_reviewer", { task, kind }),
-  startReview: (task: number) => invoke<void>("start_review", { task }),
+  /** 叫 `reviewer`（不给就是上次叫的）在后台审阅任务的改动。 */
+  startReview: (task: number, reviewer?: string) => invoke<void>("start_review", { task, reviewer }),
   cancelReview: (task: number) => invoke<void>("cancel_review", { task }),
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),
   newline: (r: AgentRef) => invoke<void>("newline", { ...r }),

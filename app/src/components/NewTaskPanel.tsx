@@ -59,7 +59,7 @@ const ICON = { size: 14, strokeWidth: 1.75 } as const;
 const NAMING_DELAY_MS = 900;
 const LAST_REPO_KEY = "duolo.lastRepo";
 
-type Menu = "project" | "repo" | "base" | "writer" | "reviewer" | null;
+type Menu = "project" | "repo" | "base" | "writer" | null;
 
 /**
  * 新建任务（项目后面的 +，或 ⌘N）。写一句需求、回车就开始，其他都有默认值：
@@ -286,7 +286,7 @@ export function NewTaskPanel(props: Props) {
           )}
         </div>
 
-        {/* 谁写谁审，以及附件、语音、开始 */}
+        {/* 谁来写，以及附件、语音、开始 */}
         <div className="new-task-bar">
           <span className="agent-pair">
             <div className="dropdown-anchor">
@@ -305,29 +305,6 @@ export function NewTaskPanel(props: Props) {
                   onPick={(id) => {
                     pickedAgents.current = true;
                     setChoice({ ...choice, writer: id });
-                    refocus();
-                  }}
-                  onClose={() => setOpen(null)}
-                />
-              )}
-            </div>
-            <ArrowRight size={11} strokeWidth={1.75} className="dim" />
-            <div className="dropdown-anchor">
-              <button
-                className={`chip ${open === "reviewer" ? "is-open" : ""}`}
-                title={t("newTask.reviewer", { agent: pluginName(choice.reviewer) })}
-                onClick={() => setOpen(open === "reviewer" ? null : "reviewer")}
-              >
-                <AgentIcon kind={choice.reviewer} size={13} />
-              </button>
-              {open === "reviewer" && (
-                <AgentMenu
-                  title={t("newTask.reviewerTitle")}
-                  agents={agents.filter((a) => a.reviews)}
-                  selected={choice.reviewer}
-                  onPick={(id) => {
-                    pickedAgents.current = true;
-                    setChoice({ ...choice, reviewer: id });
                     refocus();
                   }}
                   onClose={() => setOpen(null)}

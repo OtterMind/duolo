@@ -8,6 +8,7 @@
 //   POST   /v1/pairings         电脑端生成配对码（放进二维码）
 //   POST   /v1/pairings/claim   手机用配对码登录同一个账号，并拿到电脑端的公钥
 //   GET    /v1/connect          WebSocket 转发（见 relay.ts）
+//   GET    /v1/voice            WebSocket 语音识别（见 voice.ts），匿名登录的也能用
 
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
@@ -18,6 +19,7 @@ import type { Auth } from "./auth.js";
 import type { Config } from "./config.js";
 import { Hub } from "./relay.js";
 import { DESKTOP_PLATFORMS, Store, type Device } from "./store.js";
+import { bufferMessages, serveVoice } from "./voice.js";
 import type { Pool } from "pg";
 
 /** 配对码有效期。 */
@@ -169,6 +171,18 @@ export async function buildApp({ config, pool, auth }: AppDeps) {
     const device = session ? await store.deviceBySession(session.session.id) : null;
     if (!device) return socket.close(4401, session ? "deviceNotRegistered" : "unauthorized");
     await hub.connect(socket, device);
+  });
+
+  // ---- 语音识别 ----
+
+  app.get("/v1/voice", { websocket: true }, async (socket, request) => {
+    const take = bufferMessages(socket);
+    const token = (request.query as { token?: string }).token;
+    const headers = token ? { ...request.headers, authorization: `Bearer ${token}` } : request.headers;
+    const session = await sessionOf(headers);
+    if (!session) return socket.close(4401, "unauthorized");
+    const user = session.user as { id: string; isAnonymous?: boolean | null };
+    await serveVoice(socket, { id: user.id, anonymous: user.isAnonymous === true }, config.voice, pool, take());
   });
 
   // 定时清理过期的离线消息和配对码。

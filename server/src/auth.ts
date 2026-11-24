@@ -2,13 +2,15 @@
 //
 // - 邮箱验证码登录（email-otp 插件）：输入邮箱 → 收到 6 位验证码 → 登录，第一次登录自动注册。
 // - 令牌登录（bearer 插件）：电脑端和手机 App 不用 Cookie，请求时带 `Authorization: Bearer <令牌>`。
+// - 匿名登录（anonymous 插件）：电脑端不用注册也能用语音识别等服务，后台自动领一个匿名身份，
+//   服务器按它限额；以后用邮箱登录时合并成正式账号。
 // - 每台设备一个会话；手机扫码配对时由服务器直接给同一个用户建会话（见 pairing.ts）。
 // - 以后加 Apple / Google / GitHub 登录，只需要在这里加 socialProviders。
 //
 // 用户、会话、验证码这几张表由 better-auth 管理，迁移见 db.ts。
 
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { bearer, emailOTP } from "better-auth/plugins";
+import { anonymous, bearer, emailOTP } from "better-auth/plugins";
 import type { Pool } from "pg";
 
 import type { Config } from "./config.js";
@@ -47,6 +49,7 @@ export function authOptions(config: Config, pool: Pool, mailer: Mailer): BetterA
         },
       }),
       bearer(),
+      anonymous(),
     ],
   };
 }

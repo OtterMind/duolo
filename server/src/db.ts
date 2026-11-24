@@ -1,11 +1,13 @@
 // 数据库：PostgreSQL。
 //
 // - better-auth 的表（user、session、verification…）用它自带的迁移建；
-// - 我们自己的表：设备、配对码、离线信箱，在下面的 SCHEMA 里，可以重复执行。
+// - 我们自己的表：设备、配对码、离线信箱，在下面的 SCHEMA 里，可以重复执行；语音用量在 voice.ts。
 
 import { getMigrations } from "better-auth/db/migration";
 import type { BetterAuthOptions } from "better-auth";
 import pg from "pg";
+
+import { VOICE_SCHEMA } from "./voice.js";
 
 export function createPool(databaseUrl: string) {
   return new pg.Pool({ connectionString: databaseUrl, max: 10 });
@@ -53,4 +55,5 @@ export async function migrate(pool: pg.Pool, authOptions: BetterAuthOptions) {
   const { runMigrations } = await getMigrations(authOptions);
   await runMigrations();
   await pool.query(SCHEMA);
+  await pool.query(VOICE_SCHEMA);
 }

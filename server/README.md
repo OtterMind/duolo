@@ -35,6 +35,9 @@ pnpm test                 # end-to-end tests, each run uses a temporary database
 | `PORT` / `HOST` | Address to listen on | `8787` / `0.0.0.0` |
 | `MAILBOX_TTL_DAYS` | How many days undelivered messages are kept | `7` |
 | `MAX_MESSAGE_BYTES` | Maximum size of one message | `262144` |
+| `DOUBAO_ASR_API_KEY` | Doubao speech API key for voice input. Empty disables server-side recognition; apps then use the system's own | empty |
+| `DOUBAO_ASR_RESOURCE_ID` / `DOUBAO_ASR_URL` | Doubao streaming recognition resource and address | `volc.seedasr.sauc.duration` / `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` |
+| `VOICE_DAILY_MINUTES` / `VOICE_ANONYMOUS_DAILY_MINUTES` | Minutes of voice input per user per day, for signed-in and anonymous users | `120` / `30` |
 
 ## API
 
@@ -42,6 +45,7 @@ pnpm test                 # end-to-end tests, each run uses a temporary database
 |---|---|
 | `POST /v1/auth/email-otp/send-verification-otp` | Send a sign-in code: `{ email, type: "sign-in" }`. The email language follows `Accept-Language` |
 | `POST /v1/auth/sign-in/email-otp` | Sign in with the code: `{ email, otp }` → `{ token, user }`. The first sign-in creates the account |
+| `POST /v1/auth/sign-in/anonymous` | Get an anonymous session without signing up → `{ token, user }`. Desktops use it for voice input; signing in with email later merges it into a real account |
 | `POST /v1/devices` | Register the current device: `{ name, platform: "mac" \| "windows" \| "linux" \| "ios" \| "android", publicKey }` |
 | `GET /v1/devices` | My devices, their public keys, and whether they are online |
 | `DELETE /v1/devices/:id` | Remove a device: its session is revoked and its connection closed |
@@ -49,6 +53,7 @@ pnpm test                 # end-to-end tests, each run uses a temporary database
 | `POST /v1/pairings` | Desktop creates a one-time pairing code (valid for 10 minutes) to show as a QR code. Phones get `desktopOnly` |
 | `POST /v1/pairings/claim` | A phone signs in to the same account with the pairing code: `{ code, device }` → `{ token, device, desktop }` (includes the desktop's public key) |
 | `GET /v1/connect` | WebSocket relay. The protocol is described in `src/relay.ts` |
+| `GET /v1/voice` | WebSocket voice recognition, anonymous sessions allowed. Audio goes to Doubao with the task's hot words and recent conversation. The protocol is described in `src/voice.ts` |
 
 Errors are returned as codes, for example `{ "error": "invalidPairingCode" }`, and clients show them in their own language.
 

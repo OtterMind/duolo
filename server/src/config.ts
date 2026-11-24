@@ -1,5 +1,7 @@
 // 服务端配置，全部来自环境变量。开发时的默认值能直接配合 docker-compose.yml 里的数据库跑起来。
 
+import type { VoiceConfig } from "./voice.js";
+
 export interface Config {
   port: number;
   host: string;
@@ -13,6 +15,8 @@ export interface Config {
   mailboxTtlMs: number;
   /** 一条消息最大多少字节（加密后的内容）。 */
   maxMessageBytes: number;
+  /** 语音识别（豆包），见 voice.ts。 */
+  voice: VoiceConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -28,5 +32,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     authSecret,
     mailboxTtlMs: Number(env.MAILBOX_TTL_DAYS ?? 7) * 24 * 60 * 60 * 1000,
     maxMessageBytes: Number(env.MAX_MESSAGE_BYTES ?? 256 * 1024),
+    voice: {
+      url: env.DOUBAO_ASR_URL ?? "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+      apiKey: env.DOUBAO_ASR_API_KEY ?? "",
+      resourceId: env.DOUBAO_ASR_RESOURCE_ID ?? "volc.seedasr.sauc.duration",
+      dailySeconds: Number(env.VOICE_DAILY_MINUTES ?? 120) * 60,
+      anonymousDailySeconds: Number(env.VOICE_ANONYMOUS_DAILY_MINUTES ?? 30) * 60,
+    },
   };
 }

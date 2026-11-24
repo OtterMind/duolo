@@ -271,11 +271,29 @@ final class AppModel {
 
     var computerOnline: Bool { link == .connected(computerOnline: true) }
 
+    // MARK: 语音
+
+    /// 语音识别用当前电脑配对的服务器和登录凭据；没配对时为空。
+    func voiceRoute() -> (server: URL, token: String)? {
+        guard let current, let secret = try? secrets.load(current.id) else { return nil }
+        return (current.server, secret.token)
+    }
+
+    /// 给识别服务的提示：打开着的任务的文件名、代码名字和最近的对话；没打开任务时只有项目名。
+    func voiceHints() -> VoiceHints {
+        let projectName = overview?.projects.first { $0.id == project }?.name
+        guard let current, let id = opened?.id, let task = rows.first(where: { $0.id == id })?.task else {
+            return VoiceHints(project: projectName, title: nil, branch: nil, events: [])
+        }
+        let events = (try? store.events(current.id, id)) ?? []
+        let name = overview?.projects.first { $0.id == task.project }?.name ?? projectName
+        return VoiceHints(project: name, title: task.untitled ? nil : task.title, branch: task.branch, events: events)
+    }
+
     /// 错误给用户看的说明。
     func message(_ problem: AppError) -> String {
         switch problem.code {
         case "voicePermission": t("mobile.voice.permission")
-        case "voiceUnavailable": t("mobile.voice.unavailable")
         default: t.error(problem.code)
         }
     }

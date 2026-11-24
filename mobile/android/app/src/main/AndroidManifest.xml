@@ -8,12 +8,6 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
-    <queries>
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
-        </intent>
-    </queries>
-
     <!-- 密钥只在这台手机上：不进备份。 -->
     <application
         android:name=".DuoloApplication"

@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "松开发送",
   "mobile.voice.releaseEdit": "松开修改",
   "mobile.voice.releaseCancel": "松开取消",
-  "mobile.voice.permission": "在系统设置里允许使用麦克风和语音识别，才能对 Duolo 说话。",
-  "mobile.voice.unavailable": "这台手机不支持语音识别。",
+  "mobile.voice.permission": "在“设置”里允许使用麦克风，就能和 Duolo 说话了。",
   "mobile.settings.appearance": "外观",
   "mobile.settings.system": "跟随系统",
   "mobile.settings.light": "浅色",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "版本 {version}",
   "mobile.settings.licenses": "开源许可",
   "mobile.perm.camera": "Duolo 用相机扫描电脑上显示的二维码。",
-  "mobile.perm.microphone": "Duolo 用麦克风听你说话，把需求交给编程 Agent。",
-  "mobile.perm.speech": "Duolo 把你说的话转成文字，发给编程 Agent。"
+  "mobile.perm.microphone": "Duolo 用麦克风听你说话，把需求交给编程 Agent。"
 }

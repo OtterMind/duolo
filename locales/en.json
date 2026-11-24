@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Release to send",
   "mobile.voice.releaseEdit": "Release to edit",
   "mobile.voice.releaseCancel": "Release to cancel",
-  "mobile.voice.permission": "Allow the microphone and speech recognition in Settings to talk to Duolo.",
-  "mobile.voice.unavailable": "Speech recognition isn't available on this phone.",
+  "mobile.voice.permission": "Allow the microphone in Settings to talk to Duolo.",
   "mobile.settings.appearance": "Appearance",
   "mobile.settings.system": "Same as system",
   "mobile.settings.light": "Light",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Version {version}",
   "mobile.settings.licenses": "Open Source Licenses",
   "mobile.perm.camera": "Duolo uses the camera to scan the code shown on your computer.",
-  "mobile.perm.microphone": "Duolo uses the microphone so you can talk to your coding agents.",
-  "mobile.perm.speech": "Duolo turns what you say into text to send to your coding agents."
+  "mobile.perm.microphone": "Duolo uses the microphone so you can talk to your coding agents."
 }

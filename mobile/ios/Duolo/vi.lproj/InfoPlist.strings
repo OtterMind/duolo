@@ -1,4 +1,3 @@
 /* 由 mobile/scripts/gen-ios-strings.mjs 生成 */
 NSCameraUsageDescription = "Duolo dùng máy ảnh để quét mã hiển thị trên máy tính.";
 NSMicrophoneUsageDescription = "Duolo dùng micrô để bạn nói với các agent lập trình.";
-NSSpeechRecognitionUsageDescription = "Duolo chuyển lời nói của bạn thành văn bản để gửi cho các agent lập trình.";

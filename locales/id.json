@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Lepas untuk mengirim",
   "mobile.voice.releaseEdit": "Lepas untuk mengubah",
   "mobile.voice.releaseCancel": "Lepas untuk batal",
-  "mobile.voice.permission": "Izinkan mikrofon dan pengenalan suara di Pengaturan untuk berbicara dengan Duolo.",
-  "mobile.voice.unavailable": "Pengenalan suara tidak tersedia di ponsel ini.",
+  "mobile.voice.permission": "Izinkan mikrofon di Pengaturan untuk berbicara dengan Duolo.",
   "mobile.settings.appearance": "Tampilan",
   "mobile.settings.system": "Ikuti sistem",
   "mobile.settings.light": "Terang",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Versi {version}",
   "mobile.settings.licenses": "Lisensi sumber terbuka",
   "mobile.perm.camera": "Duolo memakai kamera untuk memindai kode yang tampil di komputer.",
-  "mobile.perm.microphone": "Duolo memakai mikrofon agar Anda bisa berbicara dengan agen pemrograman.",
-  "mobile.perm.speech": "Duolo mengubah ucapan Anda menjadi teks untuk dikirim ke agen pemrograman."
+  "mobile.perm.microphone": "Duolo memakai mikrofon agar Anda bisa berbicara dengan agen pemrograman."
 }

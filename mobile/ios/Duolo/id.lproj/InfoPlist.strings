@@ -1,4 +1,3 @@
 /* 由 mobile/scripts/gen-ios-strings.mjs 生成 */
 NSCameraUsageDescription = "Duolo memakai kamera untuk memindai kode yang tampil di komputer.";
 NSMicrophoneUsageDescription = "Duolo memakai mikrofon agar Anda bisa berbicara dengan agen pemrograman.";
-NSSpeechRecognitionUsageDescription = "Duolo mengubah ucapan Anda menjadi teks untuk dikirim ke agen pemrograman.";

@@ -1,14 +1,12 @@
 import AVFoundation
 import DuoloKit
 import Observation
-import Speech
 import SwiftUI
 
-/// 语音识别：系统自带的 Speech。
+/// 语音识别：录麦克风，16 kHz PCM 发给配对的 Duolo 服务器识别（和电脑端同一个接口），带上任务的热词和对话。
 @MainActor @Observable
 final class VoiceInput {
     enum Phase: Equatable { case idle, starting, listening }
-    enum Failure: Error { case permission, unavailable }
 
     private(set) var phase = Phase.idle
     private(set) var text = ""
@@ -16,105 +14,123 @@ final class VoiceInput {
     private(set) var startedAt = Date.now
 
     private var engine: AVAudioEngine?
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
+    private var stream: VoiceStream?
+    private var final: String?
     private var finished: CheckedContinuation<Void, Never>?
 
-    func start(locale: Locale) async throws {
+    /// 说完后等最终结果最长多久。
+    private static let finalTimeout: Duration = .seconds(20)
+
+    func start(server: URL, token: String, hints: VoiceHints) async throws {
         guard phase == .idle else { return }
         phase = .starting
         text = ""
         level = 0
+        final = nil
         do {
-            guard await Self.allowed() else { throw Failure.permission }
-            // 等授权弹窗的时候已经松手了。
-            guard phase == .starting else { return }
-            try listen(locale: locale)
+            guard await AVAudioApplication.requestRecordPermission() else { throw AppError("voicePermission") }
+            let stream = try await VoiceStream.open(server: server, token: token, hints: hints)
+            // 等授权弹窗或连服务器的时候已经松手了。
+            guard phase == .starting else {
+                stream.cancel()
+                return
+            }
+            self.stream = stream
+            try listen(stream)
             phase = .listening
             startedAt = .now
+            Task { [weak self] in
+                for await event in stream.events { self?.receive(event) }
+                self?.complete()
+            }
         } catch {
             reset()
             throw error
         }
     }
 
-    /// 系统在后台线程回调授权结果：回调不能带主线程隔离，不然 Swift 6 运行时检查会直接终止应用。
-    private nonisolated static func allowed() async -> Bool {
-        let speech = await withCheckedContinuation { (c: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
-            SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+    private func receive(_ event: VoiceStream.Event) {
+        switch event {
+        case .partial(let said): text = said
+        case .final(let said):
+            text = said
+            final = said
+            complete()
+        case .failed: complete()
         }
-        guard speech == .authorized else { return false }
-        return await AVAudioApplication.requestRecordPermission()
     }
 
-    private func listen(locale: Locale) throws {
-        guard let recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(), recognizer.isAvailable else { throw Failure.unavailable }
+    private func listen(_ stream: VoiceStream) throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // 戴着蓝牙耳机时用耳机的麦克风。
+        let bluetooth: AVAudioSession.CategoryOptions = if #available(iOS 26, *) { .allowBluetoothHFP } else { .allowBluetooth }
+        try session.setCategory(.record, mode: .measurement, options: [.duckOthers, bluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.addsPunctuation = true
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.unavailable }
-        Self.tap(input, format: format, request: request) { [weak self] value in
+        guard format.sampleRate > 0, format.channelCount > 0,
+            let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true),
+            let converter = AVAudioConverter(from: format, to: target)
+        else { throw AppError("voicePermission") }
+        Self.tap(input, format: format, converter: converter, target: target, stream: stream) { [weak self] value in
             Task { @MainActor in self?.level = value }
         }
         engine.prepare()
         try engine.start()
         self.engine = engine
-        self.request = request
-        task = Self.recognize(recognizer, request) { [weak self] text, done in
-            Task { @MainActor in
-                guard let self else { return }
-                if let text { self.text = text }
-                if done { self.complete() }
-            }
-        }
     }
 
-    /// 这两个在音频线程和识别线程上被调用，不能带主线程隔离。
+    /// 在音频线程上被调用，不能带主线程隔离。
     private nonisolated static func tap(
-        _ input: AVAudioInputNode, format: AVAudioFormat, request: SFSpeechAudioBufferRecognitionRequest, level: @escaping @Sendable (CGFloat) -> Void
+        _ input: AVAudioInputNode, format: AVAudioFormat, converter: AVAudioConverter, target: AVAudioFormat, stream: VoiceStream,
+        level: @escaping @Sendable (CGFloat) -> Void
     ) {
-        nonisolated(unsafe) let request = request
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            request.append(buffer)
-            guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
-            var sum: Float = 0
-            for i in 0..<Int(buffer.frameLength) { sum += samples[i] * samples[i] }
-            level(CGFloat(min(1, sqrt(sum / Float(buffer.frameLength)) * 12)))
+        nonisolated(unsafe) let converter = converter
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
+            if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+                var sum: Float = 0
+                for i in 0..<Int(buffer.frameLength) { sum += samples[i] * samples[i] }
+                level(CGFloat(min(1, sqrt(sum / Float(buffer.frameLength)) * 12)))
+            }
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * target.sampleRate / format.sampleRate) + 32
+            guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
+            nonisolated(unsafe) var fed = false
+            var error: NSError?
+            converter.convert(to: out, error: &error) { _, status in
+                if fed {
+                    status.pointee = .noDataNow
+                    return nil
+                }
+                fed = true
+                status.pointee = .haveData
+                return buffer
+            }
+            guard error == nil, out.frameLength > 0, let pcm = out.int16ChannelData?[0] else { return }
+            stream.send(Data(bytes: pcm, count: Int(out.frameLength) * MemoryLayout<Int16>.size))
         }
     }
 
-    private nonisolated static func recognize(
-        _ recognizer: SFSpeechRecognizer, _ request: SFSpeechRecognitionRequest, update: @escaping @Sendable (String?, Bool) -> Void
-    ) -> SFSpeechRecognitionTask {
-        recognizer.recognitionTask(with: request) { result, error in
-            update(result?.bestTranscription.formattedString, error != nil || result?.isFinal == true)
-        }
-    }
-
-    /// 停止录音，等最后的识别结果（最多 1.5 秒）。
+    /// 停止录音，等服务器的最终结果。
     func stop() async -> String {
-        guard phase == .listening else {
+        guard phase == .listening, let stream else {
             reset()
             return ""
         }
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
-        request?.endAudio()
-        await withCheckedContinuation { c in
-            finished = c
-            Task {
-                try? await Task.sleep(for: .milliseconds(1500))
-                complete()
+        stream.stop()
+        if final == nil {
+            await withCheckedContinuation { c in
+                finished = c
+                Task {
+                    try? await Task.sleep(for: Self.finalTimeout)
+                    complete()
+                }
             }
         }
-        let said = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let said = (final ?? text).trimmingCharacters(in: .whitespacesAndNewlines)
         reset()
         return said
     }
@@ -132,10 +148,9 @@ final class VoiceInput {
     private func reset() {
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
-        task?.cancel()
+        stream?.cancel()
         engine = nil
-        request = nil
-        task = nil
+        stream = nil
         phase = .idle
         level = 0
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -161,12 +176,18 @@ final class VoiceSession {
         handsFree = false
         visible = true
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        guard let route = model.voiceRoute() else {
+            visible = false
+            model.problem = .unauthorized
+            return
+        }
+        let hints = model.voiceHints()
         Task {
             do {
-                try await input.start(locale: model.t.locale)
+                try await input.start(server: route.server, token: route.token, hints: hints)
             } catch {
                 visible = false
-                model.problem = AppError(error as? VoiceInput.Failure == .permission ? "voicePermission" : "voiceUnavailable")
+                model.problem = error as? AppError ?? AppError("voiceFailed")
             }
         }
     }

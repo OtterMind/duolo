@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "放開傳送",
   "mobile.voice.releaseEdit": "放開修改",
   "mobile.voice.releaseCancel": "放開取消",
-  "mobile.voice.permission": "請在系統設定中允許使用麥克風和語音辨識，才能對 Duolo 說話。",
-  "mobile.voice.unavailable": "這支手機不支援語音辨識。",
+  "mobile.voice.permission": "在「設定」裡允許使用麥克風，就能和 Duolo 說話了。",
   "mobile.settings.appearance": "外觀",
   "mobile.settings.system": "跟隨系統",
   "mobile.settings.light": "淺色",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "版本 {version}",
   "mobile.settings.licenses": "開放原始碼授權",
   "mobile.perm.camera": "Duolo 使用相機掃描電腦上顯示的 QR Code。",
-  "mobile.perm.microphone": "Duolo 使用麥克風聽你說話，把需求交給程式設計 Agent。",
-  "mobile.perm.speech": "Duolo 把你說的話轉成文字，傳給程式設計 Agent。"
+  "mobile.perm.microphone": "Duolo 使用麥克風聽你說話，把需求交給程式設計 Agent。"
 }

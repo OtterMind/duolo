@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "離すと送信",
   "mobile.voice.releaseEdit": "離すと編集",
   "mobile.voice.releaseCancel": "離すと取り消し",
-  "mobile.voice.permission": "Duolo に話しかけるには、設定でマイクと音声認識を許可してください。",
-  "mobile.voice.unavailable": "このスマートフォンでは音声認識を利用できません。",
+  "mobile.voice.permission": "「設定」でマイクを許可すると、Duolo に話しかけられます。",
   "mobile.settings.appearance": "外観",
   "mobile.settings.system": "システムに合わせる",
   "mobile.settings.light": "ライト",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "バージョン {version}",
   "mobile.settings.licenses": "オープンソースライセンス",
   "mobile.perm.camera": "Duolo はコンピュータに表示されたコードのスキャンにカメラを使用します。",
-  "mobile.perm.microphone": "Duolo はコーディングエージェントに話しかけるためにマイクを使用します。",
-  "mobile.perm.speech": "Duolo は話した内容を文字にしてコーディングエージェントに送ります。"
+  "mobile.perm.microphone": "Duolo はコーディングエージェントに話しかけるためにマイクを使用します。"
 }

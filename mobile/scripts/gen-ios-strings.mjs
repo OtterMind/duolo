@@ -13,7 +13,6 @@ const CODES = ["en", "zh-CN", "zh-TW", "ja", "ko", "es", "fr", "de", "pt-BR", "r
 const KEYS = {
   NSCameraUsageDescription: "mobile.perm.camera",
   NSMicrophoneUsageDescription: "mobile.perm.microphone",
-  NSSpeechRecognitionUsageDescription: "mobile.perm.speech",
 };
 const quote = (s) => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 

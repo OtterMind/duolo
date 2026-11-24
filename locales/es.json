@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Suelta para enviar",
   "mobile.voice.releaseEdit": "Suelta para editar",
   "mobile.voice.releaseCancel": "Suelta para cancelar",
-  "mobile.voice.permission": "Permite el micrófono y el reconocimiento de voz en Ajustes para hablar con Duolo.",
-  "mobile.voice.unavailable": "El reconocimiento de voz no está disponible en este teléfono.",
+  "mobile.voice.permission": "Permite el micrófono en Ajustes para hablar con Duolo.",
   "mobile.settings.appearance": "Apariencia",
   "mobile.settings.system": "Igual que el sistema",
   "mobile.settings.light": "Claro",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Versión {version}",
   "mobile.settings.licenses": "Licencias de código abierto",
   "mobile.perm.camera": "Duolo usa la cámara para escanear el código que aparece en tu ordenador.",
-  "mobile.perm.microphone": "Duolo usa el micrófono para que hables con tus agentes de programación.",
-  "mobile.perm.speech": "Duolo convierte lo que dices en texto para enviarlo a tus agentes de programación."
+  "mobile.perm.microphone": "Duolo usa el micrófono para que hables con tus agentes de programación."
 }

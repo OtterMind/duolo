@@ -190,8 +190,23 @@ fn connect(request: &CloudRequest) -> Result<Socket> {
     let uri = req.uri().clone();
     let host = uri.host().context("server address has no host")?;
     let port = uri.port_u16().unwrap_or(if uri.scheme_str() == Some("wss") { 443 } else { 80 });
-    let addr = (host, port).to_socket_addrs()?.next().context("cannot resolve the server address")?;
-    let stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
+    // 逐个地址试：`localhost` 常常先解析成 IPv6，而服务器可能只听 IPv4。
+    let mut last = None;
+    let mut connected = None;
+    for addr in (host, port).to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
+            Ok(stream) => {
+                connected = Some(stream);
+                break;
+            }
+            Err(err) => last = Some(err),
+        }
+    }
+    let stream = match (connected, last) {
+        (Some(stream), _) => stream,
+        (None, Some(err)) => return Err(err.into()),
+        (None, None) => bail!("cannot resolve the server address"),
+    };
     stream.set_read_timeout(Some(CONNECT_TIMEOUT))?;
     stream.set_write_timeout(Some(CONNECT_TIMEOUT))?;
     stream.set_nodelay(true)?;

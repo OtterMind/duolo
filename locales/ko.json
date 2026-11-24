@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "놓으면 전송",
   "mobile.voice.releaseEdit": "놓으면 수정",
   "mobile.voice.releaseCancel": "놓으면 취소",
-  "mobile.voice.permission": "Duolo에 말하려면 설정에서 마이크와 음성 인식을 허용하세요.",
-  "mobile.voice.unavailable": "이 휴대폰에서는 음성 인식을 사용할 수 없습니다.",
+  "mobile.voice.permission": "설정에서 마이크를 허용하면 Duolo에게 말할 수 있습니다.",
   "mobile.settings.appearance": "화면 모드",
   "mobile.settings.system": "시스템 설정",
   "mobile.settings.light": "라이트",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "버전 {version}",
   "mobile.settings.licenses": "오픈 소스 라이선스",
   "mobile.perm.camera": "Duolo는 컴퓨터에 표시된 코드를 스캔하는 데 카메라를 사용합니다.",
-  "mobile.perm.microphone": "Duolo는 코딩 에이전트에게 말할 수 있도록 마이크를 사용합니다.",
-  "mobile.perm.speech": "Duolo는 말한 내용을 텍스트로 바꿔 코딩 에이전트에게 보냅니다."
+  "mobile.perm.microphone": "Duolo는 코딩 에이전트에게 말할 수 있도록 마이크를 사용합니다."
 }

@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Göndermek için bırakın",
   "mobile.voice.releaseEdit": "Düzenlemek için bırakın",
   "mobile.voice.releaseCancel": "İptal için bırakın",
-  "mobile.voice.permission": "Duolo ile konuşmak için Ayarlar'dan mikrofon ve konuşma tanımaya izin verin.",
-  "mobile.voice.unavailable": "Bu telefonda konuşma tanıma kullanılamıyor.",
+  "mobile.voice.permission": "Duolo ile konuşmak için Ayarlar'dan mikrofona izin verin.",
   "mobile.settings.appearance": "Görünüm",
   "mobile.settings.system": "Sistemle aynı",
   "mobile.settings.light": "Açık",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Sürüm {version}",
   "mobile.settings.licenses": "Açık kaynak lisansları",
   "mobile.perm.camera": "Duolo, bilgisayarınızda gösterilen kodu taramak için kamerayı kullanır.",
-  "mobile.perm.microphone": "Duolo, kodlama ajanlarınızla konuşabilmeniz için mikrofonu kullanır.",
-  "mobile.perm.speech": "Duolo, söylediklerinizi metne çevirip kodlama ajanlarınıza gönderir."
+  "mobile.perm.microphone": "Duolo, kodlama ajanlarınızla konuşabilmeniz için mikrofonu kullanır."
 }

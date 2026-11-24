@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Отпустите для отправки",
   "mobile.voice.releaseEdit": "Отпустите для правки",
   "mobile.voice.releaseCancel": "Отпустите для отмены",
-  "mobile.voice.permission": "Разрешите микрофон и распознавание речи в настройках, чтобы говорить с Duolo.",
-  "mobile.voice.unavailable": "Распознавание речи на этом телефоне недоступно.",
+  "mobile.voice.permission": "Разрешите доступ к микрофону в Настройках, чтобы говорить с Duolo.",
   "mobile.settings.appearance": "Оформление",
   "mobile.settings.system": "Как в системе",
   "mobile.settings.light": "Светлое",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Версия {version}",
   "mobile.settings.licenses": "Лицензии открытого ПО",
   "mobile.perm.camera": "Duolo использует камеру, чтобы отсканировать код на экране компьютера.",
-  "mobile.perm.microphone": "Duolo использует микрофон, чтобы вы могли говорить с агентами.",
-  "mobile.perm.speech": "Duolo превращает вашу речь в текст и отправляет агентам."
+  "mobile.perm.microphone": "Duolo использует микрофон, чтобы вы могли говорить с агентами."
 }

@@ -60,8 +60,6 @@
 	<string>Duolo uses the camera to scan the code shown on your computer.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Duolo uses the microphone so you can talk to your coding agents.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Duolo turns what you say into text to send to your coding agents.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>MonaSans.ttf</string>

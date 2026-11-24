@@ -404,8 +404,7 @@
   "mobile.voice.releaseSend": "Thả để gửi",
   "mobile.voice.releaseEdit": "Thả để sửa",
   "mobile.voice.releaseCancel": "Thả để hủy",
-  "mobile.voice.permission": "Cho phép micrô và nhận dạng giọng nói trong Cài đặt để nói với Duolo.",
-  "mobile.voice.unavailable": "Điện thoại này không hỗ trợ nhận dạng giọng nói.",
+  "mobile.voice.permission": "Cho phép micrô trong Cài đặt để nói chuyện với Duolo.",
   "mobile.settings.appearance": "Giao diện",
   "mobile.settings.system": "Theo hệ thống",
   "mobile.settings.light": "Sáng",
@@ -417,6 +416,5 @@
   "mobile.settings.version": "Phiên bản {version}",
   "mobile.settings.licenses": "Giấy phép mã nguồn mở",
   "mobile.perm.camera": "Duolo dùng máy ảnh để quét mã hiển thị trên máy tính.",
-  "mobile.perm.microphone": "Duolo dùng micrô để bạn nói với các agent lập trình.",
-  "mobile.perm.speech": "Duolo chuyển lời nói của bạn thành văn bản để gửi cho các agent lập trình."
+  "mobile.perm.microphone": "Duolo dùng micrô để bạn nói với các agent lập trình."
 }

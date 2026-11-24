@@ -35,9 +35,11 @@ pnpm test                 # end-to-end tests, each run uses a temporary database
 | `PORT` / `HOST` | Address to listen on | `8787` / `0.0.0.0` |
 | `MAILBOX_TTL_DAYS` | How many days undelivered messages are kept | `7` |
 | `MAX_MESSAGE_BYTES` | Maximum size of one message | `262144` |
-| `DOUBAO_ASR_API_KEY` | Doubao speech API key for voice input. Empty disables server-side recognition; apps then use the system's own | empty |
+| `DOUBAO_ASR_API_KEY` | Doubao speech API key for voice input. Empty turns voice input off. Keep keys in the environment, never in the repository | empty |
 | `DOUBAO_ASR_RESOURCE_ID` / `DOUBAO_ASR_URL` | Doubao streaming recognition resource and address | `volc.seedasr.sauc.duration` / `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` |
 | `VOICE_DAILY_MINUTES` / `VOICE_ANONYMOUS_DAILY_MINUTES` | Minutes of voice input per user per day, for signed-in and anonymous users | `120` / `30` |
+| `VOICE_ORGANIZE_BASE_URL` / `VOICE_ORGANIZE_API_KEY` / `VOICE_ORGANIZE_MODEL` | The model that turns what was said into a clean instruction (an OpenAI-compatible API; the address ends at `/v1`). If any is empty, nothing is cleaned up | empty |
+| `VOICE_ORGANIZE_TIMEOUT_MS` | How long to wait for the clean-up before using what was said | `4000` |
 
 ## API
 

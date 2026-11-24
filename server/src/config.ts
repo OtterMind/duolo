@@ -38,6 +38,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       resourceId: env.DOUBAO_ASR_RESOURCE_ID ?? "volc.seedasr.sauc.duration",
       dailySeconds: Number(env.VOICE_DAILY_MINUTES ?? 120) * 60,
       anonymousDailySeconds: Number(env.VOICE_ANONYMOUS_DAILY_MINUTES ?? 30) * 60,
+      organize: {
+        baseUrl: env.VOICE_ORGANIZE_BASE_URL ?? "",
+        apiKey: env.VOICE_ORGANIZE_API_KEY ?? "",
+        model: env.VOICE_ORGANIZE_MODEL ?? "",
+        timeoutMs: Number(env.VOICE_ORGANIZE_TIMEOUT_MS ?? 4000),
+      },
     },
   };
 }

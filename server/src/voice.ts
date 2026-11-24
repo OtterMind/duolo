@@ -2,12 +2,13 @@
 // 识别服务的密钥只放在服务器上，客户端只用自己的登录凭据（匿名的也行），按用户每天限额。
 //
 // 和客户端之间（`GET /v1/voice`，WebSocket）：
-//   客户端 → {"type":"start","hotwords":[...],"context":[...]}   热词（文件名、函数名……）和对话上下文（新的在前），都可省
+//   客户端 → {"type":"start","hotwords":[...],"context":[...],"organize":true}
+//                                                              热词（文件名、函数名……）、对话上下文（新的在前）、要不要整理，都可省
 //   客户端 → 二进制：16 kHz、16 位、单声道 PCM（小端），每块 100~200 ms
 //   客户端 → {"type":"stop"}                                   说完了
 //   服务器 → {"type":"ready"}                                  登录和额度没问题，可以识别（客户端可以先发 start 和声音，不用等它）
 //   服务器 → {"type":"partial","text":"..."}                   识别中，整段到目前为止的文字
-//   服务器 → {"type":"final","text":"..."}                     最终结果，之后服务器关闭连接
+//   服务器 → {"type":"final","text":"...","organized":"..."}   最终结果（原话；要整理且整理出来了时带 organized），之后服务器关闭连接
 //   服务器 → {"type":"error","error":"voiceUnavailable"}       错误码，客户端按自己的语言显示，并退回本地识别
 //
 // 和豆包之间的二进制帧格式见 https://www.volcengine.com/docs/6561/1354869（实现参考 ottermind 的 voice-ws-proxy）。
@@ -16,6 +17,8 @@ import { randomUUID } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import WebSocket, { type RawData } from "ws";
 import type { Pool } from "pg";
+
+import { organize, type OrganizeConfig } from "./organize.js";
 
 /** 一秒钟的 PCM 有多少字节（16 kHz × 16 位 × 单声道）。 */
 const BYTES_PER_SECOND = 16000 * 2;
@@ -39,6 +42,8 @@ export interface VoiceConfig {
   /** 每个用户每天最多识别多少秒；匿名用户单独一个额度。 */
   dailySeconds: number;
   anonymousDailySeconds: number;
+  /** 把原话整理成指令用的模型，见 organize.ts。 */
+  organize: OrganizeConfig;
 }
 
 /** 客户端看到的错误码（文案在客户端）。 */
@@ -47,6 +52,8 @@ export type VoiceError = "voiceUnavailable" | "voiceQuotaExceeded" | "voiceFaile
 export interface VoiceStart {
   hotwords: string[];
   context: string[];
+  /** 识别完后整理成指令。 */
+  organize?: boolean;
 }
 
 /** 把客户端给的热词和上下文清理、截短，拼成豆包的 `corpus.context`（一个 JSON 字符串）。 */
@@ -194,6 +201,7 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
   let stopped = false;
   let done = false;
   let finalTimer: NodeJS.Timeout | undefined;
+  let started: VoiceStart | undefined;
   const pending: Buffer[] = [];
 
   const finish = (error?: VoiceError) => {
@@ -201,10 +209,19 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
     done = true;
     clearTimeout(finalTimer);
     void addUsage(pool, user.id, Math.ceil(audioBytes / BYTES_PER_SECOND)).catch(() => {});
-    if (error && !text) send({ type: "error", error });
-    else send({ type: "final", text });
-    client.close(1000);
     upstream?.close();
+    if (error && !text) {
+      send({ type: "error", error });
+      client.close(1000);
+      return;
+    }
+    void (async () => {
+      const organized = started?.organize
+        ? await organize(config.organize, { text, hotwords: started.hotwords, context: started.context })
+        : undefined;
+      send({ type: "final", text, ...(organized && organized !== text ? { organized } : {}) });
+      client.close(1000);
+    })();
   };
   const stop = () => {
     if (stopped) return;
@@ -225,6 +242,7 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
   };
 
   const open = (start: VoiceStart) => {
+    started = start;
     upstream = new WebSocket(config.url, {
       headers: { "X-Api-Key": config.apiKey, "X-Api-Resource-Id": config.resourceId, "X-Api-Connect-Id": randomUUID() },
     });
@@ -281,7 +299,7 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
   const onMessage = (data: RawData, binary: boolean) => {
     if (done) return;
     if (binary) return sendAudio(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
-    let message: { type?: string; hotwords?: unknown; context?: unknown };
+    let message: { type?: string; hotwords?: unknown; context?: unknown; organize?: unknown };
     try {
       message = JSON.parse(data.toString());
     } catch {
@@ -289,7 +307,7 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
     }
     if (message.type === "start" && !upstream) {
       const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
-      open({ hotwords: strings(message.hotwords), context: strings(message.context) });
+      open({ hotwords: strings(message.hotwords), context: strings(message.context), organize: message.organize === true });
     } else if (message.type === "stop") {
       stop();
     }

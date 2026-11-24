@@ -36,9 +36,11 @@ pnpm test                 # 端到端测试（每次建一个临时数据库，�
 | `PORT` / `HOST` | 监听地址 | `8787` / `0.0.0.0` |
 | `MAILBOX_TTL_DAYS` | 离线消息最多存几天 | `7` |
 | `MAX_MESSAGE_BYTES` | 单条消息上限 | `262144` |
-| `DOUBAO_ASR_API_KEY` | 语音输入用的豆包语音 API Key。为空时不在服务器上识别，客户端用系统自带的识别 | 空 |
+| `DOUBAO_ASR_API_KEY` | 语音输入用的豆包语音 API Key。为空时语音输入不可用。密钥只放在环境变量里，不要提交到仓库 | 空 |
 | `DOUBAO_ASR_RESOURCE_ID` / `DOUBAO_ASR_URL` | 豆包流式语音识别的资源和地址 | `volc.seedasr.sauc.duration` / `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` |
 | `VOICE_DAILY_MINUTES` / `VOICE_ANONYMOUS_DAILY_MINUTES` | 每个用户每天能用多少分钟语音输入（登录的 / 匿名的） | `120` / `30` |
+| `VOICE_ORGANIZE_BASE_URL` / `VOICE_ORGANIZE_API_KEY` / `VOICE_ORGANIZE_MODEL` | 把原话整理成指令用的模型（OpenAI 兼容接口，地址到 `/v1` 为止）。有一项为空就不整理 | 空 |
+| `VOICE_ORGANIZE_TIMEOUT_MS` | 整理最多等多久，超时用原话 | `4000` |
 
 ## 接口
 

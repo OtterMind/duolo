@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import pg from "pg";
@@ -61,11 +62,27 @@ class FakeDoubao {
 }
 
 const fake = new FakeDoubao();
+
+/** 假的模型接口（OpenAI 兼容）：记下请求，把原话里的 "CSV" 换成 "CSV file" 作为整理结果。 */
+const llmRequests: any[] = [];
+const llm = createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    const request = JSON.parse(body);
+    llmRequests.push({ url: req.url, auth: req.headers.authorization, request });
+    const said = (request.messages[1].content as string).split("Transcript:\n")[1];
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ choices: [{ message: { content: said.replace("CSV", "CSV file") } }] }));
+  });
+});
 let base = "";
 let wsBase = "";
 let close: () => Promise<void>;
 
 beforeAll(async () => {
+  await new Promise<void>((resolve) => llm.listen(0, "127.0.0.1", resolve));
+  const llmUrl = `http://127.0.0.1:${(llm.address() as AddressInfo).port}/v1`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
   await admin.connect();
   await admin.query(`create database ${dbName}`);
@@ -79,7 +96,13 @@ beforeAll(async () => {
     databaseUrl,
     publicUrl: "http://localhost",
     // 匿名用户每天 2 秒，测得到超额。
-    voice: { ...loaded.voice, url: fake.url, apiKey: "test-key", anonymousDailySeconds: 2 },
+    voice: {
+      ...loaded.voice,
+      url: fake.url,
+      apiKey: "test-key",
+      anonymousDailySeconds: 2,
+      organize: { baseUrl: llmUrl, apiKey: "llm-key", model: "test-model", timeoutMs: 2000 },
+    },
   };
   const mailer = new MemoryMailer();
   await migrate(pool, authOptions(config, pool, mailer));
@@ -92,6 +115,7 @@ beforeAll(async () => {
     await app.close();
     await pool.end();
     fake.server.close();
+    llm.close();
     const admin = new pg.Client({ connectionString: ADMIN_URL });
     await admin.connect();
     await admin.query(`drop database if exists ${dbName} with (force)`);
@@ -173,5 +197,18 @@ describe("voice relay", () => {
     await dictate(token, {}, 10);
     const over = await dictate(token, {}, 1);
     expect(over).toEqual([{ type: "error", error: "voiceQuotaExceeded" }]);
+  });
+
+  it("organizes the final text with the project's names when asked", async () => {
+    const plain = await dictate(await anonymousToken(), { hotwords: ["exportCsv"] }, 1);
+    expect(plain.at(-1)).toEqual({ type: "final", text: "导出订单为 CSV" });
+    expect(llmRequests).toHaveLength(0);
+
+    const asked = await dictate(await anonymousToken(), { hotwords: ["exportCsv"], context: ["Which format?"], organize: true }, 1);
+    expect(asked.at(-1)).toEqual({ type: "final", text: "导出订单为 CSV", organized: "导出订单为 CSV file" });
+    expect(llmRequests).toHaveLength(1);
+    expect(llmRequests[0]).toMatchObject({ url: "/v1/chat/completions", auth: "Bearer llm-key", request: { model: "test-model" } });
+    expect(llmRequests[0].request.messages[1].content).toContain("exportCsv");
+    expect(llmRequests[0].request.messages[1].content).toContain("Which format?");
   });
 });

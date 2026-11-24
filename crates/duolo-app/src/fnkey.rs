@@ -121,9 +121,15 @@ mod platform {
     }
 
     const KEYCODE: CGEventField = EventField::KEYBOARD_EVENT_KEYCODE;
+    /// 已经说过在等授权了。
+    static WAITING: AtomicBool = AtomicBool::new(false);
 
     pub fn run(app: &AppHandle) {
         if !trusted(false) {
+            // 只在第一次说，免得每 3 秒刷一行。
+            if !WAITING.swap(true, Ordering::SeqCst) {
+                eprintln!("fn key: waiting for the Accessibility permission");
+            }
             return;
         }
         let held = AtomicBool::new(false);
@@ -137,6 +143,7 @@ mod platform {
                 match kind {
                     CGEventType::FlagsChanged if event.get_integer_value_field(KEYCODE) == KEY_FN => {
                         let down = event.get_flags().contains(CGEventFlags::CGEventFlagSecondaryFn);
+                        eprintln!("fn key: {}", if down { "down" } else { "up" });
                         if held.swap(down, Ordering::SeqCst) != down {
                             emit(&app, if down { "down" } else { "up" });
                         }
@@ -159,12 +166,16 @@ mod platform {
                 CallbackResult::Keep
             },
         );
-        let Ok(tap) = tap else { return };
+        let Ok(tap) = tap else {
+            eprintln!("fn key: cannot listen to the keyboard");
+            return;
+        };
         let Ok(source) = tap.mach_port().create_runloop_source(0) else { return };
         PORT.store(tap.mach_port().as_concrete_TypeRef() as *mut _, Ordering::SeqCst);
         CFRunLoop::get_current().add_source(&source, unsafe { kCFRunLoopCommonModes });
         tap.enable();
         ACTIVE.store(true, Ordering::SeqCst);
+        eprintln!("fn key: listening");
         CFRunLoop::run_current();
         ACTIVE.store(false, Ordering::SeqCst);
         PORT.store(std::ptr::null_mut(), Ordering::SeqCst);

@@ -131,7 +131,7 @@ pub struct AgentOverride {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceConfig {
-    /// 是否把识别结果整理成一条清晰的指令。
+    /// 是否把识别结果整理成一条清晰的指令。默认不整理：识别结果已经带标点，整理要多等几秒。
     pub organize: bool,
     /// 整理用的命令，整理提示词作为最后一个参数传入，结果从 stdout 读取。没写时用装了的 Agent。
     pub organizer: Option<Vec<String>>,
@@ -141,7 +141,7 @@ pub struct VoiceConfig {
 
 impl Default for VoiceConfig {
     fn default() -> Self {
-        Self { organize: true, organizer: None, organize_timeout_secs: 30 }
+        Self { organize: false, organizer: None, organize_timeout_secs: 30 }
     }
 }
 
@@ -154,7 +154,7 @@ mod tests {
         // 以前的 voice.command（本机识别命令）已经不用了，留在配置里也能读。
         let cfg: Config = toml::from_str("writer = \"codex\"\n[voice]\ncommand = [\"rec.sh\"]\n").unwrap();
         assert_eq!((cfg.writer.0.as_str(), cfg.reviewer.0.as_str()), ("codex", "codex"));
-        assert!(cfg.voice.organize);
+        assert!(!cfg.voice.organize);
         assert!(cfg.namer.is_none() && cfg.voice.organizer.is_none());
     }
 

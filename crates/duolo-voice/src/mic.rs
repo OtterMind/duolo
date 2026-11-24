@@ -64,6 +64,13 @@ fn open(chunks: Sender<Chunk>) -> Result<cpal::Stream> {
     let device = cpal::default_host().default_input_device().ok_or(UserError::VoicePermission)?;
     let supported = device.default_input_config().context("cannot read the microphone format")?;
     let config = supported.config();
+    let name = device.description().map(|d| d.to_string()).unwrap_or_default();
+    eprintln!(
+        "microphone: {name}, {} Hz, {} ch, {:?}",
+        config.sample_rate,
+        config.channels,
+        supported.sample_format()
+    );
     let pcm = Resampler::new(config.sample_rate, usize::from(config.channels), chunks);
     let on_error = |err| eprintln!("microphone: {err}");
     let stream = match supported.sample_format() {

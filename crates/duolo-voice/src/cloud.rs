@@ -278,6 +278,9 @@ fn pump(
 ) -> Result<String> {
     let mut mic = Some(mic);
     let mut deadline = None;
+    // 诊断：发了多少声音、最大音量（全是 0 说明系统给的是静音，多半是没有麦克风权限）。
+    let mut sent = 0usize;
+    let mut peak = 0f32;
     loop {
         if cancel.load(Ordering::SeqCst) {
             bail!("cancelled");
@@ -286,6 +289,8 @@ fn pump(
         loop {
             match chunks.recv_timeout(Duration::ZERO) {
                 Ok(chunk) => {
+                    sent += chunk.pcm.len();
+                    peak = peak.max(chunk.level);
                     lock(shared).level = Some(chunk.level);
                     let bytes: Vec<u8> = chunk.pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
                     socket.send(Message::binary(bytes))?;
@@ -306,6 +311,9 @@ fn pump(
                 socket.send(Message::binary(bytes))?;
             }
             socket.send(Message::text(r#"{"type":"stop"}"#))?;
+            #[allow(clippy::cast_precision_loss)]
+            let seconds = sent as f32 / crate::mic::RATE as f32;
+            eprintln!("voice: sent {seconds:.1} s of audio, peak level {peak:.2}");
             deadline = Some(Instant::now() + FINAL_TIMEOUT);
         }
         if deadline.is_some_and(|d| Instant::now() >= d) {

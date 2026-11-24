@@ -113,7 +113,7 @@ args = ["--model", "opus"]
 server = "https://duolo.example.com"  # the Duolo server (speech recognition); empty means none
 
 [voice]
-organize = true                                   # tidy up filler words and self-corrections
+organize = false                                  # tidy up filler words and self-corrections (off by default)
 organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it; defaults to an installed agent
 ```
 

@@ -432,6 +432,7 @@ pub fn open_system_settings(pane: String) -> Res<()> {
 /// 开始录音：连上 Duolo 服务器，带上 `task` 的热词和最近的对话（新建任务时只有项目名）。
 #[tauri::command]
 pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<String>) -> Res<()> {
+    eprintln!("voice: start (task {task:?})");
     blocking(app, move |state| {
         let (paths, server, hints) = {
             let engine = state.engine();
@@ -446,7 +447,7 @@ pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<Stri
             });
             (engine.paths().clone(), engine.config().server.clone(), hints)
         };
-        let recorder = duolo_voice::start(&paths, &server, hints)?;
+        let recorder = duolo_voice::start(&paths, &server, hints).inspect_err(|e| eprintln!("voice: cannot start: {e:#}"))?;
         if let Some(old) = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).replace(recorder) {
             old.cancel();
         }

@@ -258,7 +258,7 @@ private fun ReviewLine(item: Timeline.Item.Review) {
     }
     val style = statusStyle(state, model.t)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(style.icon, size = 16.dp, tint = style.color)
+        StatusBadge(style, 16.dp)
         Label("${model.agentName(item.reviewer)} · ${style.label}", size = 14.sp, weight = FontWeight.Medium, color = style.color)
     }
 }

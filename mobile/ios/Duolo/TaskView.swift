@@ -293,7 +293,7 @@ struct ReviewLine: View {
         let style = StatusStyle(state, model.t)
         let name = model.overview?.agents.first { $0.kind == reviewer }?.name ?? reviewer.capitalized
         HStack(spacing: 8) {
-            Icon(style.icon, size: 16)
+            StatusBadge(style: style, size: 16).accessibilityHidden(true)
             Text("\(name) · \(style.label)")
         }
         .font(.app(14, .medium, relativeTo: .subheadline)).foregroundStyle(style.color)

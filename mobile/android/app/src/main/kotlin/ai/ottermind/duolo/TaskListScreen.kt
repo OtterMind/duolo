@@ -34,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,9 +56,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -257,19 +263,25 @@ private fun TaskRowView(row: TaskRow, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Column(Modifier.padding(vertical = 12.dp), Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
-                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。标题用掉剩下的宽度。
+                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看左边的图标。标题用掉剩下的宽度。
                     Row(Modifier.weight(1f), Arrangement.spacedBy(6.dp), Alignment.CenterVertically) {
                         AgentMark(row.task.writer)
                         Label(model.title(row.task), Modifier.weight(1f, fill = false), weight = FontWeight.SemiBold, maxLines = 1)
                         if (row.task.repo.isNotEmpty()) RepoTag(row.task.repo)
                     }
-                    Label(style.label, size = 13.sp, weight = FontWeight.SemiBold, color = style.color, maxLines = 1)
-                }
-                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp)) {
-                    Label(row.detail, Modifier.weight(1f).alignByBaseline(), size = 14.sp, color = palette.muted, maxLines = 1)
                     val time = remember(tick, row, t) { row.since?.let { Times.lasting(t, it) } ?: Times.ago(t, row.task.updatedAt) }
-                    Label(time, Modifier.alignByBaseline(), size = 12.sp, color = palette.dim, maxLines = 1)
+                    Label(time, size = 12.sp, color = palette.dim, maxLines = 1)
                 }
+                // 第二行是最新的一句话；只有等你确认在前面写出状态名，光看问号不知道要你做什么。
+                val detail = if (row.state == TaskRow.State.NeedsYou) {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = style.color, fontWeight = FontWeight.SemiBold)) { append(style.label) }
+                        if (row.detail.isNotEmpty()) append(" · ${row.detail}")
+                    }
+                } else {
+                    AnnotatedString(row.detail)
+                }
+                Text(detail, color = palette.muted, fontSize = 14.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             HorizontalDivider(color = palette.line)
         }

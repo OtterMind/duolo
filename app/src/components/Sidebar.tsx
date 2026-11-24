@@ -150,7 +150,7 @@ export function Sidebar(props: Props) {
   );
 }
 
-/** 一个任务一行：模型图标、标题、审阅和进度的小图标。当前任务多一行：分支、改动、时长。 */
+/** 一个任务一行：状态、模型图标、标题、审阅的小标记。当前任务多一行：分支、改动、时长。 */
 function TaskRow({
   task,
   current,
@@ -196,6 +196,10 @@ function TaskRow({
       title={writer ? `${title}\n${writer.name} · ${stateLabel}` : title}
     >
       <div className="task-line">
+        {/* 状态在行首，和手机端、GitHub 的列表一样；名字在悬停提示里。 */}
+        <span className="row-status">
+          {untitled && task.state !== "needs_you" ? null : <StateIcon task={task} />}
+        </span>
         <span className={untitled ? "is-faded" : ""}>
           <AgentIcon kind={writer?.kind ?? ""} title={writer?.name} />
         </span>
@@ -212,9 +216,6 @@ function TaskRow({
         )}
         {task.repo && <span className="repo-tag">{task.repo}</span>}
         <ReviewChip task={task} onOpen={() => onOpenReview(task.id)} />
-        <span className="row-status">
-          {untitled && task.state !== "needs_you" ? null : <StateIcon task={task} />}
-        </span>
         <span className="row-actions">
           <button
             className="icon-btn"
@@ -256,7 +257,7 @@ function TaskRow({
   );
 }
 
-/** 打开审阅的小标记（审阅中、审过才有）。结论由右边的状态图标表示，这里不再带颜色。 */
+/** 打开审阅的小标记（审阅中、审过才有）。结论由行首的状态图标表示，这里不带颜色。 */
 function ReviewChip({ task, onOpen }: { task: Task; onOpen(): void }) {
   const t = useT();
   const running = task.reviewingSince != null;

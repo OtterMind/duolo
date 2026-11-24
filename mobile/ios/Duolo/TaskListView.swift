@@ -244,23 +244,28 @@ struct TaskRowView: View {
             StatusBadge(style: style)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。
+                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看左边的图标。
                     HStack(spacing: 6) {
                         AgentMark(agent: row.task.writer).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
                         Text(model.title(row.task)).font(.app(16, .semibold)).lineLimit(1)
                         if !row.task.repo.isEmpty { RepoTag(name: row.task.repo) }
                     }
                     Spacer(minLength: 0)
-                    Text(style.label).font(.app(13, .semibold, relativeTo: .footnote)).foregroundStyle(style.color).lineLimit(1).layoutPriority(1)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(row.detail).font(.app(14, relativeTo: .subheadline)).foregroundStyle(Palette.muted).lineLimit(1)
-                    Spacer(minLength: 0)
                     TimelineView(.periodic(from: .now, by: 30)) { _ in
                         Text(row.since.map(model.lasting) ?? model.ago(row.task.updatedAt))
                     }
                     .font(.app(12, relativeTo: .caption)).foregroundStyle(Palette.dim).lineLimit(1).layoutPriority(1)
                 }
+                // 第二行是最新的一句话；只有等你确认在前面写出状态名，光看问号不知道要你做什么。
+                Group {
+                    if row.state == .needsYou {
+                        let label = Text(style.label).foregroundStyle(style.color).fontWeight(.semibold)
+                        row.detail.isEmpty ? label : Text("\(label) · \(row.detail)")
+                    } else {
+                        Text(row.detail)
+                    }
+                }
+                .font(.app(14, relativeTo: .subheadline)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             .padding(.vertical, 13)
             .overlay(alignment: .bottom) { Palette.line.frame(height: 1) }

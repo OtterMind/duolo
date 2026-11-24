@@ -9,12 +9,16 @@ import android.icu.text.RelativeDateTimeFormatter
 import android.icu.util.Measure
 import android.icu.util.MeasureUnit
 import android.icu.util.ULocale
-import androidx.compose.animation.core.RepeatMode
+import android.provider.Settings
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
@@ -40,8 +44,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -57,8 +68,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 
 /** 颜色，浅色和深色成对。和 iOS 的 Theme.swift 一致。 */
 @Immutable
@@ -190,40 +199,86 @@ fun RepoTag(name: String) = Label(
 )
 
 /** 任务状态的颜色、图标和名字，列表和详情都用这一份。 */
-data class StatusStyle(val icon: Int, val color: Color, val label: String, val active: Boolean)
+/** 状态图标的底色：两个主题一样，上面的白色图标都看得清；和电脑侧边栏同一组。 */
+object StateFill {
+    val wait = Color(0xFFB07A00)
+    val bad = Color(0xFFE0413F)
+    val write = Color(0xFF1F74E0)
+    val review = Color(0xFF8250DF)
+    /** 比微信绿深一档，白色对勾才看得清。 */
+    val pass = Color(0xFF05954A)
+    val gray = Color(0xFF6E7781)
+}
+
+/** [icon] 是圆里的白色图标；审出问题时写问题数（[count]），未启动时两个都没有。[color] 是写成文字时的颜色。 */
+data class StatusStyle(val icon: Int?, val count: Int?, val fill: Color, val color: Color, val label: String, val active: Boolean)
 
 @Composable
 fun statusStyle(state: TaskRow.State, t: Localizer): StatusStyle {
     val p = palette
-    val (icon, color) = when (state) {
-        TaskRow.State.NeedsYou -> R.drawable.ic_question to p.wait
-        is TaskRow.State.Issues, TaskRow.State.ReviewFailed -> R.drawable.ic_issue_opened to p.bad
-        TaskRow.State.Crashed -> R.drawable.ic_x_circle to p.bad
-        TaskRow.State.Writing -> R.drawable.ic_pencil to p.write
-        TaskRow.State.Reviewing -> R.drawable.ic_eye to p.review
-        TaskRow.State.Passed -> R.drawable.ic_check_circle to p.greenText
-        TaskRow.State.Reviewed, TaskRow.State.Written -> R.drawable.ic_check_circle to p.gray
-        TaskRow.State.Ended -> R.drawable.ic_skip to p.gray
-        TaskRow.State.NotStarted -> R.drawable.ic_circle to p.gray
+    val count = (state as? TaskRow.State.Issues)?.count
+    val (icon, fill, color) = when (state) {
+        TaskRow.State.NeedsYou -> Triple(R.drawable.ic_ask, StateFill.wait, p.wait)
+        is TaskRow.State.Issues -> Triple(null, StateFill.bad, p.bad)
+        TaskRow.State.ReviewFailed -> Triple(R.drawable.ic_alert, StateFill.bad, p.bad)
+        TaskRow.State.Crashed -> Triple(R.drawable.ic_x, StateFill.bad, p.bad)
+        TaskRow.State.Writing -> Triple(R.drawable.ic_pencil, StateFill.write, p.write)
+        TaskRow.State.Reviewing -> Triple(R.drawable.ic_eye, StateFill.review, p.review)
+        TaskRow.State.Passed -> Triple(R.drawable.ic_check, StateFill.pass, p.greenText)
+        TaskRow.State.Reviewed -> Triple(R.drawable.ic_eye, StateFill.gray, p.gray)
+        TaskRow.State.Written -> Triple(R.drawable.ic_check, StateFill.gray, p.gray)
+        TaskRow.State.Ended -> Triple(R.drawable.ic_dash, StateFill.gray, p.gray)
+        TaskRow.State.NotStarted -> Triple(null, StateFill.gray, p.gray)
     }
     // 文案和电脑共用 state.*。
-    val label = t("state.${state.code}", "count" to ((state as? TaskRow.State.Issues)?.count ?: 0))
-    return StatusStyle(icon, color, label, state.group == TaskRow.Group.Active)
+    val label = t("state.${state.code}", "count" to (count ?: 0))
+    return StatusStyle(icon, count, fill, color, label, state.group == TaskRow.Group.Active)
 }
 
-/** 状态图标：同样的圆角底，只换颜色和图标；进行中的会轻轻闪（系统关了动画就不闪）。 */
+/**
+ * 状态图标：纯色圆底加白色图标（和电脑侧边栏一样）。进行中的圆小一圈，外面一段弧线在转（系统关了动画就不转）；
+ * 未启动只有一个虚线圈。读屏念状态名。
+ */
 @Composable
-fun StatusBadge(style: StatusStyle, size: Dp = 36.dp) = Box(
-    Modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(style.color.copy(alpha = 0.13f)),
-    Alignment.Center,
-) {
-    val alpha = if (style.active) {
-        val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(1f, 0.45f, infiniteRepeatable(tween(900), RepeatMode.Reverse), "alpha")
-        pulse
+fun StatusBadge(style: StatusStyle, size: Dp = 32.dp) {
+    val dim = palette.dim
+    val still = LocalContext.current.let { Settings.Global.getFloat(it.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+    val turn = if (style.active && !still) {
+        val angle by rememberInfiniteTransition(label = "turn").animateFloat(0f, 360f, infiniteRepeatable(tween(1600, easing = LinearEasing)), "angle")
+        angle
     } else {
-        1f
+        0f
     }
-    Icon(style.icon, Modifier.alpha(alpha), size / 2, style.color)
+    Box(Modifier.size(size).semantics { contentDescription = style.label }, Alignment.Center) {
+        Canvas(Modifier.matchParentSize()) {
+            val ring = this.size.minDimension / 16
+            when {
+                style.icon == null && style.count == null -> drawCircle(
+                    dim, radius = this.size.minDimension / 2 - ring * 0.75f,
+                    style = Stroke(ring * 0.75f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ring * 1.5f, ring * 1.6f))),
+                )
+                style.active -> {
+                    val r = this.size.minDimension / 2 - ring / 2
+                    drawCircle(style.fill.copy(alpha = 0.28f), r, style = Stroke(ring))
+                    drawArc(
+                        style.fill, turn - 90f, 90f, false, Offset(ring / 2, ring / 2), Size(r * 2, r * 2),
+                        style = Stroke(ring, cap = StrokeCap.Round),
+                    )
+                    drawCircle(style.fill, this.size.minDimension * 0.39f)
+                }
+                else -> drawCircle(style.fill)
+            }
+        }
+        val count = style.count
+        when {
+            count != null -> Text(
+                if (count > 9) "9+" else "$count", color = Color.White, fontFamily = MonaSans, fontWeight = FontWeight.SemiBold,
+                // 按圆的大小换算，不跟着系统字号变大。
+                fontSize = with(LocalDensity.current) { (size * if (count > 9) 0.38f else 0.47f).toSp() },
+            )
+            style.icon != null -> Icon(style.icon, size = size * if (style.active) 0.4f else 0.5f, tint = Color.White)
+        }
+    }
 }
 
 object Times {

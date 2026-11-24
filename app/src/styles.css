@@ -15,10 +15,6 @@
   --need: #e0a84a;
   --danger: #e0716c;
   --ins: #8fc286;
-  --ok: #5bb98b;
-  /* 任务状态：在写、在审（和手机端同样的意思）。 */
-  --writing: #5cb8ff;
-  --reviewing: #b69cff;
   --focus: #6e9bf5;
   --claude: #d97757;
   --del: #e0716c;
@@ -293,7 +289,7 @@ body.is-resizing * {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 22px;
+  padding-left: 46px;
   color: var(--dim);
   font: 11px var(--mono);
   min-width: 0;
@@ -306,7 +302,7 @@ body.is-resizing * {
 }
 .row-status {
   flex: none;
-  width: 18px;
+  width: 16px;
   display: inline-flex;
   justify-content: center;
 }
@@ -320,9 +316,6 @@ body.is-resizing * {
 }
 .task-row:hover .row-actions {
   display: inline-flex;
-}
-.task-row:hover .row-status {
-  display: none;
 }
 .rename-input {
   min-width: 0;
@@ -371,19 +364,72 @@ body.is-resizing * {
   flex: none;
   color: var(--dim);
 }
-.status-glyph.is-passed {
-  color: var(--ok);
-}
-.state-issues {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  color: var(--danger);
-  font: 11px var(--sans);
-  font-variant-numeric: tabular-nums;
-}
 .status-glyph.is-failed {
   color: var(--danger);
+}
+/* 任务状态：纯色圆底加白色图标，和手机端同一组底色（白色图标都看得清）。 */
+.state-badge {
+  flex: none;
+  --tone: #6e7781;
+}
+.state-badge.tone-wait {
+  --tone: #b07a00;
+}
+.state-badge.tone-bad {
+  --tone: #e0413f;
+}
+.state-badge.tone-write {
+  --tone: #1f74e0;
+}
+.state-badge.tone-review {
+  --tone: #8250df;
+}
+.state-badge.tone-pass {
+  --tone: #05954a;
+}
+.state-fill {
+  fill: var(--tone);
+}
+.state-glyph {
+  fill: #fff;
+}
+.state-ask {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.state-count {
+  fill: #fff;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.state-track,
+.state-arc {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 3;
+}
+.state-track {
+  opacity: 0.3;
+}
+.state-arc {
+  stroke-linecap: round;
+  transform-origin: 16px 16px;
+  animation: spin 1.6s linear infinite;
+}
+.state-dashed {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .state-arc {
+    animation: none;
+  }
 }
 .foot-stats {
   display: flex;
@@ -553,12 +599,6 @@ body.is-resizing * {
   border: 1.75px solid #3a3a3a;
   border-top-color: var(--claude);
   animation: spin 0.9s linear infinite;
-}
-.status-running.is-writing {
-  border-top-color: var(--writing);
-}
-.status-running.is-reviewing {
-  border-top-color: var(--reviewing);
 }
 .status-needs_input {
   width: 7px;

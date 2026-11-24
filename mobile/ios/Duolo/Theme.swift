@@ -145,8 +145,23 @@ struct RepoTag: View {
 }
 
 /// 任务状态的颜色、图标和名字，列表和详情都用这一份。
+/// 状态图标的底色：两个主题一样，上面的白色图标都看得清；和电脑侧边栏同一组。
+enum StateFill {
+    static let wait = Color(red: 0xB0 / 255, green: 0x7A / 255, blue: 0x00 / 255)
+    static let bad = Color(red: 0xE0 / 255, green: 0x41 / 255, blue: 0x3F / 255)
+    static let write = Color(red: 0x1F / 255, green: 0x74 / 255, blue: 0xE0 / 255)
+    static let review = Color(red: 0x82 / 255, green: 0x50 / 255, blue: 0xDF / 255)
+    /// 比微信绿深一档，白色对勾才看得清。
+    static let pass = Color(red: 0x05 / 255, green: 0x95 / 255, blue: 0x4A / 255)
+    static let gray = Color(red: 0x6E / 255, green: 0x77 / 255, blue: 0x81 / 255)
+}
+
 struct StatusStyle {
-    let icon: String
+    /// 圆里的白色图标；审出问题时写问题数，未启动时没有。
+    let icon: String?
+    let count: Int?
+    let fill: Color
+    /// 写成文字时的颜色。
     let color: Color
     let label: String
     let active: Bool
@@ -154,41 +169,64 @@ struct StatusStyle {
     init(_ state: TaskRow.State, _ t: Localizer) {
         active = state.group == .active
         // 文案和电脑共用 state.*。
-        var issues = 0
+        var issues: Int?
         if case .issues(let n) = state { issues = n }
-        label = t("state.\(state.code)", ["count": "\(issues)"])
+        count = issues
+        label = t("state.\(state.code)", ["count": "\(issues ?? 0)"])
         switch state {
-        case .needsYou: (icon, color) = ("question", Palette.wait)
-        case .issues: (icon, color) = ("issue-opened", Palette.bad)
-        case .reviewFailed: (icon, color) = ("issue-opened", Palette.bad)
-        case .crashed: (icon, color) = ("x-circle", Palette.bad)
-        case .writing: (icon, color) = ("pencil", Palette.write)
-        case .reviewing: (icon, color) = ("eye", Palette.review)
-        case .passed: (icon, color) = ("check-circle", Palette.greenText)
-        case .reviewed, .written: (icon, color) = ("check-circle", Palette.gray)
-        case .ended: (icon, color) = ("skip", Palette.gray)
-        case .notStarted: (icon, color) = ("circle", Palette.gray)
+        case .needsYou: (icon, fill, color) = ("ask", StateFill.wait, Palette.wait)
+        case .issues: (icon, fill, color) = (nil, StateFill.bad, Palette.bad)
+        case .reviewFailed: (icon, fill, color) = ("alert", StateFill.bad, Palette.bad)
+        case .crashed: (icon, fill, color) = ("x", StateFill.bad, Palette.bad)
+        case .writing: (icon, fill, color) = ("pencil", StateFill.write, Palette.write)
+        case .reviewing: (icon, fill, color) = ("eye", StateFill.review, Palette.review)
+        case .passed: (icon, fill, color) = ("check", StateFill.pass, Palette.greenText)
+        case .reviewed: (icon, fill, color) = ("eye", StateFill.gray, Palette.gray)
+        case .written: (icon, fill, color) = ("check", StateFill.gray, Palette.gray)
+        case .ended: (icon, fill, color) = ("dash", StateFill.gray, Palette.gray)
+        case .notStarted: (icon, fill, color) = (nil, StateFill.gray, Palette.gray)
         }
     }
 }
 
-/// 状态图标：同样的圆角底，只换颜色和图标；进行中的会轻轻闪。
+/// 状态图标：纯色圆底加白色图标（和电脑侧边栏一样）。进行中的圆小一圈，外面一段弧线在转；
+/// 未启动只有一个虚线圈。读屏念状态名。
 struct StatusBadge: View {
     let style: StatusStyle
-    var size: CGFloat = 36
+    var size: CGFloat = 32
     @Environment(\.accessibilityReduceMotion) private var still
-    @State private var dimmed = false
+    @State private var turned = false
 
     var body: some View {
-        Icon(style.icon, size: size / 2)
-            .foregroundStyle(style.color)
-            .opacity(dimmed ? 0.45 : 1)
-            .frame(width: size, height: size)
-            .background(style.color.opacity(0.13), in: .rect(cornerRadius: size * 0.3))
-            .onAppear {
-                guard style.active, !still else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever()) { dimmed = true }
+        let ring = size / 16
+        ZStack {
+            if style.icon == nil && style.count == nil {
+                Circle().strokeBorder(Palette.dim, style: StrokeStyle(lineWidth: ring * 0.75, dash: [ring * 1.5, ring * 1.6]))
+                    .padding(ring * 0.75)
+            } else {
+                if style.active {
+                    Circle().stroke(style.fill.opacity(0.28), lineWidth: ring)
+                    Circle().trim(from: 0, to: 0.25).stroke(style.fill, style: StrokeStyle(lineWidth: ring, lineCap: .round))
+                        .rotationEffect(.degrees(turned ? 270 : -90))
+                }
+                Circle().fill(style.fill).padding(style.active ? size * 0.11 : 0)
+                if let count = style.count {
+                    Text(count > 9 ? "9+" : "\(count)").font(.app(size * (count > 9 ? 0.38 : 0.47), .semibold)).monospacedDigit()
+                        .foregroundStyle(.white).dynamicTypeSize(.large)
+                } else if let icon = style.icon {
+                    Image(icon).renderingMode(.template).resizable().scaledToFit().foregroundStyle(.white)
+                        .frame(width: size * (style.active ? 0.4 : 0.5), height: size * (style.active ? 0.4 : 0.5))
+                }
             }
-            .id("\(style.icon)\(style.active)")
+        }
+        .padding(style.active ? ring / 2 : 0)
+        .frame(width: size, height: size)
+        .onAppear {
+            guard style.active, !still else { return }
+            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { turned = true }
+        }
+        .id("\(style.label)\(style.active)")
+        .accessibilityElement()
+        .accessibilityLabel(style.label)
     }
 }

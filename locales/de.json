@@ -89,7 +89,6 @@
   "review.copyFailed": "Die Änderungen konnten für das Review nicht kopiert werden: {detail}",
   "voice.title": "Spracheingabe ({key} halten)",
   "voice.hold": "{key} halten zum Sprechen",
-  "voice.notConfiguredTitle": "Spracheingabe ist nicht eingerichtet",
   "voice.processing": "Wird aufbereitet …",
   "voice.needTask": "Öffne zuerst eine Aufgabe und nutze dann die Spracheingabe.",
   "voice.listening": "Höre zu…",

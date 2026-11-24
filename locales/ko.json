@@ -89,7 +89,6 @@
   "review.copyFailed": "리뷰할 변경 사항을 복사하지 못했습니다: {detail}",
   "voice.title": "음성 입력({key} 키 길게 누르기)",
   "voice.hold": "{key} 키를 누른 채 말하기",
-  "voice.notConfiguredTitle": "음성 입력이 설정되지 않았습니다",
   "voice.processing": "정리하는 중…",
   "voice.needTask": "작업을 먼저 연 다음 음성 입력을 사용하세요.",
   "voice.listening": "듣는 중…",

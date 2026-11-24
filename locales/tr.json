@@ -89,7 +89,6 @@
   "review.copyFailed": "İncelemek için değişiklikler kopyalanamadı: {detail}",
   "voice.title": "Sesli giriş ({key} tuşunu basılı tutun)",
   "voice.hold": "Konuşmak için {key} tuşunu basılı tutun",
-  "voice.notConfiguredTitle": "Sesli giriş ayarlanmadı",
   "voice.processing": "Düzenleniyor…",
   "voice.needTask": "Önce bir görev açın, sonra sesli girişi kullanın.",
   "voice.listening": "Dinleniyor…",

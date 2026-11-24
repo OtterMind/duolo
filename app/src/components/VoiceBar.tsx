@@ -7,14 +7,14 @@ import * as terminals from "../lib/terminals";
 import type { Voice } from "../lib/voice";
 import { TALK_KEY } from "../lib/platform";
 
-/** 终端区域的上内边距，和 .terminal-wrap 保持一致。 */
+/** 终端区域的上、左内边距，和 .terminal-wrap 保持一致。 */
 const PAD_TOP = 10;
+const PAD_LEFT = 16;
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 /**
- * 语音的状态，都在 Agent 的输入块上：录音时输入块变成录音条
- * （听到的文字、波形、计时，右边是丢弃 / 插入 / 插入并发送三个图标）；插入后右上角出现换回原话和撤销。
- * 入口是终端下面的 `VoiceButton`。
+ * 语音的入口和状态，都在 Agent 的输入块上：输入框空着（连 Agent 的灰字提示都没有）时，提示符后面灰着写"按住 Fn 说话"；
+ * 录音时输入块变成录音条（听到的文字、波形、计时，右边是丢弃 / 插入 / 插入并发送三个图标）；插入后右上角出现换回原话和撤销。
  */
 export function VoiceBar({ agent, voice }: { agent: AgentRef; voice: Voice }) {
   const t = useT();
@@ -94,37 +94,28 @@ export function VoiceBar({ agent, voice }: { agent: AgentRef; voice: Voice }) {
   }
 
   const ins = voice.inserted;
-  if (!ins || ins.target.kind !== "agent") return null;
+  const hint = block.hint;
   return (
-    <div className="voice-inserted" style={{ top: top - 34 }}>
-      {ins.organized && (
-        <button className="icon-btn" title={t("voice.revert")} onClick={voice.revert}>
-          <Undo2 {...ICON} />
-        </button>
+    <>
+      {ins && ins.target.kind === "agent" && (
+        <div className="voice-inserted" style={{ top: top - 34 }}>
+          {ins.organized && (
+            <button className="icon-btn" title={t("voice.revert")} onClick={voice.revert}>
+              <Undo2 {...ICON} />
+            </button>
+          )}
+          <button className="icon-btn" title={t("voice.undo")} onClick={voice.undo}>
+            <Trash2 {...ICON} />
+          </button>
+        </div>
       )}
-      <button className="icon-btn" title={t("voice.undo")} onClick={voice.undo}>
-        <Trash2 {...ICON} />
-      </button>
-    </div>
-  );
-}
-
-/** 语音入口：终端下面一个写着"按住 Fn 说话"的按钮，比输入框末尾的小图标好找；点一下也能开始和结束录音。 */
-export function VoiceButton({ voice }: { voice: Voice }) {
-  const t = useT();
-  const recording = voice.phase.kind === "recording";
-  return (
-    <div className="voice-strip">
-      <button
-        className={`voice-talk ${recording ? "is-recording" : ""} ${voice.ready ? "" : "is-off"}`}
-        title={voice.ready ? t("voice.title", { key: TALK_KEY }) : t("voice.notConfiguredTitle")}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={voice.toggle}
-      >
-        {recording ? <span className="rec-dot" /> : <Mic {...ICON} />}
-        {t("voice.hold", { key: TALK_KEY })}
-      </button>
-    </div>
+      {hint && voice.ready && (
+        <span className="voice-hint" style={{ left: PAD_LEFT + hint.left, top: PAD_TOP + hint.top, height: hint.height }}>
+          <Mic size={12} strokeWidth={1.75} />
+          {t("voice.hold", { key: TALK_KEY })}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -156,12 +147,12 @@ function Elapsed({ since }: { since: number }) {
 
 /** Agent 输入块的位置，画面变化时更新。 */
 function useInputBlock(agent: AgentRef) {
-  const [pos, setPos] = useState<{ top: number; height: number } | null>(null);
+  const [pos, setPos] = useState<ReturnType<typeof terminals.inputBlock>>(null);
   useEffect(() => {
     const update = () =>
       setPos((old) => {
         const next = terminals.inputBlock(agent);
-        return old?.top === next?.top && old?.height === next?.height ? old : next;
+        return JSON.stringify(old) === JSON.stringify(next) ? old : next;
       });
     update();
     return terminals.onInputBlockChange(agent, update);

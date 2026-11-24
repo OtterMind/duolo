@@ -89,7 +89,6 @@
   "review.copyFailed": "Не удалось скопировать изменения для ревью: {detail}",
   "voice.title": "Голосовой ввод (удерживайте {key})",
   "voice.hold": "Удерживайте {key}, чтобы говорить",
-  "voice.notConfiguredTitle": "Голосовой ввод не настроен",
   "voice.processing": "Обработка…",
   "voice.needTask": "Сначала откройте задачу, затем используйте голос.",
   "voice.listening": "Слушаю…",

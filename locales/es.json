@@ -89,7 +89,6 @@
   "review.copyFailed": "No se pudieron copiar los cambios para revisarlos: {detail}",
   "voice.title": "Entrada de voz (mantén {key})",
   "voice.hold": "Mantén {key} para hablar",
-  "voice.notConfiguredTitle": "La entrada de voz no está configurada",
   "voice.processing": "Ordenando…",
   "voice.needTask": "Abre primero una tarea y luego usa la voz.",
   "voice.listening": "Escuchando…",

@@ -89,7 +89,6 @@
   "review.copyFailed": "Impossible de copier les modifications pour la revue : {detail}",
   "voice.title": "Saisie vocale (maintenir {key})",
   "voice.hold": "Maintenez {key} pour parler",
-  "voice.notConfiguredTitle": "La saisie vocale n’est pas configurée",
   "voice.processing": "Mise au propre…",
   "voice.needTask": "Ouvrez d’abord une tâche, puis utilisez la voix.",
   "voice.listening": "Écoute…",

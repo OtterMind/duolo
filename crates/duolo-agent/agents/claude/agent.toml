@@ -17,7 +17,8 @@ session_id_args = ["--session-id", "{session}"]
 # 在终端里审阅时用计划模式：只看不改，要改文件得先让用户同意。
 review_args = ["--permission-mode", "plan"]
 # 不在启动时自己升级（升级由用户决定，也免得升级到一半换了界面）。
-env = { DISABLE_AUTOUPDATER = "1" }
+# 打开"下一步建议"：回答完后把建议的下一句灰着写进输入框（Tab 采用），不然要等服务器分批放开。
+env = { DISABLE_AUTOUPDATER = "1", CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = "1" }
 
 # 钩子（见 docs/agent-compat.md）：会话开始时告诉 Duolo 准确的会话编号（清空对话后也跟得上），
 # 请求授权时告诉它要用什么工具、做什么。设置文件每次启动时交给它，不改用户的配置。

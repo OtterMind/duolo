@@ -89,7 +89,6 @@
   "review.copyFailed": "Không thể sao chép các thay đổi để review: {detail}",
   "voice.title": "Nhập bằng giọng nói (giữ {key})",
   "voice.hold": "Giữ {key} để nói",
-  "voice.notConfiguredTitle": "Chưa cấu hình nhập bằng giọng nói",
   "voice.processing": "Đang chỉnh lại…",
   "voice.needTask": "Hãy mở một tác vụ trước, rồi dùng giọng nói.",
   "voice.listening": "Đang nghe…",

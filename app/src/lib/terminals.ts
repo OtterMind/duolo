@@ -58,6 +58,8 @@ interface Entry {
   blockListeners: Set<() => void>;
   /** 画面往下挪了多少像素，见 `alignBottom`。 */
   shift: number;
+  /** 输入框空着（连 Agent 的灰字提示都没有）时，提示文字放在哪；不该显示时为 null。 */
+  hint: { left: number; top: number; height: number } | null;
 }
 
 const pool = new Map<string, Entry>();
@@ -151,7 +153,7 @@ function create(ref: AgentRef): Entry {
     void api.write(ref, data).catch(() => {});
   });
 
-  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set(), shift: 0 };
+  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set(), shift: 0, hint: null };
   let frame = 0;
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(() => ((frame = 0), paintInputBlock(entry)));
@@ -244,7 +246,7 @@ function paintInputBlock(entry: Entry) {
 
   // 输入块的位置每次都更新（滚动或改变窗口大小时行的位置会变）。
   const screen = entry.el.querySelector<HTMLElement>(".xterm-screen");
-  const before = `${block.style.display}:${block.style.top}:${block.style.height}`;
+  const before = `${block.style.display}:${block.style.top}:${block.style.height}:${JSON.stringify(entry.hint)}`;
   const rowHeight = screen && term.rows > 0 ? screen.offsetHeight / term.rows : 0;
   if (screen && rowHeight) alignBottom(entry, screen, rowHeight);
   if (found && screen && rowHeight) {
@@ -253,10 +255,12 @@ function paintInputBlock(entry: Entry) {
     block.style.display = "block";
     block.style.top = `${screen.offsetTop + entry.shift + first * rowHeight - INPUT_PAD_Y}px`;
     block.style.height = `${rows * rowHeight + INPUT_PAD_Y * 2}px`;
+    entry.hint = emptyInput(term, top + 1, bottom - 1, screen, rowHeight, entry.shift);
   } else {
     block.style.display = "none";
+    entry.hint = null;
   }
-  if (`${block.style.display}:${block.style.top}:${block.style.height}` !== before) {
+  if (`${block.style.display}:${block.style.top}:${block.style.height}:${JSON.stringify(entry.hint)}` !== before) {
     entry.blockListeners.forEach((listener) => listener());
   }
 
@@ -278,6 +282,25 @@ function paintInputBlock(entry: Entry) {
       );
     if (decoration) entry.input.decorations.push(decoration);
   }
+}
+
+/**
+ * 输入框里除了开头的提示符（❯ > ›）什么都没有时，返回提示文字的位置（提示符后面，第一行）。
+ * 用户打的字、Agent 灰着写的提示或建议，都算有内容，这时不显示，免得叠在一起。
+ */
+function emptyInput(term: Terminal, first: number, last: number, screen: HTMLElement, rowHeight: number, shift: number) {
+  const buf = term.buffer.active;
+  const lines: string[] = [];
+  for (let y = first; y <= last; y++) lines.push(buf.getLine(y)?.translateToString(true) ?? "");
+  const prompt = /^(\s*)([❯>›])\s?/.exec(lines[0] ?? "");
+  const rest = [prompt ? lines[0].slice(prompt[0].length) : lines[0], ...lines.slice(1)];
+  if (!prompt || rest.some((line) => line.trim())) return null;
+  const cellWidth = screen.offsetWidth / term.cols;
+  return {
+    left: screen.offsetLeft + (prompt[1].length + 2) * cellWidth,
+    top: screen.offsetTop + shift + (first - buf.viewportY) * rowHeight,
+    height: rowHeight,
+  };
 }
 
 /**
@@ -305,11 +328,13 @@ function alignBottom(entry: Entry, screen: HTMLElement, rowHeight: number) {
   screen.style.transform = shift ? `translateY(${shift}px)` : "";
 }
 
-/** 输入块相对终端元素的位置；Agent 没有显示输入框时为 null。 */
-export function inputBlock(ref: AgentRef): { top: number; height: number } | null {
+/** 输入块相对终端元素的位置，`hint` 见 `emptyInput`；Agent 没有显示输入框时为 null。 */
+export function inputBlock(
+  ref: AgentRef,
+): { top: number; height: number; hint: { left: number; top: number; height: number } | null } | null {
   const entry = pool.get(agentKey(ref));
   if (!entry || entry.block.style.display !== "block") return null;
-  return { top: entry.block.offsetTop, height: entry.block.offsetHeight };
+  return { top: entry.block.offsetTop, height: entry.block.offsetHeight, hint: entry.hint };
 }
 
 /** 输入块出现、消失或移动时回调，返回取消函数。 */

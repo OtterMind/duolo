@@ -1,15 +1,16 @@
 package ai.ottermind.duolo
 
 import ai.ottermind.duolo.core.AppError
+import ai.ottermind.duolo.core.VoiceHints
+import ai.ottermind.duolo.core.VoiceStream
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Application
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Bundle
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.SystemClock
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,10 +67,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import kotlin.math.sqrt
 
-/** 一次语音输入：从按下到说完。识别用系统的 SpeechRecognizer，只在主线程上用。 */
-class VoiceSession(private val app: Application) {
+/**
+ * 一次语音输入：从按下到说完。录麦克风，16 kHz PCM 发给配对的 Duolo 服务器识别（和电脑端同一个接口），
+ * 带上任务的热词和对话。状态只在主线程上改。
+ */
+class VoiceSession(private val app: Application, private val http: OkHttpClient) {
     enum class Target { Send, Edit, Cancel }
 
     var visible by mutableStateOf(false)
@@ -87,80 +94,94 @@ class VoiceSession(private val app: Application) {
         private set
 
     private val scope = CoroutineScope(Dispatchers.Main.immediate)
-    private var recognizer: SpeechRecognizer? = null
+    private var stream: VoiceStream? = null
+    private var session: Job? = null
+    private var recording: Job? = null
     private var done: (String, Boolean) -> Unit = { _, _ -> }
     private var problem: (AppError) -> Unit = {}
 
-    /** 已经松手了，在等最后的识别结果。 */
+    /** 已经松手了，在等最终结果。 */
     private var finishing = false
     private var timeout: Job? = null
-
-    /** 之前几段已经定下来的话：系统听到停顿就会结束一段，按住期间要接着听。 */
-    private var settled = ""
 
     val allowed: Boolean
         get() = ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    fun begin(language: String, problem: (AppError) -> Unit, done: (text: String, edit: Boolean) -> Unit) {
+    /** `route` 是配对的服务器和登录凭据，没配对时为空。 */
+    fun begin(route: Pair<String, String>?, hints: VoiceHints, problem: (AppError) -> Unit, done: (text: String, edit: Boolean) -> Unit) {
         if (visible) return
-        if (!SpeechRecognizer.isRecognitionAvailable(app)) return problem(AppError("voiceUnavailable"))
+        if (route == null) return problem(AppError.unauthorized)
         this.done = done
         this.problem = problem
         target = Target.Send
         handsFree = false
         finishing = false
-        settled = ""
         text = ""
         level = 0f
         startedAt = SystemClock.elapsedRealtime()
         visible = true
-        listen(language)
-    }
-
-    private fun listen(language: String) {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
-            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        recognizer?.destroy()
-        recognizer = SpeechRecognizer.createSpeechRecognizer(app).apply {
-            setRecognitionListener(object : RecognitionListener {
-                private fun best(bundle: Bundle?) = bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                private fun join(next: String) = listOf(settled, next).filter { it.isNotBlank() }.joinToString(" ")
-
-                override fun onPartialResults(partial: Bundle?) {
-                    best(partial).takeIf { it.isNotEmpty() }?.let { text = join(it) }
-                }
-
-                override fun onResults(results: Bundle?) {
-                    settled = join(best(results))
-                    text = settled
-                    if (finishing) complete() else listen(language)
-                }
-
-                override fun onError(error: Int) {
-                    val quiet = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-                    when {
-                        finishing -> complete()
-                        quiet -> listen(language)
-                        else -> {
-                            end()
-                            problem(AppError(if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) "voicePermission" else "voiceUnavailable"))
-                        }
+        session = scope.launch {
+            val opened = try {
+                VoiceStream.open(route.first, route.second, hints, http)
+            } catch (e: AppError) {
+                end()
+                return@launch problem(e)
+            }
+            // 连服务器的时候已经取消或松手了。
+            if (!visible || finishing) {
+                opened.cancel()
+                if (finishing) complete()
+                return@launch
+            }
+            stream = opened
+            recording = record(opened)
+            for (event in opened.events) {
+                when (event) {
+                    is VoiceStream.Event.Partial -> text = event.text
+                    is VoiceStream.Event.Final -> {
+                        text = event.text
+                        if (finishing) complete()
+                    }
+                    is VoiceStream.Event.Failed -> if (finishing) complete() else {
+                        end()
+                        problem(event.error)
                     }
                 }
+            }
+        }
+    }
 
-                override fun onRmsChanged(rms: Float) {
-                    level = (rms / 10f).coerceIn(0f, 1f)
-                }
-
-                override fun onReadyForSpeech(params: Bundle?) = Unit
-                override fun onBeginningOfSpeech() = Unit
-                override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() = Unit
-                override fun onEvent(type: Int, params: Bundle?) = Unit
-            })
-            startListening(intent)
+    /** 在后台线程上录音，每 100 毫秒发一块。 */
+    @SuppressLint("MissingPermission") // 开始前 HoldToTalk 已经确认过权限。
+    private fun record(stream: VoiceStream) = scope.launch(Dispatchers.IO) {
+        val chunk = RATE / 10 * 2
+        val size = maxOf(AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), chunk * 2)
+        val recorder = try {
+            AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
+        } catch (_: Exception) {
+            null
+        }
+        if (recorder == null || recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder?.release()
+            launch(Dispatchers.Main) {
+                end()
+                problem(AppError("voicePermission"))
+            }
+            return@launch
+        }
+        val buffer = ByteArray(chunk)
+        try {
+            recorder.startRecording()
+            while (isActive) {
+                val n = recorder.read(buffer, 0, buffer.size)
+                if (n <= 0) continue
+                stream.send(buffer, n)
+                val loud = rms(buffer, n)
+                launch(Dispatchers.Main) { level = loud }
+            }
+        } finally {
+            recorder.stop()
+            recorder.release()
         }
     }
 
@@ -174,15 +195,16 @@ class VoiceSession(private val app: Application) {
         if (target == Target.Cancel) return end()
         this.target = target
         finishing = true
-        recognizer?.stopListening()
-        // 最多等 1.5 秒最后的结果。
+        recording?.cancel()
+        stream?.stop()
         timeout = scope.launch {
-            delay(1_500)
+            delay(FINAL_TIMEOUT_MS)
             complete()
         }
     }
 
     private fun complete() {
+        if (!visible) return
         val said = text.trim()
         val edit = target == Target.Edit
         end()
@@ -191,10 +213,33 @@ class VoiceSession(private val app: Application) {
 
     private fun end() {
         timeout?.cancel()
-        recognizer?.destroy()
-        recognizer = null
+        recording?.cancel()
+        stream?.cancel()
+        session?.cancel()
+        stream = null
+        recording = null
+        session = null
         finishing = false
         visible = false
+        level = 0f
+    }
+
+    private companion object {
+        const val RATE = 16_000
+
+        /** 说完后等最终结果最长多久。 */
+        const val FINAL_TIMEOUT_MS = 20_000L
+
+        /** 音量（0~1）：均方根放大后截断。 */
+        fun rms(pcm: ByteArray, size: Int): Float {
+            var sum = 0.0
+            val samples = size / 2
+            for (i in 0 until samples) {
+                val s = ((pcm[2 * i + 1].toInt() shl 8) or (pcm[2 * i].toInt() and 0xff)).toShort() / 32768.0
+                sum += s * s
+            }
+            return if (samples == 0) 0f else (sqrt(sum / samples) * 12).toFloat().coerceIn(0f, 1f)
+        }
     }
 }
 
@@ -216,7 +261,7 @@ fun HoldToTalk(modifier: Modifier = Modifier, floating: Boolean = false, done: (
             return false
         }
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        voice.begin(model.t.locale.toLanguageTag(), { model.problem = it }) { text, edit -> onDone(text, edit) }
+        voice.begin(model.voiceRoute(), model.voiceHints(), { model.problem = it }) { text, edit -> onDone(text, edit) }
         return voice.visible
     }
 

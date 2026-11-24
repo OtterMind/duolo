@@ -1,6 +1,7 @@
 package ai.ottermind.duolo
 
 import ai.ottermind.duolo.core.AppError
+import ai.ottermind.duolo.core.VoiceHints
 import ai.ottermind.duolo.core.Command
 import ai.ottermind.duolo.core.Computer
 import ai.ottermind.duolo.core.LocalStore
@@ -89,13 +90,14 @@ class AppModel(private val app: Application) : DefaultLifecycleObserver {
         private set
     private var project by mutableStateOf<String?>(null)
 
-    /** 正在进行的语音输入，面板由最上层的界面画。 */
-    val voice = VoiceSession(app)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = LocalStore(AndroidDb.open(app))
     private val secrets = KeystoreSecrets(app)
     private val http = defaultHttp()
+
+    /** 正在进行的语音输入，面板由最上层的界面画。 */
+    val voice = VoiceSession(app, http)
     private val transport = OkHttpTransport(http)
     private val pairing = Pairing(store, secrets, http)
     private var engine: SyncEngine? = null
@@ -333,10 +335,26 @@ class AppModel(private val app: Application) : DefaultLifecycleObserver {
 
     val computerOnline: Boolean get() = link == SyncEngine.Link.Connected(true)
 
+    /** 语音识别用当前电脑配对的服务器和登录凭据；没配对时为空。 */
+    fun voiceRoute(): Pair<String, String>? {
+        val computer = current ?: return null
+        val secret = runCatching { secrets.load(computer.id) }.getOrNull() ?: return null
+        return computer.server to secret.token
+    }
+
+    /** 给识别服务的提示：打开着的任务的文件名、代码名字和最近的对话；没打开任务时只有项目名。 */
+    fun voiceHints(): VoiceHints {
+        val computer = current
+        val task = opened?.id?.let { id -> rows.firstOrNull { it.id == id }?.task }
+        if (computer == null || task == null) return VoiceHints.of(currentProject?.name, null, null, emptyList())
+        val events = runCatching { store.events(computer.id, task.id) }.getOrDefault(emptyList())
+        val name = overview?.projects?.firstOrNull { it.id == task.project }?.name ?: currentProject?.name
+        return VoiceHints.of(name, task.title.takeUnless { task.untitled }, task.branch, events)
+    }
+
     /** 错误给用户看的说明。 */
     fun message(problem: AppError): String = when (problem.code) {
         "voicePermission" -> t("mobile.voice.permission")
-        "voiceUnavailable" -> t("mobile.voice.unavailable")
         else -> t.error(problem.code)
     }
 

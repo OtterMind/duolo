@@ -281,11 +281,6 @@ impl Engine {
         self.small_job(&self.config.namer)
     }
 
-    /// 整理口述内容用的命令，同上。
-    pub fn organizer(&self) -> Option<OneShot> {
-        self.small_job(&self.config.voice.organizer)
-    }
-
     fn small_job(&self, configured: &Option<Vec<String>>) -> Option<OneShot> {
         match configured {
             Some(argv) if argv.is_empty() => None,
@@ -1384,19 +1379,16 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             std::fs::write(dir.path().join("config.toml"), config).unwrap();
             let engine = Engine::open(Paths::at(dir.path())).unwrap();
-            (engine.namer().map(|c| c.argv), engine.organizer().map(|c| c.argv))
+            engine.namer().map(|c| c.argv)
         };
         // 别的内置 Agent 本机装没装都不影响结果。
         let fake = "[agents.claude]\ncommand = \"git\"\n[agents.codex]\ncommand = \"duolo-no-such-command\"\n\
                     [agents.opencode]\ncommand = \"duolo-no-such-command\"\n[agents.pi]\ncommand = \"duolo-no-such-command\"\n";
-        let (namer, organizer) = open(fake);
-        assert_eq!(namer.as_ref().unwrap()[0], "git", "没写时用装了的 Agent");
-        assert_eq!(namer, organizer);
-        let (namer, organizer) = open(&format!("namer = []\n[voice]\norganizer = [\"x\", \"y\"]\n{fake}"));
-        assert_eq!(namer, None, "写成空的就是不用");
-        assert_eq!(organizer.unwrap(), ["x", "y"]);
+        assert_eq!(open(fake).unwrap()[0], "git", "没写时用装了的 Agent");
+        assert_eq!(open(&format!("namer = [\"x\", \"y\"]\n{fake}")).unwrap(), ["x", "y"]);
+        assert_eq!(open(&format!("namer = []\n{fake}")), None, "写成空的就是不用");
         let none = fake.replace("\"git\"", "\"duolo-no-such-command\"");
-        assert_eq!(open(&none), (None, None));
+        assert_eq!(open(&none), None);
     }
 
     #[test]

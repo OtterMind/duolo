@@ -14,9 +14,8 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
-use duolo_core::process::OneShot;
 use duolo_core::{AgentKey, Paths};
-use duolo_voice::{organize, Hints, OrganizeContext, Recorder};
+use duolo_voice::{Hints, Recorder};
 
 /// 语音结果要送到哪里。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,7 +93,14 @@ impl Voice {
     }
 
     /// 开始录音（要连上服务器，最多等几秒）；正在待确认时，新说的内容接在后面。
-    pub fn start(&mut self, paths: &Paths, server: &str, hints: Hints, target: VoiceTarget) -> Result<()> {
+    pub fn start(
+        &mut self,
+        paths: &Paths,
+        server: &str,
+        hints: Hints,
+        organize: bool,
+        target: VoiceTarget,
+    ) -> Result<()> {
         let prefix = match std::mem::replace(&mut self.phase, Phase::Idle) {
             Phase::Pending { text, .. } => text,
             other => {
@@ -105,7 +111,7 @@ impl Voice {
                 String::new()
             }
         };
-        let recorder = match duolo_voice::start(paths, server, hints) {
+        let recorder = match duolo_voice::start(paths, server, hints, organize) {
             Ok(recorder) => recorder,
             Err(err) => {
                 if !prefix.is_empty() {
@@ -118,8 +124,8 @@ impl Voice {
         Ok(())
     }
 
-    /// 结束录音，转写和整理在后台进行。`organizer` 为 None 时不整理。
-    pub fn stop(&mut self, organizer: Option<OneShot>, timeout: Duration, ctx: OrganizeContext) {
+    /// 结束录音，在后台等服务器的识别（和整理）结果。
+    pub fn stop(&mut self) {
         let Phase::Recording { recorder, target, prefix } = std::mem::replace(&mut self.phase, Phase::Idle) else {
             return;
         };
@@ -127,9 +133,8 @@ impl Voice {
         let tx = self.tx.clone();
         thread::spawn(move || {
             let outcome = match recorder.finish() {
-                Ok(raw) => {
-                    let organized = organizer.and_then(|command| organize(&command, timeout, &raw, &ctx).ok());
-                    Outcome::Ready { target, prefix, raw, organized }
+                Ok(transcript) => {
+                    Outcome::Ready { target, prefix, raw: transcript.raw, organized: transcript.organized }
                 }
                 Err(err) => Outcome::Failed { target, prefix, error: format!("{err:#}") },
             };

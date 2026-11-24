@@ -41,6 +41,15 @@ pub struct CloudRequest {
     pub hotwords: Vec<String>,
     /// 对话上下文（新的在前）。
     pub context: Vec<String>,
+    /// 让服务器把结果整理成指令。
+    pub organize: bool,
+}
+
+/// 识别结果：原话，以及服务器整理过的（要求整理且整理出来了时）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Transcript {
+    pub raw: String,
+    pub organized: Option<String>,
 }
 
 /// 服务器拒绝了这次识别。
@@ -67,9 +76,17 @@ impl std::error::Error for CloudError {}
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ServerMessage {
     Ready,
-    Partial { text: String },
-    Final { text: String },
-    Error { error: String },
+    Partial {
+        text: String,
+    },
+    Final {
+        text: String,
+        #[serde(default)]
+        organized: Option<String>,
+    },
+    Error {
+        error: String,
+    },
 }
 
 /// 识别中的状态，收发线程写，界面轮询读。
@@ -78,7 +95,7 @@ struct Shared {
     partial: String,
     level: Option<f32>,
     /// 收发线程结束时的结果。
-    result: Option<Result<String, String>>,
+    result: Option<Result<Transcript, String>>,
 }
 
 #[derive(Debug)]
@@ -96,7 +113,12 @@ impl Recorder {
     /// 连上服务器、等它说"可以"，再打开麦克风。阻塞最多几秒，请在后台线程调用。
     pub fn start(request: &CloudRequest) -> Result<Self> {
         let mut socket = connect(request)?;
-        let hello = serde_json::json!({ "type": "start", "hotwords": request.hotwords, "context": request.context });
+        let hello = serde_json::json!({
+            "type": "start",
+            "hotwords": request.hotwords,
+            "context": request.context,
+            "organize": request.organize,
+        });
         socket.send(Message::text(hello.to_string()))?;
         wait_ready(&mut socket)?;
         set_poll(&socket, Some(POLL))?;
@@ -130,26 +152,28 @@ impl Recorder {
     }
 
     /// 结束录音，等最终结果。阻塞，请在后台线程调用。
-    pub fn finish(mut self) -> Result<String> {
+    pub fn finish(mut self) -> Result<Transcript> {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
         let shared = lock(&self.shared);
-        let text = match shared.result.clone() {
-            Some(Ok(text)) => text,
+        let transcript = match shared.result.clone() {
+            Some(Ok(transcript)) => transcript,
             // 断了但已经听到一些：用听到的。
-            _ if !shared.partial.trim().is_empty() => shared.partial.clone(),
+            _ if !shared.partial.trim().is_empty() => Transcript { raw: shared.partial.clone(), organized: None },
             Some(Err(err)) => {
                 eprintln!("voice: {err}");
                 return Err(UserError::VoiceFailed.into());
             }
             None => return Err(UserError::VoiceFailed.into()),
         };
-        if text.trim().is_empty() {
+        let raw = transcript.raw.trim().to_string();
+        if raw.is_empty() {
             return Err(UserError::NothingRecognized.into());
         }
-        Ok(text.trim().to_string())
+        let organized = transcript.organized.map(|o| o.trim().to_string()).filter(|o| !o.is_empty() && *o != raw);
+        Ok(Transcript { raw, organized })
     }
 
     /// 放弃这次录音。
@@ -275,7 +299,7 @@ fn pump(
     shared: &Mutex<Shared>,
     stop: &AtomicBool,
     cancel: &AtomicBool,
-) -> Result<String> {
+) -> Result<Transcript> {
     let mut mic = Some(mic);
     let mut deadline = None;
     // 诊断：发了多少声音、最大音量（全是 0 说明系统给的是静音，多半是没有麦克风权限）。
@@ -322,7 +346,7 @@ fn pump(
         match socket.read() {
             Ok(Message::Text(text)) => match serde_json::from_str::<ServerMessage>(&text) {
                 Ok(ServerMessage::Partial { text }) => lock(shared).partial = text,
-                Ok(ServerMessage::Final { text }) => return Ok(text),
+                Ok(ServerMessage::Final { text, organized }) => return Ok(Transcript { raw: text, organized }),
                 Ok(ServerMessage::Error { error }) => return Err(CloudError::Refused(error).into()),
                 _ => {}
             },
@@ -349,6 +373,10 @@ mod tests {
     fn parses_server_messages() {
         let m: ServerMessage = serde_json::from_str(r#"{"type":"partial","text":"hi"}"#).unwrap();
         assert!(matches!(m, ServerMessage::Partial { text } if text == "hi"));
+        let m: ServerMessage = serde_json::from_str(r#"{"type":"final","text":"a","organized":"b"}"#).unwrap();
+        assert!(matches!(m, ServerMessage::Final { text, organized } if text == "a" && organized.as_deref() == Some("b")));
+        let m: ServerMessage = serde_json::from_str(r#"{"type":"final","text":"a"}"#).unwrap();
+        assert!(matches!(m, ServerMessage::Final { organized: None, .. }));
         let m: ServerMessage = serde_json::from_str(r#"{"type":"error","error":"voiceUnavailable"}"#).unwrap();
         assert!(matches!(m, ServerMessage::Error { error } if error == "voiceUnavailable"));
     }

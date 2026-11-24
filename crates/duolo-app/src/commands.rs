@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use duolo_core::{AgentKey, AgentKind, Command, CommandResult, ProjectId, TaskEvent, TaskId};
 use duolo_core::{Settings, UserError, VoiceConfig};
 use duolo_engine::{check_environment, ops, Size, TaskOptions};
-use duolo_voice::OrganizeContext;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 
@@ -447,7 +446,9 @@ pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<Stri
             });
             (engine.paths().clone(), engine.config().server.clone(), hints)
         };
-        let recorder = duolo_voice::start(&paths, &server, hints).inspect_err(|e| eprintln!("voice: cannot start: {e:#}"))?;
+        let organize = voice_config(state).organize;
+        let recorder = duolo_voice::start(&paths, &server, hints, organize)
+            .inspect_err(|e| eprintln!("voice: cannot start: {e:#}"))?;
         if let Some(old) = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).replace(recorder) {
             old.cancel();
         }
@@ -482,27 +483,13 @@ pub fn voice_cancel(state: State<'_, AppState>) {
     }
 }
 
-/// 结束录音，返回原话和整理后的指令（未开启整理或整理失败时为 None）。
+/// 结束录音，返回原话和服务器整理后的指令（没开整理或整理失败时为 None）。
 #[tauri::command]
-pub async fn voice_finish(
-    state: State<'_, AppState>,
-    project: Option<String>,
-    task: Option<String>,
-) -> Res<VoiceResult> {
+pub async fn voice_finish(state: State<'_, AppState>) -> Res<VoiceResult> {
     crate::fnkey::set_recording(false);
     let recorder = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).take().ok_or(UserError::NotRecording)?;
-    let config = voice_config(&state);
-    let organizer = state.engine().organizer().filter(|_| config.organize);
-    tauri::async_runtime::spawn_blocking(move || {
-        let raw = recorder.finish()?;
-        let organized = organizer.and_then(|command| {
-            let timeout = Duration::from_secs(config.organize_timeout_secs);
-            duolo_voice::organize(&command, timeout, &raw, &OrganizeContext { project, task }).ok()
-        });
-        let organized = organized.filter(|t| *t != raw);
-        Ok(VoiceResult { raw, organized })
-    })
-    .await?
+    let transcript = tauri::async_runtime::spawn_blocking(move || recorder.finish()).await??;
+    Ok(VoiceResult { raw: transcript.raw, organized: transcript.organized })
 }
 
 #[derive(Debug, serde::Serialize)]

@@ -114,8 +114,7 @@ args = ["--model", "opus"]
 server = "https://duolo.example.com"  # Duolo 服务器（语音识别），写成空的表示不用
 
 [voice]
-organize = false                                  # 整理口头语和改口（默认不整理）
-organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认用装了的 Agent
+organize = false   # 让服务器整理口头语和改口（默认不整理）
 ```
 
 ### 接入别的 Agent

@@ -8,7 +8,7 @@
 | `duolo-agent` | Agent 插件：每种 Agent 怎么启动、恢复、审阅，画面怎么认，会话记录怎么读（见 [agents.md](agents.md)） | core |
 | `duolo-git` | git 命令行封装：仓库定位、worktree、改动统计 | git |
 | `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态（规则由插件给） | portable-pty、vt100 |
-| `duolo-voice` | 语音：录麦克风发给 Duolo 服务器识别、生成热词和对话提示、调用整理命令 | core |
+| `duolo-voice` | 语音：录麦克风发给 Duolo 服务器识别（要的话顺便整理）、生成热词和对话提示 | core |
 | `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、git、pty |
 | `duolo-app` | 桌面应用后端（Tauri）：把 Engine 的能力作为命令提供给界面，推送状态快照和 Agent 输出 | engine、voice、tauri |
 | `app/` | 桌面应用界面（React + xterm.js）：侧边栏、首页、任务页、语音 | 只通过 Tauri 命令访问后端 |
@@ -94,7 +94,7 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 - **对话和工具调用**：`duolo-agent` 的 `Watch` 在后台线程跟着 Agent 自己写的会话记录，引擎只取结果；
   画面识别保留为兜底。以后可以再加 Claude hooks 这样的结构化来源。
 - **新的 Agent CLI**：写一个插件，见 [agents.md](agents.md)。
-- **语音识别**：换识别服务只改服务器（`server/src/voice.ts`）；整理的命令默认用装了的 Agent（插件的 `[quick]`），可以换成 `voice.organizer`。
+- **语音识别**：换识别服务只改服务器（`server/src/voice.ts`）；整理成指令也在服务器上（`server/src/organize.ts`，OpenAI 兼容的模型接口）。
 - **多端协议**：`duolo-core` 的模型类型只增不改，作为以后守护进程与客户端协议的基础。
 
 ## 多语言

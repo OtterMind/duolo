@@ -5,7 +5,7 @@
 // - 也可以点输入块右侧的麦克风，或用菜单里的 ⌘⇧Space：开始后再按一次结束。
 // - 录音中：Esc 丢弃，↵ 插入，⌘↵（Ctrl+Enter）插入并发送。
 // 按键的按下和松开由后端的系统级按键监听发来（`fn-key` 事件），Duolo 在后台时也有效。
-// 识别用 Duolo 服务器（后端录音、上传，带上任务的热词和对话），整理用装了的 Agent；
+// 识别和整理都在 Duolo 服务器上（后端录音、上传，带上任务的热词和对话）；
 // 文字插入当前任务 Agent 的输入框，或者新建任务面板的输入框。
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -135,12 +135,12 @@ export function useVoice(opts: Options): Voice {
 
   const finish = useCallback((submit: boolean) => {
     if (phaseRef.current.kind !== "recording") return;
-    const { context, onError, onInserted } = optsRef.current;
+    const { onError, onInserted } = optsRef.current;
     phaseRef.current = { kind: "processing" };
     setPhase({ kind: "processing" });
     setNotice((n) => (n === "silent" ? null : n));
     api
-      .voiceFinish(context.project, context.task)
+      .voiceFinish()
       .then(async ({ raw, organized }) => {
         const to = targetRef.current;
         const text = (organized ?? raw).trim();

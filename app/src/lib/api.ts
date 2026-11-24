@@ -257,7 +257,7 @@ export const api = {
   fnKeyStatus: () => invoke<FnKeyStatus>("fn_key_status"),
   requestFnKeyPermission: () => invoke<void>("request_fn_key_permission"),
   openSystemSettings: (pane: SettingsPane) => invoke<void>("open_system_settings", { pane }),
-  voiceFinish: (project?: string, task?: string) => invoke<VoiceResult>("voice_finish", { project, task }),
+  voiceFinish: () => invoke<VoiceResult>("voice_finish"),
   quit: () => invoke<void>("quit"),
 
   /** 订阅 Agent 输出：先收到已有输出的重放，之后是实时输出。 */

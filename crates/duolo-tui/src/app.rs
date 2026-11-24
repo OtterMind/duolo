@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 use duolo_core::{t, tf, AgentKey, ProjectId, Task, TaskId};
 use duolo_engine::{check_environment, Check, Engine};
 use duolo_pty::Size;
-use duolo_voice::OrganizeContext;
 use ratatui::layout::Rect;
 
 use crate::line_input::LineInput;
@@ -468,11 +467,8 @@ impl App {
     // ---- 语音 ----
 
     pub fn toggle_voice(&mut self, target: VoiceTarget) {
-        let cfg = self.engine.config().voice.clone();
         if self.voice.recording_elapsed().is_some() {
-            let ctx = self.organize_context();
-            let organizer = self.engine.organizer().filter(|_| cfg.organize);
-            self.voice.stop(organizer, Duration::from_secs(cfg.organize_timeout_secs), ctx);
+            self.voice.stop();
             return;
         }
         let events = match target {
@@ -487,20 +483,9 @@ impl App {
             branch: task.map(|t| t.branch.as_str()),
             events: &events,
         });
-        let (paths, server) = (self.engine.paths().clone(), self.engine.config().server.clone());
-        if let Err(err) = self.voice.start(&paths, &server, hints, target) {
+        let (paths, config) = (self.engine.paths().clone(), self.engine.config());
+        if let Err(err) = self.voice.start(&paths, &config.server, hints, config.voice.organize, target) {
             self.error(duolo_core::error::describe(&err));
-        }
-    }
-
-    fn organize_context(&self) -> OrganizeContext {
-        let task = self.selected_task();
-        OrganizeContext {
-            project: task
-                .and_then(|t| self.engine.state().project(&t.project))
-                .map(|p| p.name.clone())
-                .or_else(|| self.home_project_name().map(Into::into)),
-            task: task.map(|t| t.title.clone()),
         }
     }
 

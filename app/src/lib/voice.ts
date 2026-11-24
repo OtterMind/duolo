@@ -5,7 +5,8 @@
 // - 也可以点输入块右侧的麦克风，或用菜单里的 ⌘⇧Space：开始后再按一次结束。
 // - 录音中：Esc 丢弃，↵ 插入，⌘↵（Ctrl+Enter）插入并发送。
 // 按键的按下和松开由后端的系统级按键监听发来（`fn-key` 事件），Duolo 在后台时也有效。
-// 识别和整理在后端完成；文字插入当前任务 Agent 的输入框，或者新建任务面板的输入框。
+// 识别用 Duolo 服务器（后端录音、上传，带上任务的热词和对话），整理用装了的 Agent；
+// 文字插入当前任务 Agent 的输入框，或者新建任务面板的输入框。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -115,7 +116,8 @@ export function useVoice(opts: Options): Voice {
     phaseRef.current = next;
     setPhase(next);
     try {
-      await api.voiceStart();
+      const { context } = optsRef.current;
+      await api.voiceStart(to.kind === "agent" ? to.ref.task : undefined, context.project);
     } catch (err) {
       phaseRef.current = { kind: "idle" };
       setPhase({ kind: "idle" });

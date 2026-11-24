@@ -13,6 +13,7 @@ pub const HOME_ENV: &str = "DUOLO_HOME";
 /// ~/.duolo/
 ///   config.toml   用户配置
 ///   state.json    项目和任务
+///   account.json  在 Duolo 服务器上的登录凭据
 ///   agents/       用户自己装的 Agent 插件
 ///   wt/           每个任务的 git worktree
 ///   review/       审阅时的临时副本，审阅完就删
@@ -48,6 +49,11 @@ impl Paths {
     /// 界面里修改的偏好设置（语言等）。用户手写的配置在 `config.toml`。
     pub fn settings_file(&self) -> PathBuf {
         self.root.join("settings.json")
+    }
+
+    /// 在 Duolo 服务器上的登录凭据，见 [`crate::account`]。
+    pub fn account_file(&self) -> PathBuf {
+        self.root.join("account.json")
     }
 
     pub fn state_file(&self) -> PathBuf {

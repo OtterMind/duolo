@@ -8,7 +8,7 @@
 | `duolo-agent` | Agent 插件：每种 Agent 怎么启动、恢复、审阅，画面怎么认，会话记录怎么读（见 [agents.md](agents.md)） | core |
 | `duolo-git` | git 命令行封装：仓库定位、worktree、改动统计 | git |
 | `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态（规则由插件给） | portable-pty、vt100 |
-| `duolo-voice` | 语音：调用外部录音转写命令、调用整理命令 | core |
+| `duolo-voice` | 语音：录麦克风发给 Duolo 服务器识别、生成热词和对话提示、调用整理命令 | core |
 | `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、git、pty |
 | `duolo-app` | 桌面应用后端（Tauri）：把 Engine 的能力作为命令提供给界面，推送状态快照和 Agent 输出 | engine、voice、tauri |
 | `app/` | 桌面应用界面（React + xterm.js）：侧边栏、首页、任务页、语音 | 只通过 Tauri 命令访问后端 |
@@ -94,7 +94,7 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 - **对话和工具调用**：`duolo-agent` 的 `Watch` 在后台线程跟着 Agent 自己写的会话记录，引擎只取结果；
   画面识别保留为兜底。以后可以再加 Claude hooks 这样的结构化来源。
 - **新的 Agent CLI**：写一个插件，见 [agents.md](agents.md)。
-- **语音引擎**：替换 `voice.command`；整理的命令默认用装了的 Agent（插件的 `[quick]`），可以换成 `voice.organizer`。
+- **语音识别**：换识别服务只改服务器（`server/src/voice.ts`）；整理的命令默认用装了的 Agent（插件的 `[quick]`），可以换成 `voice.organizer`。
 - **多端协议**：`duolo-core` 的模型类型只增不改，作为以后守护进程与客户端协议的基础。
 
 ## 多语言
@@ -129,11 +129,9 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
   启动时的对话框基本不会出现。测试里 Agent 的家目录换成临时目录（`DUOLO_AGENT_HOME`），不会改到真的配置文件。
 - 会话编号：存在 `AgentSpec.session`，恢复时用插件的 `resume_session_args`。插件有 `session_id_args` 的（Claude Code），
   新开会话时由 Duolo 定好编号；没有的（Codex）从会话记录里认，同一个目录里别的 Agent 已经认领的会话不会认成它的。
-- 语音：内置识别程序输出 `~ 临时结果` / `^ 音量` / `= 最终结果` 行，`duolo-voice::Recorder` 读取，
-  结束录音时 macOS / Linux 发 SIGINT，Windows 往标准输入写一行 `stop`。
-  - macOS：`duolo-app/dictate/main.swift`（Speech 框架），`build.rs` 编译后作为 externalBin 打进应用；
-  - Windows：`duolo-app/dictate/dictate.ps1`（System.Speech），作为资源随应用安装，用 Windows PowerShell 运行；
-  - Linux：没有内置识别，用户配置 `voice.command`（例如 `scripts/voice-whisper.sh`）。
+- 语音：`duolo-voice` 用 cpal 录系统当前的输入设备，转成 16 kHz 单声道 PCM，通过 WebSocket 发给服务器的 `/v1/voice`
+  （协议见 `server/src/voice.ts`），服务器转给豆包流式识别。开始时带上 `hints.rs` 从任务事件里取的热词和最近的对话。
+  没登录过时先领一个匿名身份（`~/.duolo/account.json`）。三个系统同一套，没有本机识别。
 
 ## 跨平台
 
@@ -170,5 +168,5 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 ## 约定
 
 - 错误用 `anyhow`，面向用户的提示用中文，说清楚原因和怎么修。
-- 不允许 `unsafe`，唯一例外是 `duolo-voice` 里给子进程发 SIGINT，带 SAFETY 注释。
+- 不允许 `unsafe`，只有调用系统接口的地方例外（进程树、按键监听），带 SAFETY 注释。
 - 提交前：`cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo test --workspace`。

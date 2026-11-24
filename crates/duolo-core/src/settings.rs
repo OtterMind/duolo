@@ -17,15 +17,13 @@ pub const LANGUAGE_AUTO: &str = "auto";
 pub struct Settings {
     /// 界面语言：`auto` 跟随系统，或者语言代码（`en`、`zh-CN`、`ja` 等，见 `app/src/i18n`）。
     pub language: String,
-    /// 语音识别的语言：`auto` 跟随界面语言，或者语言代码。
-    pub voice_language: String,
     /// 说完后是否整理成指令；没有设置过时用 `config.toml` 里的 `voice.organize`。
     pub voice_organize: Option<bool>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: LANGUAGE_AUTO.into(), voice_language: LANGUAGE_AUTO.into(), voice_organize: None }
+        Self { language: LANGUAGE_AUTO.into(), voice_organize: None }
     }
 }
 
@@ -55,7 +53,6 @@ mod tests {
         Settings { language: "ja".into(), ..Settings::default() }.save(&path).unwrap();
         let loaded = Settings::load(&path).unwrap();
         assert_eq!(loaded.language, "ja");
-        assert_eq!(loaded.voice_language, LANGUAGE_AUTO);
         assert_eq!(loaded.voice_organize, None);
     }
 

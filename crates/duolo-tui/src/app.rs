@@ -475,11 +475,20 @@ impl App {
             self.voice.stop(organizer, Duration::from_secs(cfg.organize_timeout_secs), ctx);
             return;
         }
-        if !cfg.is_configured() {
-            self.error(t("error.voiceNotConfigured"));
-            return;
-        }
-        if let Err(err) = self.voice.start(&cfg, target) {
+        let events = match target {
+            VoiceTarget::Agent(key) => self.engine.events_since(key.task, 0).unwrap_or_default(),
+            VoiceTarget::Home => Vec::new(),
+        };
+        let task = self.selected_task();
+        let project = task.and_then(|t| self.engine.state().project(&t.project)).map(|p| p.name.as_str());
+        let hints = duolo_voice::hints(&duolo_voice::HintSource {
+            project: project.or_else(|| self.home_project_name()),
+            task_title: task.map(|t| t.title.as_str()),
+            branch: task.map(|t| t.branch.as_str()),
+            events: &events,
+        });
+        let (paths, server) = (self.engine.paths().clone(), self.engine.config().server.clone());
+        if let Err(err) = self.voice.start(&paths, &server, hints, target) {
             self.error(duolo_core::error::describe(&err));
         }
     }

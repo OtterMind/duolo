@@ -43,8 +43,6 @@ pub struct AppState {
     recorder: Mutex<Option<Recorder>>,
     /// 等界面来取的"打开项目"请求。
     open_request: Mutex<Option<String>>,
-    /// 界面当前使用的语言代码，内置语音识别按它选择识别语言。
-    locale: Mutex<String>,
     /// 界面收到了这次退出请求。
     quit_seen: AtomicBool,
     /// 正在用系统弹窗问要不要退出。
@@ -119,7 +117,6 @@ fn main() {
         engine: Mutex::new(engine),
         recorder: Mutex::new(None),
         open_request: Mutex::new(path_arg(std::env::args().skip(1), None).inspect(|p| eprintln!("open request: {p}"))),
-        locale: Mutex::new("en".into()),
         quit_seen: AtomicBool::new(false),
         asking_quit: AtomicBool::new(false),
     };
@@ -157,9 +154,6 @@ fn main() {
         });
     let app = builder
         .setup(|app| {
-            if let Ok(dir) = app.path().resource_dir() {
-                let _ = platform::RESOURCES.set(dir);
-            }
             first_launch_size(app);
             spawn_snapshot_loop(app.handle().clone());
             fnkey::start(app.handle().clone());
@@ -438,6 +432,5 @@ pub fn apply_locale(app: &AppHandle, locale: &str) -> tauri::Result<()> {
     app.set_menu(build_menu(app, locale)?)?;
     let state = app.state::<AppState>();
     state.engine().set_reply_language(duolo_core::i18n::language_name(locale));
-    *state.locale.lock().unwrap_or_else(|p| p.into_inner()) = locale.to_string();
     Ok(())
 }

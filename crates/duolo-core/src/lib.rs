@@ -3,6 +3,7 @@
 //! 这个 crate 不依赖终端、进程或 UI，只描述"有哪些项目、任务和 Agent"以及它们如何保存。
 //! 调度引擎、TUI，以及以后的守护进程和手机端协议都建立在这里的类型之上。
 
+pub mod account;
 pub mod config;
 pub mod error;
 pub mod event;
@@ -17,6 +18,7 @@ pub mod store;
 pub mod text;
 pub mod wire;
 
+pub use account::Account;
 pub use config::{AgentOverride, Config, VoiceConfig};
 pub use error::UserError;
 pub use event::{Command, CommandResult, EventKind, Speaker, TaskEvent};

@@ -15,8 +15,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use duolo_core::process::OneShot;
-use duolo_core::{AgentKey, VoiceConfig};
-use duolo_voice::{organize, OrganizeContext, Recorder};
+use duolo_core::{AgentKey, Paths};
+use duolo_voice::{organize, Hints, OrganizeContext, Recorder};
 
 /// 语音结果要送到哪里。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,8 +93,8 @@ impl Voice {
         }
     }
 
-    /// 开始录音；正在待确认时，新说的内容接在后面。
-    pub fn start(&mut self, cfg: &VoiceConfig, target: VoiceTarget) -> Result<()> {
+    /// 开始录音（要连上服务器，最多等几秒）；正在待确认时，新说的内容接在后面。
+    pub fn start(&mut self, paths: &Paths, server: &str, hints: Hints, target: VoiceTarget) -> Result<()> {
         let prefix = match std::mem::replace(&mut self.phase, Phase::Idle) {
             Phase::Pending { text, .. } => text,
             other => {
@@ -105,7 +105,15 @@ impl Voice {
                 String::new()
             }
         };
-        let recorder = Recorder::start(cfg)?;
+        let recorder = match duolo_voice::start(paths, server, hints) {
+            Ok(recorder) => recorder,
+            Err(err) => {
+                if !prefix.is_empty() {
+                    self.phase = Phase::Pending { target, raw: prefix.clone(), text: prefix };
+                }
+                return Err(err);
+            }
+        };
         self.phase = Phase::Recording { recorder, target, prefix };
         Ok(())
     }

@@ -5,7 +5,7 @@ import { LOCALES, useI18n, type LanguagePref } from "../i18n";
 import { api, type FnKeyStatus, type VoiceSettings } from "../lib/api";
 import { TALK_KEY } from "../lib/platform";
 
-/** 左下角齿轮打开的设置：界面语言，以及语音输入的识别语言、快捷键、整理。 */
+/** 左下角齿轮打开的设置：界面语言，以及语音输入的快捷键、整理。 */
 export function SettingsPopover({ onClose, onError }: { onClose(): void; onError(err: unknown): void }) {
   const { pref, setPref, t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
@@ -48,21 +48,6 @@ export function SettingsPopover({ onClose, onError }: { onClose(): void; onError
       </label>
 
       <div className="settings-head">{t("settings.voice")}</div>
-      <label className="settings-row">
-        <span className="grow">{t("settings.voiceLanguage")}</span>
-        <select
-          value={voice?.language ?? "auto"}
-          disabled={!voice}
-          onChange={(e) => voice && saveVoice({ ...voice, language: e.target.value })}
-        >
-          <option value="auto">{t("settings.voiceLanguageAuto")}</option>
-          {LOCALES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <div className="settings-row">
         <span className="grow">{t("settings.hotkey")}</span>
         <span>

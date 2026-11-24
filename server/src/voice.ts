@@ -5,6 +5,7 @@
 //   客户端 → {"type":"start","hotwords":[...],"context":[...]}   热词（文件名、函数名……）和对话上下文（新的在前），都可省
 //   客户端 → 二进制：16 kHz、16 位、单声道 PCM（小端），每块 100~200 ms
 //   客户端 → {"type":"stop"}                                   说完了
+//   服务器 → {"type":"ready"}                                  登录和额度没问题，可以识别（客户端可以先发 start 和声音，不用等它）
 //   服务器 → {"type":"partial","text":"..."}                   识别中，整段到目前为止的文字
 //   服务器 → {"type":"final","text":"..."}                     最终结果，之后服务器关闭连接
 //   服务器 → {"type":"error","error":"voiceUnavailable"}       错误码，客户端按自己的语言显示，并退回本地识别
@@ -184,6 +185,7 @@ export async function serveVoice(client: WebSocket, user: VoiceUser, config: Voi
   if (!config.apiKey) return fail("voiceUnavailable");
   const limit = user.anonymous ? config.anonymousDailySeconds : config.dailySeconds;
   if ((await usedToday(pool, user.id)) >= limit) return fail("voiceQuotaExceeded");
+  send({ type: "ready" });
 
   let upstream: WebSocket | null = null;
   let sequence = 1;

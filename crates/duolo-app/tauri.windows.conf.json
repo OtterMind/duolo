@@ -5,9 +5,6 @@
       "nsis",
       "msi"
     ],
-    "resources": {
-      "dictate/dictate.ps1": "dictate/dictate.ps1"
-    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"

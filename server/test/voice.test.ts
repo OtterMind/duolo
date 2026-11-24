@@ -165,7 +165,8 @@ describe("voice relay", () => {
     expect(fake.request.audio).toMatchObject({ format: "pcm", rate: 16000 });
     expect(JSON.parse(fake.request.request.corpus.context)).toMatchObject({ hotwords: [{ word: "CSV" }] });
     expect(fake.audioBytes).toBe(5 * 6400);
-    expect(received[0]).toEqual({ type: "partial", text: "导出订单" });
+    expect(received[0]).toEqual({ type: "ready" });
+    expect(received[1]).toEqual({ type: "partial", text: "导出订单" });
     expect(received.at(-1)).toEqual({ type: "final", text: "导出订单为 CSV" });
 
     // 每天 2 秒的额度已经用完（刚才 1 秒，再说 1 秒以上）。

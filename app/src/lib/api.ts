@@ -169,13 +169,11 @@ export interface NewTaskOptions {
 
 export interface VoiceStatus {
   text: string;
-  /** 0~1；识别程序不报告音量时为 null。 */
+  /** 0~1；还没收到声音时为 null。 */
   level: number | null;
 }
 
 export interface VoiceSettings {
-  /** `auto`（跟随界面语言）或语言代码。 */
-  language: string;
   organize: boolean;
 }
 
@@ -250,7 +248,8 @@ export const api = {
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   openTerminal: (path: string) => invoke<void>("open_terminal", { path }),
-  voiceStart: () => invoke<void>("voice_start"),
+  /** 连上服务器开始录音；`task` 用来带上热词和最近的对话。 */
+  voiceStart: (task?: number, project?: string) => invoke<void>("voice_start", { task, project }),
   voiceCancel: () => invoke<void>("voice_cancel"),
   voiceStatus: () => invoke<VoiceStatus>("voice_status"),
   getVoiceSettings: () => invoke<VoiceSettings>("get_voice_settings"),

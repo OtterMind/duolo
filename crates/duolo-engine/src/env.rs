@@ -58,11 +58,12 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
         agent: String::new(),
         install: String::new(),
         name: t("env.voice"),
-        ok: config.voice.is_configured(),
-        command: config.voice.command.first().cloned().unwrap_or_default(),
+        // 语音用 Duolo 服务器识别，配了服务器就算可用。
+        ok: !config.server.is_empty(),
+        command: config.server.clone(),
         version: String::new(),
         minimum: String::new(),
-        detail: if config.voice.is_configured() { t("env.configured") } else { t("env.notConfigured") },
+        detail: if config.server.is_empty() { t("env.notConfigured") } else { t("env.configured") },
     });
     checks
 }

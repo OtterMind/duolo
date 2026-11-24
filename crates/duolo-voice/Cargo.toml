@@ -12,7 +12,15 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 duolo-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# 用 Duolo 服务器识别：录麦克风，WebSocket 发过去。
+cpal.workspace = true
+tungstenite.workspace = true
+rustls.workspace = true
+webpki-roots.workspace = true
+ureq.workspace = true
 
-# 结束录音时发 SIGINT（Windows 改为写标准输入，不需要）。
-[target.'cfg(unix)'.dependencies]
-libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

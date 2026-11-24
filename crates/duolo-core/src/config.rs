@@ -27,6 +27,8 @@ pub struct Config {
     /// 根据需求给新分支起名的命令，提示词作为最后一个参数，结果从 stdout 读取。
     /// 没写时用装了的 Agent；写成空的表示不用 AI 起名。
     pub namer: Option<Vec<String>>,
+    /// Duolo 服务器的地址（语音识别等）。写成空的表示不用服务器，语音只用本机的识别。
+    pub server: String,
 }
 
 impl Default for Config {
@@ -39,9 +41,13 @@ impl Default for Config {
             review_prompt: DEFAULT_REVIEW_PROMPT.into(),
             review_command: Vec::new(),
             namer: None,
+            server: DEFAULT_SERVER.into(),
         }
     }
 }
+
+/// 默认的 Duolo 服务器。
+pub const DEFAULT_SERVER: &str = "";
 
 /// 没有配置时谁写、谁审。
 const DEFAULT_WRITER: &str = "claude";
@@ -125,10 +131,6 @@ pub struct AgentOverride {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceConfig {
-    /// 录音并转写的命令。Duolo 启动它开始录音，结束时通知它停止：macOS / Linux 发送 SIGINT，
-    /// Windows 往标准输入写一行 `stop`。命令收到后停止录音、把识别出的文字打印到 stdout 并退出。
-    /// 为空表示未配置。
-    pub command: Vec<String>,
     /// 是否把识别结果整理成一条清晰的指令。
     pub organize: bool,
     /// 整理用的命令，整理提示词作为最后一个参数传入，结果从 stdout 读取。没写时用装了的 Agent。
@@ -139,13 +141,7 @@ pub struct VoiceConfig {
 
 impl Default for VoiceConfig {
     fn default() -> Self {
-        Self { command: Vec::new(), organize: true, organizer: None, organize_timeout_secs: 30 }
-    }
-}
-
-impl VoiceConfig {
-    pub fn is_configured(&self) -> bool {
-        !self.command.is_empty()
+        Self { organize: true, organizer: None, organize_timeout_secs: 30 }
     }
 }
 
@@ -155,9 +151,9 @@ mod tests {
 
     #[test]
     fn partial_config_keeps_defaults() {
+        // 以前的 voice.command（本机识别命令）已经不用了，留在配置里也能读。
         let cfg: Config = toml::from_str("writer = \"codex\"\n[voice]\ncommand = [\"rec.sh\"]\n").unwrap();
         assert_eq!((cfg.writer.0.as_str(), cfg.reviewer.0.as_str()), ("codex", "codex"));
-        assert!(cfg.voice.is_configured());
         assert!(cfg.voice.organize);
         assert!(cfg.namer.is_none() && cfg.voice.organizer.is_none());
     }

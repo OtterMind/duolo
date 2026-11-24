@@ -4,11 +4,10 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use duolo_core::settings::LANGUAGE_AUTO;
 use duolo_core::{AgentKey, AgentKind, Command, CommandResult, ProjectId, TaskEvent, TaskId};
 use duolo_core::{Settings, UserError, VoiceConfig};
 use duolo_engine::{check_environment, ops, Size, TaskOptions};
-use duolo_voice::{OrganizeContext, Recorder};
+use duolo_voice::OrganizeContext;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 
@@ -375,8 +374,7 @@ pub fn open_terminal(path: String) -> Res<()> {
 
 // ---- 语音 ----
 
-/// 实际使用的语音配置：用户没有配置 `voice.command` 时，用内置的识别程序。
-/// 识别语言和是否整理按界面里的设置；识别语言为 `auto` 时跟随界面语言。
+/// 实际使用的语音配置：是否整理按界面里的设置。
 fn voice_config(state: &AppState) -> VoiceConfig {
     let (mut config, settings_path) = {
         let engine = state.engine();
@@ -386,23 +384,12 @@ fn voice_config(state: &AppState) -> VoiceConfig {
     if let Some(organize) = settings.voice_organize {
         config.organize = organize;
     }
-    if !config.is_configured() {
-        let locale = match settings.voice_language.as_str() {
-            LANGUAGE_AUTO => state.locale.lock().unwrap_or_else(|p| p.into_inner()).clone(),
-            code => code.to_string(),
-        };
-        if let Some(command) = crate::platform::bundled_dictate(&locale) {
-            config.command = command;
-        }
-    }
     config
 }
 
 /// 界面里的语音设置。
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct VoiceSettings {
-    /// `auto` 或语言代码。
-    language: String,
     organize: bool,
 }
 
@@ -413,14 +400,13 @@ pub fn get_voice_settings(state: State<'_, AppState>) -> Res<VoiceSettings> {
         (engine.config().voice.organize, engine.paths().settings_file())
     };
     let settings = Settings::load(&path)?;
-    Ok(VoiceSettings { language: settings.voice_language, organize: settings.voice_organize.unwrap_or(organize) })
+    Ok(VoiceSettings { organize: settings.voice_organize.unwrap_or(organize) })
 }
 
 #[tauri::command]
 pub fn set_voice_settings(state: State<'_, AppState>, voice: VoiceSettings) -> Res<()> {
     let path = state.engine().paths().settings_file();
     let mut settings = Settings::load(&path)?;
-    settings.voice_language = voice.language;
     settings.voice_organize = Some(voice.organize);
     Ok(settings.save(&path)?)
 }
@@ -443,15 +429,31 @@ pub fn open_system_settings(pane: String) -> Res<()> {
     Ok(crate::platform::open_settings(&pane)?)
 }
 
+/// 开始录音：连上 Duolo 服务器，带上 `task` 的热词和最近的对话（新建任务时只有项目名）。
 #[tauri::command]
-pub fn voice_start(state: State<'_, AppState>) -> Res<()> {
-    let config = voice_config(&state);
-    let recorder = Recorder::start(&config)?;
-    if let Some(old) = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).replace(recorder) {
-        old.cancel();
-    }
-    crate::fnkey::set_recording(true);
-    Ok(())
+pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<String>) -> Res<()> {
+    blocking(app, move |state| {
+        let (paths, server, hints) = {
+            let engine = state.engine();
+            let task = task.and_then(|id| engine.state().task(TaskId(id)));
+            let events = task.and_then(|t| engine.events_since(t.id, 0).ok()).unwrap_or_default();
+            let project_name = task.and_then(|t| engine.state().project(&t.project)).map(|p| p.name.as_str());
+            let hints = duolo_voice::hints(&duolo_voice::HintSource {
+                project: project_name.or(project.as_deref()),
+                task_title: task.map(|t| t.title.as_str()),
+                branch: task.map(|t| t.branch.as_str()),
+                events: &events,
+            });
+            (engine.paths().clone(), engine.config().server.clone(), hints)
+        };
+        let recorder = duolo_voice::start(&paths, &server, hints)?;
+        if let Some(old) = state.recorder.lock().unwrap_or_else(|p| p.into_inner()).replace(recorder) {
+            old.cancel();
+        }
+        crate::fnkey::set_recording(true);
+        Ok(())
+    })
+    .await
 }
 
 /// 录音中目前听到的内容和音量。
@@ -467,7 +469,7 @@ pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
 #[derive(Debug, serde::Serialize)]
 pub struct VoiceStatus {
     text: String,
-    /// 0~1；识别命令不报告音量时为空。
+    /// 0~1；还没收到声音时为空。
     level: Option<f32>,
 }
 

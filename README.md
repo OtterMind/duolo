@@ -110,10 +110,9 @@ reviewer = "codex"         # default agent for reviews
 command = "/opt/homebrew/bin/claude"
 args = ["--model", "opus"]
 
+server = "https://duolo.example.com"  # the Duolo server (speech recognition); empty means none
+
 [voice]
-# A command that records and transcribes. It starts recording when launched and prints the text when told to stop
-# (SIGINT on macOS and Linux, a line saying "stop" on standard input on Windows).
-command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # tidy up filler words and self-corrections
 organizer = ["claude", "-p", "--model", "haiku"]  # the command that does it; defaults to an installed agent
 ```
@@ -124,18 +123,12 @@ Every agent is a plugin: an `agent.toml` that says how to start, resume and revi
 
 ### Voice
 
-- **macOS** uses the system's speech recognition (on device where supported). It asks for microphone and speech permission the first time.
-- **Windows** uses System.Speech dictation on device. Install the speech pack for your language under Settings → Time & language → Speech.
-- **Linux** has no built-in recognizer, so configure one as below.
+Speech is recognized by the Duolo server (which passes it to Doubao streaming speech recognition), the same on macOS, Windows and Linux:
 
-Recognition follows the interface language and can be set separately in Settings. To use your own recognizer, point `voice.command` at it. `scripts/voice-whisper.sh` records with sox and transcribes locally with whisper.cpp:
-
-```sh
-brew install sox whisper-cpp          # Linux: install sox from your package manager and build whisper.cpp
-mkdir -p ~/.duolo/models
-curl -L -o ~/.duolo/models/ggml-large-v3-turbo.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
-```
+- Duolo records from the current input device, so a headset's microphone works when you wear one. The system asks for microphone access the first time.
+- Each recording carries hints from the current task (recently touched files, code names the agent mentioned, the branch and project names) and the latest conversation, so mixed-language speech and code names come out right more often.
+- No sign-up: the first time, Duolo gets an anonymous identity from the server and keeps it in `~/.duolo/account.json`. The server limits use per identity per day.
+- Your voice and these hints are sent to the Duolo server and the recognition service. If the server can't be reached, voice input is unavailable and Duolo says why.
 
 ## Architecture
 

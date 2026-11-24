@@ -19,12 +19,20 @@ pub enum UserError {
     GitFailed { command: String, detail: String },
     #[error("cannot start {program}; make sure it is installed and on PATH")]
     CommandNotFound { program: String },
-    #[error("voice input is not configured (voice.command)")]
+    #[error("voice input needs a Duolo server (server)")]
     VoiceNotConfigured,
-    #[error("microphone or speech recognition permission was denied")]
+    #[error("microphone permission was denied")]
     VoicePermission,
     #[error("no speech was recognized")]
     NothingRecognized,
+    #[error("speech recognition failed")]
+    VoiceFailed,
+    #[error("the server has no speech recognition right now")]
+    VoiceUnavailable,
+    #[error("today's voice input quota is used up")]
+    VoiceQuotaExceeded,
+    #[error("cannot reach the Duolo server")]
+    VoiceOffline,
     #[error("not recording")]
     NotRecording,
     #[error("review command is not configured (review_command)")]
@@ -86,6 +94,10 @@ impl UserError {
             Self::VoiceNotConfigured => "voiceNotConfigured",
             Self::VoicePermission => "voicePermission",
             Self::NothingRecognized => "nothingRecognized",
+            Self::VoiceFailed => "voiceFailed",
+            Self::VoiceUnavailable => "voiceUnavailable",
+            Self::VoiceQuotaExceeded => "voiceQuotaExceeded",
+            Self::VoiceOffline => "voiceOffline",
             Self::NotRecording => "notRecording",
             Self::ReviewNotConfigured => "reviewNotConfigured",
             Self::AgentNotRunning => "agentNotRunning",
@@ -191,6 +203,10 @@ mod tests {
             UserError::VoiceNotConfigured,
             UserError::VoicePermission,
             UserError::NothingRecognized,
+            UserError::VoiceFailed,
+            UserError::VoiceUnavailable,
+            UserError::VoiceQuotaExceeded,
+            UserError::VoiceOffline,
             UserError::NotRecording,
             UserError::ReviewNotConfigured,
             UserError::AgentNotRunning,

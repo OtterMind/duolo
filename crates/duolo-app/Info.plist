@@ -26,7 +26,5 @@
   </array>
   <key>NSMicrophoneUsageDescription</key>
   <string>Duolo uses the microphone for voice input.</string>
-  <key>NSSpeechRecognitionUsageDescription</key>
-  <string>Duolo turns your speech into text for the coding agent.</string>
 </dict>
 </plist>

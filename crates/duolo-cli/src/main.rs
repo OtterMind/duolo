@@ -328,7 +328,7 @@ fn doctor(paths: &Paths) -> Result<()> {
     }
     println!("{}{}", pad(&t("cli.doctor.writer"), 12), agents.name(&config.writer));
     println!("{}{}", pad(&t("cli.doctor.reviewer"), 12), agents.name(&config.reviewer));
-    if !config.voice.is_configured() {
+    if config.server.is_empty() {
         println!("{}", tf("cli.doctor.voiceHint", &[("path", &paths.config_file().display())]));
     }
     Ok(())

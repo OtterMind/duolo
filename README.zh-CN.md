@@ -111,10 +111,9 @@ reviewer = "codex"         # 默认审阅的 Agent
 command = "/opt/homebrew/bin/claude"
 args = ["--model", "opus"]
 
+server = "https://duolo.example.com"  # Duolo 服务器（语音识别），写成空的表示不用
+
 [voice]
-# 录音并转写的命令：启动时开始录音，收到停止信号后把文字打印到 stdout
-# （macOS / Linux 发 SIGINT，Windows 往标准输入写一行 stop）
-command = ["/path/to/duolo/scripts/voice-whisper.sh"]
 organize = true                                   # 整理口头语和改口
 organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认用装了的 Agent
 ```
@@ -125,24 +124,13 @@ organizer = ["claude", "-p", "--model", "haiku"]  # 整理用的命令，默认�
 
 ### 语音
 
-不需要任何配置：
+语音用 Duolo 服务器识别（服务端转给豆包的流式语音识别），macOS、Windows、Linux 都一样：
 
-- **macOS**：系统自带的语音识别（Speech 框架，能在本机识别时不上传音频）。第一次使用时系统会请求麦克风和语音识别权限。
-- **Windows**：系统自带的听写（System.Speech，在本机识别），随应用安装的 `dictate.ps1` 负责调用。需要在 设置 → 时间和语言 → 语音 里装好对应语言的语音识别。
-- **Linux**：系统没有自带识别，需要按下面的方式配置 whisper.cpp。
-
-识别语言默认跟随界面语言，可以在左下角设置里单独选。
-
-也可以换成自己的识别命令。识别引擎通过外部命令接入，方便按平台和隐私要求替换。仓库里的 `scripts/voice-whisper.sh` 用 sox 录音、whisper.cpp 本地转写，音频不离开电脑：
-
-```sh
-brew install sox whisper-cpp          # Linux：用发行版的包管理器装 sox，whisper.cpp 从源码编译
-mkdir -p ~/.duolo/models
-curl -L -o ~/.duolo/models/ggml-large-v3-turbo.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
-```
-
-第一次录音时系统会请求麦克风权限。
+- 录系统当前的输入设备，戴耳机时用耳机的麦克风。第一次使用时系统会请求麦克风权限。
+- 开始录音时带上当前任务的热词（最近改过的文件、Agent 提到的代码名字、分支名、项目名）和最近的对话，
+  中英混说、代码里的名字更容易认对。
+- 不用注册：第一次使用时自动在服务器上领一个匿名身份，存在 `~/.duolo/account.json`；服务器按身份每天限额。
+- 声音和这些提示会发给 Duolo 服务器和识别服务；服务器连不上时语音输入不可用，会提示原因。
 
 ## 多语言
 

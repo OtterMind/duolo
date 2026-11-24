@@ -24,6 +24,7 @@ pub(crate) fn store(name: &str) -> Option<&'static dyn Store> {
     match name {
         "claude" => Some(&ClaudeJson),
         "codex" => Some(&CodexToml),
+        "antigravity" => Some(&AntigravityJson),
         _ => None,
     }
 }
@@ -71,6 +72,43 @@ impl Store for ClaudeJson {
             .and_then(|projects| projects.shift_remove(&key))
             .is_some();
         if removed {
+            replace(file, &serde_json::to_string_pretty(&config)?)?;
+        }
+        Ok(())
+    }
+}
+
+/// Antigravity：JSON 文件里的 `trustedWorkspaces` 数组，按确切路径记（上一级的不算数，参考 Orca 的做法）。
+#[derive(Debug)]
+struct AntigravityJson;
+
+const TRUSTED_WORKSPACES: &str = "trustedWorkspaces";
+
+impl Store for AntigravityJson {
+    fn grant(&self, file: &Path, dir: &Path) -> Result<()> {
+        let Some(mut config) = read_json(file)? else { return Ok(()) };
+        let key = dir.display().to_string();
+        let Some(list) = config
+            .as_object_mut()
+            .map(|c| c.entry(TRUSTED_WORKSPACES).or_insert_with(|| Value::Array(Vec::new())))
+            .and_then(Value::as_array_mut)
+        else {
+            return Ok(());
+        };
+        if list.iter().any(|e| e.as_str() == Some(key.as_str())) {
+            return Ok(());
+        }
+        list.push(Value::String(key));
+        replace(file, &serde_json::to_string_pretty(&config)?)
+    }
+
+    fn revoke(&self, file: &Path, dir: &Path) -> Result<()> {
+        let Some(mut config) = read_json(file)? else { return Ok(()) };
+        let key = dir.display().to_string();
+        let Some(list) = config.get_mut(TRUSTED_WORKSPACES).and_then(Value::as_array_mut) else { return Ok(()) };
+        let before = list.len();
+        list.retain(|e| e.as_str() != Some(key.as_str()));
+        if list.len() != before {
             replace(file, &serde_json::to_string_pretty(&config)?)?;
         }
         Ok(())
@@ -160,6 +198,25 @@ mod tests {
         assert!(config["projects"].get("/w/shop/1-x").is_none());
         // 没装过、文件不在：什么也不做。
         ClaudeJson.grant(&dir.path().join("none.json"), wt).unwrap();
+        assert!(!dir.path().join("none.json").exists());
+    }
+
+    #[test]
+    fn antigravity_trust_is_added_once_and_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        fs::write(&file, r#"{"trustedWorkspaces": ["/home/me/app"], "theme": "dark"}"#).unwrap();
+        let wt = Path::new("/w/shop/1-x");
+        AntigravityJson.grant(&file, wt).unwrap();
+        AntigravityJson.grant(&file, wt).unwrap();
+        let config: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(config["trustedWorkspaces"], serde_json::json!(["/home/me/app", "/w/shop/1-x"]));
+        assert_eq!(config["theme"], "dark", "别的不动");
+        AntigravityJson.revoke(&file, wt).unwrap();
+        let config: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(config["trustedWorkspaces"], serde_json::json!(["/home/me/app"]), "用户自己的留着");
+        // 没装过、文件不在：什么也不做。
+        AntigravityJson.grant(&dir.path().join("none.json"), wt).unwrap();
         assert!(!dir.path().join("none.json").exists());
     }
 

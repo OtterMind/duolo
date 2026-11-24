@@ -88,6 +88,7 @@
   "review.noOutput": "A revisão não produziu nenhum resultado.",
   "review.copyFailed": "Não foi possível copiar as alterações para revisá-las: {detail}",
   "voice.title": "Entrada de voz (segure {key})",
+  "voice.hold": "Segure {key} para falar",
   "voice.notConfiguredTitle": "A entrada de voz não está configurada",
   "voice.processing": "Organizando…",
   "voice.needTask": "Abra uma tarefa primeiro e depois use a voz.",

@@ -88,6 +88,7 @@
   "review.noOutput": "Review tidak menghasilkan keluaran.",
   "review.copyFailed": "Tidak dapat menyalin perubahan untuk direview: {detail}",
   "voice.title": "Input suara (tahan {key})",
+  "voice.hold": "Tahan {key} untuk bicara",
   "voice.notConfiguredTitle": "Input suara belum diatur",
   "voice.processing": "Merapikan…",
   "voice.needTask": "Buka tugas dulu, lalu gunakan input suara.",

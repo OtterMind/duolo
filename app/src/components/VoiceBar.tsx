@@ -12,8 +12,9 @@ const PAD_TOP = 10;
 const ICON = { size: 14, strokeWidth: 1.75 } as const;
 
 /**
- * 语音入口和状态，都在 Agent 的输入块上：平时是右侧的麦克风；录音时输入块变成录音条
+ * 语音的状态，都在 Agent 的输入块上：录音时输入块变成录音条
  * （听到的文字、波形、计时，右边是丢弃 / 插入 / 插入并发送三个图标）；插入后右上角出现换回原话和撤销。
+ * 入口是终端下面的 `VoiceButton`。
  */
 export function VoiceBar({ agent, voice }: { agent: AgentRef; voice: Voice }) {
   const t = useT();
@@ -93,30 +94,37 @@ export function VoiceBar({ agent, voice }: { agent: AgentRef; voice: Voice }) {
   }
 
   const ins = voice.inserted;
+  if (!ins || ins.target.kind !== "agent") return null;
   return (
-    <>
-      {ins && ins.target.kind === "agent" && (
-        <div className="voice-inserted" style={{ top: top - 34 }}>
-          {ins.organized && (
-            <button className="icon-btn" title={t("voice.revert")} onClick={voice.revert}>
-              <Undo2 {...ICON} />
-            </button>
-          )}
-          <button className="icon-btn" title={t("voice.undo")} onClick={voice.undo}>
-            <Trash2 {...ICON} />
-          </button>
-        </div>
+    <div className="voice-inserted" style={{ top: top - 34 }}>
+      {ins.organized && (
+        <button className="icon-btn" title={t("voice.revert")} onClick={voice.revert}>
+          <Undo2 {...ICON} />
+        </button>
       )}
+      <button className="icon-btn" title={t("voice.undo")} onClick={voice.undo}>
+        <Trash2 {...ICON} />
+      </button>
+    </div>
+  );
+}
+
+/** 语音入口：终端下面一个写着"按住 Fn 说话"的按钮，比输入框末尾的小图标好找；点一下也能开始和结束录音。 */
+export function VoiceButton({ voice }: { voice: Voice }) {
+  const t = useT();
+  const recording = voice.phase.kind === "recording";
+  return (
+    <div className="voice-strip">
       <button
-        className={`voice-mic ${voice.ready ? "" : "is-off"}`}
-        style={{ top: top + (block.height - 28) / 2 }}
+        className={`voice-talk ${recording ? "is-recording" : ""} ${voice.ready ? "" : "is-off"}`}
         title={voice.ready ? t("voice.title", { key: TALK_KEY }) : t("voice.notConfiguredTitle")}
         onMouseDown={(e) => e.preventDefault()}
         onClick={voice.toggle}
       >
-        <Mic {...ICON} />
+        {recording ? <span className="rec-dot" /> : <Mic {...ICON} />}
+        {t("voice.hold", { key: TALK_KEY })}
       </button>
-    </>
+    </div>
   );
 }
 

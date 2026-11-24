@@ -88,6 +88,7 @@
   "review.noOutput": "审阅没有给出结论。",
   "review.copyFailed": "没能复制改动来审阅：{detail}",
   "voice.title": "语音输入（按住 {key}）",
+  "voice.hold": "按住 {key} 说话",
   "voice.notConfiguredTitle": "语音输入还没配置",
   "voice.processing": "正在整理…",
   "voice.needTask": "先打开一个任务，再用语音输入。",

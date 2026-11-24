@@ -88,6 +88,7 @@
   "review.noOutput": "審閱沒有給出結論。",
   "review.copyFailed": "無法複製變更來審閱：{detail}",
   "voice.title": "語音輸入（按住 {key}）",
+  "voice.hold": "按住 {key} 說話",
   "voice.notConfiguredTitle": "語音輸入尚未設定",
   "voice.processing": "正在整理…",
   "voice.needTask": "先開啟一個任務，再使用語音輸入。",

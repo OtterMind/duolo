@@ -88,6 +88,7 @@
   "review.noOutput": "La revisione non ha prodotto alcun risultato.",
   "review.copyFailed": "Impossibile copiare le modifiche da revisionare: {detail}",
   "voice.title": "Input vocale (tieni premuto {key})",
+  "voice.hold": "Tieni premuto {key} per parlare",
   "voice.notConfiguredTitle": "L’input vocale non è configurato",
   "voice.processing": "Riordino in corso…",
   "voice.needTask": "Apri prima un’attività, poi usa la voce.",

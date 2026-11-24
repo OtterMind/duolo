@@ -54,8 +54,10 @@ interface Entry {
   opened: boolean;
   /** 已订阅的进程编号。Agent 重新启动后编号会变，要重新订阅。 */
   attachedSession: number | null;
-  /** 输入块位置变化时通知（麦克风和录音条跟着它）。 */
+  /** 输入块位置变化时通知（录音条跟着它）。 */
   blockListeners: Set<() => void>;
+  /** 画面往下挪了多少像素，见 `alignBottom`。 */
+  shift: number;
 }
 
 const pool = new Map<string, Entry>();
@@ -97,8 +99,9 @@ function create(ref: AgentRef): Entry {
     // Windows 回退到 Cascadia Mono / Consolas，Linux 回退到 DejaVu Sans Mono。
     fontFamily:
       'Hack, "SF Mono", Menlo, "Cascadia Mono", Consolas, "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Noto Sans CJK SC", monospace',
+    // 字号、行高和 Warp 的默认一样。
     fontSize: 13,
-    lineHeight: 1.3,
+    lineHeight: 1.2,
     cursorStyle: "bar",
     allowTransparency: true,
     cursorBlink: true,
@@ -132,7 +135,7 @@ function create(ref: AgentRef): Entry {
     void api.write(ref, data).catch(() => {});
   });
 
-  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set() };
+  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set(), shift: 0 };
   let frame = 0;
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(() => ((frame = 0), paintInputBlock(entry)));
@@ -226,12 +229,13 @@ function paintInputBlock(entry: Entry) {
   // 输入块的位置每次都更新（滚动或改变窗口大小时行的位置会变）。
   const screen = entry.el.querySelector<HTMLElement>(".xterm-screen");
   const before = `${block.style.display}:${block.style.top}:${block.style.height}`;
-  if (found && screen && term.rows > 0) {
-    const rowHeight = screen.getBoundingClientRect().height / term.rows;
+  const rowHeight = screen && term.rows > 0 ? screen.offsetHeight / term.rows : 0;
+  if (screen && rowHeight) alignBottom(entry, screen, rowHeight);
+  if (found && screen && rowHeight) {
     const first = top + 1 - buf.viewportY;
     const rows = bottom - top - 1;
     block.style.display = "block";
-    block.style.top = `${screen.offsetTop + first * rowHeight - INPUT_PAD_Y}px`;
+    block.style.top = `${screen.offsetTop + entry.shift + first * rowHeight - INPUT_PAD_Y}px`;
     block.style.height = `${rows * rowHeight + INPUT_PAD_Y * 2}px`;
   } else {
     block.style.display = "none";
@@ -258,6 +262,31 @@ function paintInputBlock(entry: Entry) {
       );
     if (decoration) entry.input.decorations.push(decoration);
   }
+}
+
+/**
+ * 输入框始终在底部（参考 Warp）：内容还没占满一屏时，把画面整体往下挪，让最后一行内容（或光标）贴着底边。
+ * 只挪画面，终端的行数不变，Agent 看到的尺寸也不变；点击和选中按挪过的位置算，xterm 自己会换算。
+ * 有回滚历史时不挪（上面空出来的地方没法显示历史），这时内容一般已经占满一屏。
+ */
+function alignBottom(entry: Entry, screen: HTMLElement, rowHeight: number) {
+  const { term } = entry;
+  const buf = term.buffer.active;
+  let rows = 0;
+  if (buf.baseY === 0) {
+    let last = buf.cursorY;
+    for (let y = term.rows - 1; y > last; y--) {
+      if (buf.getLine(y)?.translateToString(true).trim()) {
+        last = y;
+        break;
+      }
+    }
+    rows = term.rows - 1 - last;
+  }
+  const shift = Math.round(rows * rowHeight);
+  if (shift === entry.shift) return;
+  entry.shift = shift;
+  screen.style.transform = shift ? `translateY(${shift}px)` : "";
 }
 
 /** 输入块相对终端元素的位置；Agent 没有显示输入框时为 null。 */

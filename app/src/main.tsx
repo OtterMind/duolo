@@ -1,5 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+// 字体参考 Warp：界面用 Roboto，终端和代码用 Hack，都随应用打包，三个系统看起来一样。
+import "@fontsource-variable/roboto";
 import "hack-font/build/web/hack.css";
 
 import { invoke } from "@tauri-apps/api/core";

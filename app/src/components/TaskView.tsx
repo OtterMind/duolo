@@ -13,7 +13,7 @@ import { AgentIcon } from "./AgentIcon";
 import { AgentList, Popover } from "./AgentMenu";
 import type { ConfirmSpec } from "./Confirm";
 import { Markdown } from "./Markdown";
-import { VoiceBar } from "./VoiceBar";
+import { VoiceBar, VoiceButton } from "./VoiceBar";
 import { isMac, kbd } from "../lib/platform";
 
 interface Props {
@@ -121,6 +121,7 @@ export function TaskView(props: Props) {
         <div className="task-main">
           <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
           <VoiceBar agent={ref} voice={voice} />
+          <VoiceButton voice={voice} />
         </div>
         {reviewOpen && (
           <ReviewPanel

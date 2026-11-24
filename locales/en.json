@@ -88,6 +88,7 @@
   "review.noOutput": "The review produced no output.",
   "review.copyFailed": "Couldn't copy the changes to review them: {detail}",
   "voice.title": "Voice input (hold {key})",
+  "voice.hold": "Hold {key} to talk",
   "voice.notConfiguredTitle": "Voice input is not configured",
   "voice.processing": "Cleaning up…",
   "voice.needTask": "Open a task first, then use voice input.",

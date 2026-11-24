@@ -88,6 +88,7 @@
   "review.noOutput": "レビューの結果が出力されませんでした。",
   "review.copyFailed": "レビュー用に変更をコピーできませんでした：{detail}",
   "voice.title": "音声入力（{key} を長押し）",
+  "voice.hold": "{key} を長押しで話す",
   "voice.notConfiguredTitle": "音声入力が設定されていません",
   "voice.processing": "整理しています…",
   "voice.needTask": "タスクを開いてから音声入力を使ってください。",

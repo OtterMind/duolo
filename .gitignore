@@ -5,3 +5,8 @@ node_modules/
 /crates/duolo-app/gen
 /crates/duolo-app/binaries
 /server/dist
+
+# 本机的密钥（豆包、模型接口等）只放在环境变量或这些文件里，不能提交：仓库是开源的。
+.env
+.env.*
+!.env.example

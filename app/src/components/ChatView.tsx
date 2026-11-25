@@ -204,7 +204,7 @@ export function ChatView({ task, agent, voice, setVoiceTarget, onError }: Props)
             </button>
           </div>
         )}
-        <div className={`chat-input ${recording ? "is-recording" : ""}`}>
+        <div className={`chat-input ${recording ? "is-recording" : ""}`} data-focus-home>
           <textarea
             ref={input}
             rows={1}

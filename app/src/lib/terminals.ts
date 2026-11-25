@@ -134,6 +134,8 @@ function create(ref: AgentRef): Entry {
 
   const el = document.createElement("div");
   el.className = "xterm-host";
+  // 指针离开终端时暂时拿走它的焦点，见 lib/focus.ts。
+  el.dataset.focusHome = "";
   el.addEventListener("mousedown", () => (pressedInTerminal = true), true);
   const block = document.createElement("div");
   block.className = "input-block";

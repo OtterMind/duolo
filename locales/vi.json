@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Đang chạy",
   "sidebar.reviewFailed": "Thất bại",
   "sidebar.languageAuto": "Theo hệ thống",
-  "sidebar.search": "Tìm tác vụ và lệnh",
+  "sidebar.search": "Tác vụ và lệnh",
   "sidebar.waiting": "{count} tác vụ đang chờ bạn",
   "sidebar.rename": "Đổi tên",
   "sidebar.reviewTitle": "{agent} xem xét",

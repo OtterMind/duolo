@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Em andamento",
   "sidebar.reviewFailed": "Falhou",
   "sidebar.languageAuto": "Padrão do sistema",
-  "sidebar.search": "Buscar tarefas e comandos",
+  "sidebar.search": "Tarefas e comandos",
   "sidebar.waiting": "{count} aguardando você",
   "sidebar.rename": "Renomear",
   "sidebar.reviewTitle": "Revisão do {agent}",

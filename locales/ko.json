@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "진행 중",
   "sidebar.reviewFailed": "실패",
   "sidebar.languageAuto": "시스템 설정",
-  "sidebar.search": "작업 및 명령 검색",
+  "sidebar.search": "작업 및 명령",
   "sidebar.waiting": "{count}개 작업이 기다리는 중",
   "sidebar.rename": "이름 변경",
   "sidebar.reviewTitle": "{agent} 리뷰",

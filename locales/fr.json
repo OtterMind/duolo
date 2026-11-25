@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "En cours",
   "sidebar.reviewFailed": "Échec",
   "sidebar.languageAuto": "Langue du système",
-  "sidebar.search": "Rechercher des tâches et des commandes",
+  "sidebar.search": "Tâches et commandes",
   "sidebar.waiting": "{count} vous attendent",
   "sidebar.rename": "Renommer",
   "sidebar.reviewTitle": "Relecture {agent}",

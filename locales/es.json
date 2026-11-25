@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "En curso",
   "sidebar.reviewFailed": "Falló",
   "sidebar.languageAuto": "Según el sistema",
-  "sidebar.search": "Buscar tareas y comandos",
+  "sidebar.search": "Tareas y comandos",
   "sidebar.waiting": "{count} esperan tu respuesta",
   "sidebar.rename": "Renombrar",
   "sidebar.reviewTitle": "Revisión de {agent}",

@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Идёт",
   "sidebar.reviewFailed": "Ошибка",
   "sidebar.languageAuto": "Как в системе",
-  "sidebar.search": "Поиск задач и команд",
+  "sidebar.search": "Задачи и команды",
   "sidebar.waiting": "Ждут вас: {count}",
   "sidebar.rename": "Переименовать",
   "sidebar.reviewTitle": "Ревью {agent}",

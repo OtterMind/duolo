@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Läuft",
   "sidebar.reviewFailed": "Fehlgeschlagen",
   "sidebar.languageAuto": "Systemsprache",
-  "sidebar.search": "Aufgaben und Befehle suchen",
+  "sidebar.search": "Aufgaben und Befehle",
   "sidebar.waiting": "{count} warten auf dich",
   "sidebar.rename": "Umbenennen",
   "sidebar.reviewTitle": "{agent}-Prüfung",

@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Sürüyor",
   "sidebar.reviewFailed": "Başarısız",
   "sidebar.languageAuto": "Sistem dili",
-  "sidebar.search": "Görev ve komut ara",
+  "sidebar.search": "Görevler ve komutlar",
   "sidebar.waiting": "{count} görev sizi bekliyor",
   "sidebar.rename": "Yeniden adlandır",
   "sidebar.reviewTitle": "{agent} incelemesi",

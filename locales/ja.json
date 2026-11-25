@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "実行中",
   "sidebar.reviewFailed": "失敗",
   "sidebar.languageAuto": "システムに合わせる",
-  "sidebar.search": "タスクとコマンドを検索",
+  "sidebar.search": "タスクとコマンド",
   "sidebar.waiting": "{count} 件があなたを待っています",
   "sidebar.rename": "名前を変更",
   "sidebar.reviewTitle": "{agent} レビュー",

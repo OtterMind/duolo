@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "In progress",
   "sidebar.reviewFailed": "Failed",
   "sidebar.languageAuto": "System default",
-  "sidebar.search": "Search tasks and commands",
+  "sidebar.search": "Tasks and commands",
   "sidebar.waiting": "{count} waiting for you",
   "sidebar.rename": "Rename",
   "sidebar.reviewTitle": "{agent} review",

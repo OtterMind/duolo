@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "In corso",
   "sidebar.reviewFailed": "Non riuscita",
   "sidebar.languageAuto": "Lingua di sistema",
-  "sidebar.search": "Cerca attività e comandi",
+  "sidebar.search": "Attività e comandi",
   "sidebar.waiting": "{count} ti aspettano",
   "sidebar.rename": "Rinomina",
   "sidebar.reviewTitle": "Revisione {agent}",

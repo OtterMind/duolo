@@ -132,7 +132,7 @@ fn recognizes_its_own_screens() {
             assert_eq!(state(p, "approval.txt"), AgentState::NeedsInput, "{id}");
             assert!(choosing("approval.txt"), "{id}：确认框上不能发消息（回车会替用户选）");
             // 带编号的选项手机上能回答（发数字键）；没编号的（只能用方向键选）回答不了，这里不要求。
-            if fixture(p, "approval.txt").contains("1. ") {
+            if fixture(p, "approval.txt").contains("1. ") || fixture(p, "approval.txt").contains("1 (") {
                 let prompt =
                     parse_prompt(&fixture(p, "approval.txt")).unwrap_or_else(|| panic!("{id}：认不出确认框的选项"));
                 assert!(prompt.options.len() >= 2 && !prompt.question.is_empty(), "{id}: {prompt:?}");
@@ -169,6 +169,9 @@ fn session_file(id: &str, worktree: &str) -> PathBuf {
         "pi" => Path::new(".pi/agent/sessions")
             .join(format!("--{}--", worktree.trim_start_matches('/').replace('/', "-")))
             .join(format!("2026-11-22T10-00-00-000Z_{SESSION}.jsonl")),
+        "grok" => {
+            Path::new(".grok/sessions").join(worktree.replace('/', "%2F")).join(SESSION).join("chat_history.jsonl")
+        }
         other => panic!("没写明 {other} 的会话记录放在哪里"),
     }
 }

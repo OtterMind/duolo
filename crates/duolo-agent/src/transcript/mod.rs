@@ -5,6 +5,7 @@
 
 mod claude;
 mod codex;
+mod grok;
 mod listing;
 mod pi;
 
@@ -42,6 +43,12 @@ pub(crate) trait Format: std::fmt::Debug + Send + Sync {
 
     /// 一行记录里的内容，不关心的返回空。
     fn parse(&self, line: &Value) -> Vec<Entry>;
+
+    /// 每行都带 `timestamp`：只读这次启动之后的。没有时间的格式（Grok）每行都读：
+    /// 新会话的文件是启动后才建的，接回的会话从启动时的文件末尾读起。
+    fn dated(&self) -> bool {
+        true
+    }
 }
 
 /// 按名字找格式。
@@ -50,6 +57,7 @@ pub(crate) fn format(name: &str) -> Option<&'static dyn Format> {
         "claude" => Some(&claude::Claude),
         "codex" => Some(&codex::Codex),
         "pi" => Some(&pi::Pi),
+        "grok" => Some(&grok::Grok),
         _ => None,
     }
 }
@@ -320,7 +328,10 @@ impl Reader {
             .lines()
             .filter_map(|line| serde_json::from_str::<Value>(line).ok())
             .filter(|v| {
-                v.get("timestamp").and_then(Value::as_str).is_some_and(|t| t.get(..19).unwrap_or(t) >= &self.since[..])
+                !self.format.dated()
+                    || v.get("timestamp")
+                        .and_then(Value::as_str)
+                        .is_some_and(|t| t.get(..19).unwrap_or(t) >= &self.since[..])
             })
             .flat_map(|v| self.format.parse(&v))
             .collect()

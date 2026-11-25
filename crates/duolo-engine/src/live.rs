@@ -27,6 +27,8 @@ pub(crate) struct OpenPrompt {
     id: String,
     /// 记成事件时的编号；没记成（写文件失败）时为空。
     seq: Option<u64>,
+    /// 选每个选项要按的键；聊天模式下按编号回答，这里是空的，只看个数。
+    keys: Vec<String>,
     options: usize,
 }
 
@@ -269,7 +271,7 @@ impl Engine {
             if status == AgentStatus::NeedsInput {
                 if let Some((id, prompt)) = self.open_prompt(key) {
                     if self.live.prompt.get(&key).map(|p| &p.id) != Some(&id) {
-                        let options = prompt.options.len();
+                        let (options, keys) = (prompt.options.len(), prompt.keys);
                         let kind = EventKind::Prompt {
                             agent: key.agent,
                             question: prompt.question,
@@ -277,7 +279,7 @@ impl Engine {
                             options: prompt.options,
                         };
                         let seq = self.record(key.task, kind);
-                        self.live.prompt.insert(key, OpenPrompt { id, seq, options });
+                        self.live.prompt.insert(key, OpenPrompt { id, seq, keys, options });
                     }
                 }
             } else {
@@ -301,7 +303,7 @@ impl Engine {
     fn open_prompt(&self, key: AgentKey) -> Option<(String, Prompt)> {
         if let Some(chat) = self.chats.get(&key) {
             let ask = chat.ask()?;
-            let prompt = Prompt { question: ask.tool, detail: ask.target, options: ask.options };
+            let prompt = Prompt { question: ask.tool, detail: ask.target, options: ask.options, keys: Vec::new() };
             return Some((format!("ask:{}", ask.id), prompt));
         }
         self.prompt_on_screen(key)
@@ -420,7 +422,7 @@ impl Engine {
         self.live.pending.entry(key).or_default().push(text);
     }
 
-    /// 回答 Agent 正在等的选择（`option` 从 0 开始），等于在终端里按对应的数字键。
+    /// 回答 Agent 正在等的选择（`option` 从 0 开始），等于在终端里按这个选项的编号（画面上写的，不一定连续）。
     /// `prompt` 有值时只回答那一条提示，Agent 已经不在等它时报 `promptChanged`。
     pub fn answer(&mut self, task: TaskId, option: usize, prompt: Option<u64>) -> Result<()> {
         let key = self.writer_key(task)?;
@@ -445,7 +447,9 @@ impl Engine {
                 return Err(UserError::PromptChanged.into());
             }
         }
-        self.write(key, (option + 1).to_string().as_bytes())
+        // 画面上认出的提示按它的编号；没认出来时（不带提示的回答）按序号。
+        let pressed = self.live.prompt.get(&key).and_then(|p| p.keys.get(option).cloned());
+        self.write(key, pressed.unwrap_or_else(|| (option + 1).to_string()).as_bytes())
     }
 
     /// 打断 Agent 正在做的事。

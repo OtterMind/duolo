@@ -117,10 +117,10 @@ pi 1.6.0 没登录模型服务，只验证了启动、参数、状态报告，�
 | 状态 | OSC 7501（2.1.295 起） | OSC 7501（0.163 起；空闲时不一定马上报） | 认画面（它不报告） | OSC 7501 | OSC 7501 |
 | 会话编号 | Duolo 定（`--session-id`）+ 钩子 | 从会话记录里认（`payload.id`） | 用它的命令列出会话认（`session list --format json`） | Duolo 定（`--session-id`） | Duolo 定（`--session-id`） |
 | 恢复会话 | `--resume <id>`，不知道编号时 `--continue` | `resume <id>`，不知道时 `resume --last` | 只按编号（`--session <id>`）：它的 `--continue` 会接到同一个仓库里别的任务的会话 | `--session-id <id>`，不知道时 `--continue` | `--resume <id>`，不知道时 `--continue` |
-| 对话记录 | 读会话记录 | 读会话记录 | 没有（存在它的数据库里） | 读会话记录 | 没有（终端里不读；聊天模式下来自协议） |
+| 对话记录 | 读会话记录 | 读会话记录 | 没有（存在它的数据库里） | 读会话记录 | 读会话记录（`chat_history.jsonl`，每行没有时间，按读到的位置分新旧） |
 | 信任文件夹 | `~/.claude.json`（或 `$CLAUDE_CONFIG_DIR/.claude.json`），每个任务目录 | `~/.codex/config.toml`（或 `$CODEX_HOME`），主仓库 | 不问 | 只有仓库里有 `.pi/` 的设置、扩展时问，认画面 | 不问 |
 | 升级提示 | `DISABLE_AUTOUPDATER=1` | `-c check_for_update_on_startup=false` | `OPENCODE_DISABLE_AUTOUPDATE=true` | `PI_SKIP_VERSION_CHECK=1` | 没见过启动时的升级提示 |
-| 确认框 | 带编号，手机上能回答 | 带编号 | **不带编号**，按回车就是"允许一次"：认出来，不发消息；手机上回答不了 | 不要求确认 | 编号写成 `1 (○) …`，手机上回答不了；它自己报告在等确认 |
+| 确认框 | 带编号，手机上能回答 | 带编号 | **不带编号**，按回车就是"允许一次"：认出来，不发消息；手机上回答不了 | 不要求确认 | 单选框写法 `3 (●) Yes, proceed`，编号不连续：按画面上的编号回答，手机上能答 |
 | 只读审阅 | `--restricted`、`--strict-mcp-config`、只给读文件的工具 | 只读沙箱、关掉 MCP 和联网搜索、功能白名单 | 临时定义的 agent：工具先全关（`"*": false`），只开读文件、搜索的；写、运行命令、联网、项目外的目录一律拒绝 | `--tools read,grep,find,ls`，不连 MCP、不加载扩展和技能 | `--tools read_file,grep,list_dir`（只给这些）、`dontAsk`、关掉 MCP、子代理、联网搜索和记忆（实测写不了文件） |
 | 钩子 | `SessionStart`、`PermissionRequest` | 不用 | 不用 | 不用 | 不用 |
 | 最低版本 | 不设（各功能有退路） | 0.136.0 | 不设 | 不设 | 1.0.92 |
@@ -137,6 +137,8 @@ Grok 1.0.92 要注意的（实测）：
 - Esc 打断不了，要 Ctrl+C（空闲时按一下什么也不做）；⌥↵ 和 Ctrl+J 都是换行。
 - 默认的 auto-review 模式下，在工作目录里建文件、跑 `ls` 都不问；要联网之类才弹确认框。
 - 第一次启动底部有"Help improve Grok [Opt out] [Opt in]"的提示，不挡输入，Duolo 不替用户选。
+- 没有不留会话的参数：`grok -p`（审阅、起名）也会存会话，`summary.json` 里标着 `"session_kind": "headless"`，读对话时跳过。
+- 确认框上按选项的数字键直接选中并执行，不用再按回车。
 
 还没接的：DeepSeek Harness（`dsh`）。它现在有终端界面（`dsh-tui`），可以照样接，但要 Node 24.9 以上和 DeepSeek 的 API Key，
 而且还是预览版，等需要时再接。Orca 的记录：`dsh-tui .` 启动，第一句话等它准备好后粘贴，会话打开前回车会被拒（最多 24 秒）。

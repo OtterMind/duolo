@@ -1,0 +1,7 @@
+{"type": "system", "content": "You are Grok. You are an interactive CLI tool that helps users with software engineering tasks."}
+{"type": "user", "content": [{"type": "text", "text": "<user_info>\nOS Version: macos\nWorkspace Path: {worktree}\n</user_info>"}]}
+{"type": "user", "content": [{"type": "text", "text": "<system-reminder>\nThe following skills are available for use:\n</system-reminder>"}]}
+{"type": "user", "content": [{"type": "text", "text": "<user_query>\nExport orders\n</user_query>"}], "prompt_index": 0}
+{"type": "reasoning", "id": "rs_1", "summary": [{"type": "summary_text", "text": "Plan the export."}], "encrypted_content": "x"}
+{"type": "assistant", "content": "On it.", "tool_calls": [{"id": "call-1-0", "name": "search_replace", "arguments": "{\"file_path\": \"src/orders.ts\", \"old_string\": \"a\", \"new_string\": \"b\"}"}]}
+{"type": "tool_result", "tool_call_id": "call-1-0", "content": "ok"}

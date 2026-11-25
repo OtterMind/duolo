@@ -38,7 +38,7 @@ separator = "--"
 
 [screen]
 # 状态靠它自己报告（OSC 7501，1.0.92 实测：idle / working / done / blocked）。画面上的字只是兜底。
-# 确认框的选项写成 "1 (○) Always allow"，不是 "1. Yes"：手机上回答不了，只在终端里答。
+# 确认框的选项是单选框写法 "3 (●) Yes, proceed"，编号不连续；按数字键直接选中执行，Duolo 按画面上的编号回答。
 approval = ["yes, proceed", "no, reject"]
 busy = ["[stop]"]
 choosing = ["tab:next option"]
@@ -53,3 +53,9 @@ newline = "\n"
 [chat]
 protocol = "acp"
 args = ["agent", "stdio"]
+
+# 会话记录：~/.grok/sessions/<URL 编码的工作目录>/<会话编号>/chat_history.jsonl（可以用 GROK_HOME 换目录）。
+[transcript]
+format = "grok"
+home = ".grok"
+home_env = "GROK_HOME"

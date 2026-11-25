@@ -433,5 +433,10 @@
   "chat.allowSession": "Für diese Sitzung erlauben",
   "chat.deny": "Ablehnen",
   "chat.agentError": "{agent} hat einen Fehler gemeldet",
-  "tui.chatMode": "{agent} läuft im Chatmodus · öffne diese Aufgabe in der Duolo-App oder wechsle dort zum Terminal"
+  "tui.chatMode": "{agent} läuft im Chatmodus · öffne diese Aufgabe in der Duolo-App oder wechsle dort zum Terminal",
+  "sidebar.openBeside": "Daneben öffnen",
+  "task.split": "Eine weitere Aufgabe daneben öffnen",
+  "task.unsplit": "Diesen Bereich schließen",
+  "newTask.moreAgents": "Weitere Agenten",
+  "newTask.writerHint": "Wer den Code schreibt (⇥ zum Wechseln)"
 }

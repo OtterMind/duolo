@@ -18,7 +18,7 @@ import { AgentIcon } from "./AgentIcon";
 import { StateIcon, useStateLabel } from "./StatusIcon";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
 import { SettingsPopover } from "./SettingsPopover";
-import { isMac, kbd } from "../lib/platform";
+import { isMac, kbd, modKey } from "../lib/platform";
 
 interface Props {
   snap: Snapshot | null;
@@ -27,6 +27,10 @@ interface Props {
   focusSearch: number;
   onNewTask(project?: string): void;
   onOpenTask(task: number): void;
+  /** 分屏时旁边那一格的任务。 */
+  beside: number | null;
+  /** 放在旁边一格（⌘ 点任务）。 */
+  onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
   onStartReview(task: number): void;
   onCloseTask(task: number): void;
@@ -155,7 +159,9 @@ export function Sidebar(props: Props) {
 function TaskRow({
   task,
   current,
+  beside,
   onOpenTask,
+  onOpenBeside,
   onOpenReview,
   onStartReview,
   onCloseTask,
@@ -172,6 +178,7 @@ function TaskRow({
   const diff = useDiff(current ? task.id : null);
 
   const entries: MenuEntry[] = [
+    { label: t("sidebar.openBeside"), kbd: "⌘\\", run: () => onOpenBeside(task.id) },
     { label: t("sidebar.rename"), run: () => setRenaming(true) },
     { label: t("sidebar.review", { agent: task.reviewer.name }), kbd: "⌘⇧R", run: () => onStartReview(task.id) },
     { sep: true },
@@ -184,10 +191,11 @@ function TaskRow({
 
   return (
     <div
-      className={`task-row ${current ? "is-current" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
+      className={`task-row ${current ? "is-current" : ""} ${beside === task.id ? "is-beside" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
       role="button"
       tabIndex={0}
-      onClick={() => onOpenTask(task.id)}
+      // ⌘ 点：放在旁边一格，两个任务并排看。
+      onClick={(e) => (modKey(e.nativeEvent) ? onOpenBeside(task.id) : onOpenTask(task.id))}
       onDoubleClick={() => setRenaming(true)}
       onKeyDown={(e) => e.key === "Enter" && !renaming && onOpenTask(task.id)}
       onContextMenu={(e) => {

@@ -433,5 +433,10 @@
   "chat.allowSession": "이 세션 동안 허용",
   "chat.deny": "거부",
   "chat.agentError": "{agent}이(가) 오류를 보고했습니다",
-  "tui.chatMode": "{agent}가 채팅 모드로 실행 중 · Duolo 앱에서 이 작업을 열거나 터미널로 전환하세요"
+  "tui.chatMode": "{agent}가 채팅 모드로 실행 중 · Duolo 앱에서 이 작업을 열거나 터미널로 전환하세요",
+  "sidebar.openBeside": "옆에 열기",
+  "task.split": "옆에 다른 작업 열기",
+  "task.unsplit": "이 창 닫기",
+  "newTask.moreAgents": "다른 에이전트",
+  "newTask.writerHint": "코드를 작성할 에이전트 (⇥로 전환)"
 }

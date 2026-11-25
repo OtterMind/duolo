@@ -277,6 +277,9 @@ body.is-resizing * {
 .task-row:focus-visible {
   box-shadow: inset 0 0 0 1px var(--focus);
 }
+.task-row.is-beside {
+  background: color-mix(in srgb, var(--active) 55%, transparent);
+}
 .task-row.is-current {
   background: var(--active);
   padding-bottom: 6px;
@@ -645,6 +648,28 @@ body.is-resizing * {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* 分屏：两个任务并排，各占一半。正在操作的那一格标题亮一些、顶栏下有一条蓝线。 */
+.panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pane + .pane {
+  border-left: 1px solid var(--line-strong);
+}
+.pane.is-active .topbar {
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+.panes:has(.pane + .pane) .pane:not(.is-active) .topbar-title {
+  color: var(--dim);
 }
 
 
@@ -1471,13 +1496,40 @@ body.is-resizing * {
 }
 
 /* 新建任务面板：谁写 → 谁审 */
-.agent-pair {
+/* 新建任务：谁来写。一排 Agent，选中的那个亮起来并显示名字。 */
+.agent-picker {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #222;
+  border: 1px solid #303030;
 }
-.agent-pair .chip {
-  padding: 0 6px;
+.agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  opacity: 0.6;
+}
+.agent-pill:hover {
+  opacity: 1;
+  background: var(--hover);
+}
+.agent-pill.is-on {
+  opacity: 1;
+  color: var(--text);
+  background: #343434;
+  padding-right: 9px;
+}
+.agent-more {
+  width: 24px;
+  height: 24px;
 }
 .menu-title,
 .menu-hint {

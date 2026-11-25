@@ -433,5 +433,10 @@
   "chat.allowSession": "本次對話內允許",
   "chat.deny": "拒絕",
   "chat.agentError": "{agent} 回報了錯誤",
-  "tui.chatMode": "{agent} 在聊天模式下執行 · 在 Duolo 應用程式中開啟這個任務，或在那裡切回終端機"
+  "tui.chatMode": "{agent} 在聊天模式下執行 · 在 Duolo 應用程式中開啟這個任務，或在那裡切回終端機",
+  "sidebar.openBeside": "在旁邊開啟",
+  "task.split": "在旁邊再開一個任務",
+  "task.unsplit": "關閉這一格",
+  "newTask.moreAgents": "更多 Agent",
+  "newTask.writerHint": "誰來寫程式（⇥ 切換）"
 }

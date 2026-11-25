@@ -32,11 +32,12 @@ const MENU_SHORTCUTS: [string, string][] = [
   ["close-task", "⌘⇧W"],
 ];
 
-/** 菜单里不列的快捷键：⌘1…⌘9 跳到第 n 个任务，⌘K 搜索任务，⌥↓ 跳到下一个等你确认的任务。 */
+/** 菜单里不列的快捷键：⌘1…⌘9 跳到第 n 个任务，⌘K 搜索任务，⌥↓ 跳到下一个等你确认的任务，⌘\ 开关分屏。 */
 const EXTRA_SHORTCUTS: [string, string][] = [
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n): [string, string] => [`task-${n}`, `⌘${n}`]),
   ["search", "⌘K"],
   ["next-waiting", "⌥↓"],
+  ["split", "⌘\\"],
 ];
 
 export type View = { kind: "empty" } | { kind: "task"; task: number };
@@ -48,6 +49,17 @@ export function App() {
   /** 配置里默认的写代码和审阅 Agent。 */
   const [agentDefaults, setAgentDefaults] = useState<AgentChoice | null>(null);
   const [view, setView] = useState<View>({ kind: "empty" });
+  /**
+   * 分屏：旁边的另一个任务，和它在左边还是右边。正在操作的任务是 `view.task`；
+   * 点旁边那一格就换成操作它，两格的位置不变。
+   */
+  const [beside, setBeside] = useState<{ task: number; left: boolean } | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const besideRef = useRef(beside);
+  besideRef.current = beside;
+  /** 上一个操作过的任务：⌘\ 分屏时放在旁边。 */
+  const lastTask = useRef<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -82,12 +94,43 @@ export function App() {
   }, []);
 
   const current = view.kind === "task" ? findTask(snap, view.task) : null;
+  const besideTask = beside && current ? findTask(snap, beside.task) : null;
+  /** 分屏时关掉一格：关的是正在操作的那格，就换成操作另一格。 */
+  const closePane = (task: number) => {
+    if (beside && view.kind === "task" && task === view.task) setView({ kind: "task", task: beside.task });
+    setBeside(null);
+  };
 
   // ---- 打开和新建任务 ----
 
   const openTask = useCallback((task: number) => {
-    if (findTask(snapRef.current, task)) setView({ kind: "task", task });
+    if (!findTask(snapRef.current, task)) return;
+    const [v, b] = [viewRef.current, besideRef.current];
+    if (v.kind === "task" && v.task !== task) lastTask.current = v.task;
+    // 打开的是旁边那一格的任务：两格换一下谁在操作，位置不变。
+    if (b && b.task === task && v.kind === "task") setBeside({ task: v.task, left: !b.left });
+    setView({ kind: "task", task });
   }, []);
+
+  /** 把任务放在旁边一格（⌘ 点侧边栏的任务、右键菜单）。 */
+  const openBeside = useCallback(
+    (task: number) => {
+      const v = viewRef.current;
+      if (v.kind !== "task" || v.task === task) return openTask(task);
+      if (findTask(snapRef.current, task)) setBeside({ task, left: false });
+    },
+    [openTask],
+  );
+
+  /** ⌘\：开着分屏就关上，否则把上一个任务（没有就下一个任务）放在旁边。 */
+  const toggleSplit = useCallback(() => {
+    if (besideRef.current) return setBeside(null);
+    const v = viewRef.current;
+    if (v.kind !== "task") return;
+    const others = allTasks(snapRef.current).filter((t) => t.id !== v.task);
+    const pick = others.find((t) => t.id === lastTask.current) ?? others[0];
+    if (pick) openBeside(pick.id);
+  }, [openBeside]);
 
   /** 当前任务所在的项目，没有时是第一个项目。 */
   const currentProject = useCallback(() => {
@@ -191,6 +234,11 @@ export function App() {
       else if (s.projects.length > 0) await createTask(s.projects[0].id, "");
     })();
   }, [refresh, addProject, openTask, createTask]);
+
+  // 旁边那个任务关掉了（或者和正在操作的是同一个）：不再分屏。
+  useEffect(() => {
+    if (beside && (view.kind !== "task" || beside.task === view.task || !findTask(snap, beside.task))) setBeside(null);
+  }, [snap, view, beside]);
 
   // 当前任务被关闭后，打开同项目里最近的任务。
   useEffect(() => {
@@ -318,6 +366,8 @@ export function App() {
   /** 任务在聊天模式下时，语音文字插到对话的输入框里。 */
   const chatTarget = useRef<VoiceTarget | null>(null);
   const setChatTarget = useCallback((target: VoiceTarget | null) => (chatTarget.current = target), []);
+  /** 分屏时没在操作的那一格：语音不插到它那里。 */
+  const noVoiceTarget = useCallback(() => {}, []);
   const currentRef = useRef(current);
   currentRef.current = current;
   const voice = useVoice({
@@ -356,6 +406,7 @@ export function App() {
 
   handlers.current["search"] = () => setFocusSearch((n) => n + 1);
   handlers.current["next-waiting"] = jumpToWaiting;
+  handlers.current["split"] = toggleSplit;
 
   useEffect(() => {
     const unlistenMenu = listen<string>("menu", (e) => handlers.current[e.payload]?.());
@@ -410,6 +461,8 @@ export function App() {
           openTask(task);
           toggleReview(task);
         }}
+        beside={beside?.task ?? null}
+        onOpenBeside={openBeside}
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}
@@ -417,17 +470,33 @@ export function App() {
       />
       <main className="main">
         {view.kind === "task" && current ? (
-          <TaskView
-            task={current.task}
-            voice={voice}
-            setVoiceTarget={setChatTarget}
-            reviewOpen={reviewOpen === current.task.id}
-            agents={agentOptions(env)}
-            onReviewOpenChange={(open) => setReviewOpen(open ? current.task.id : null)}
-            onConfirm={setConfirm}
-            onClose={() => requestClose(view.task)}
-            onError={fail}
-          />
+          <div className="panes">
+            {(besideTask ? (beside?.left ? [besideTask, current] : [current, besideTask]) : [current]).map(({ task }) => {
+              const active = task.id === current.task.id;
+              return (
+                <div
+                  key={task.id}
+                  className={`pane ${besideTask && active ? "is-active" : ""}`}
+                  // 点旁边那一格（包括里面的按钮、终端）就换成操作它。
+                  onMouseDownCapture={() => !active && openTask(task.id)}
+                >
+                  <TaskView
+                    task={task}
+                    voice={voice}
+                    setVoiceTarget={active ? setChatTarget : noVoiceTarget}
+                    reviewOpen={reviewOpen === task.id}
+                    agents={agentOptions(env)}
+                    onReviewOpenChange={(open) => setReviewOpen(open ? task.id : null)}
+                    onSplit={besideTask ? undefined : toggleSplit}
+                    onUnsplit={besideTask ? () => closePane(task.id) : undefined}
+                    onConfirm={setConfirm}
+                    onClose={() => requestClose(task.id)}
+                    onError={fail}
+                  />
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <Empty
             snap={snap}

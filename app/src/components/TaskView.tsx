@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ellipsis, GitBranch, MessagesSquare, SquareTerminal, X } from "lucide-react";
+import { Columns2, Ellipsis, GitBranch, MessagesSquare, PanelRightClose, SquareTerminal, X } from "lucide-react";
 
 import { useT } from "../i18n";
 
@@ -27,6 +27,10 @@ interface Props {
   /** 可以换成的 Agent。 */
   agents: AgentOption[];
   onReviewOpenChange(open: boolean): void;
+  /** 没分屏时：在旁边再开一个任务（⌘\\）。 */
+  onSplit?(): void;
+  /** 分屏时：关掉这一格。 */
+  onUnsplit?(): void;
   onConfirm(spec: ConfirmSpec): void;
   onClose(): void;
   onError(err: unknown): void;
@@ -104,6 +108,16 @@ export function TaskView(props: Props) {
           onStart={startReview}
           onToggle={() => onReviewOpenChange(!reviewOpen)}
         />
+        {props.onSplit && (
+          <button className="icon-btn" title={`${t("task.split")} (${kbd("⌘\\")})`} onClick={props.onSplit}>
+            <Columns2 size={15} strokeWidth={1.75} />
+          </button>
+        )}
+        {props.onUnsplit && (
+          <button className="icon-btn" title={t("task.unsplit")} onClick={props.onUnsplit}>
+            <PanelRightClose size={15} strokeWidth={1.75} />
+          </button>
+        )}
         <div className="more" onMouseDown={(e) => e.stopPropagation()}>
           <button className="icon-btn" title={t("common.more")} onClick={() => setMenu((m) => !m)}>
             <Ellipsis size={15} strokeWidth={1.75} />

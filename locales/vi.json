@@ -433,5 +433,10 @@
   "chat.allowSession": "Cho phép trong phiên này",
   "chat.deny": "Từ chối",
   "chat.agentError": "{agent} đã báo lỗi",
-  "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó"
+  "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó",
+  "sidebar.openBeside": "Mở bên cạnh",
+  "task.split": "Mở thêm một tác vụ bên cạnh",
+  "task.unsplit": "Đóng khung này",
+  "newTask.moreAgents": "Thêm agent",
+  "newTask.writerHint": "Ai viết mã (⇥ để đổi)"
 }

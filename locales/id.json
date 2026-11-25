@@ -433,5 +433,10 @@
   "chat.allowSession": "Izinkan untuk sesi ini",
   "chat.deny": "Tolak",
   "chat.agentError": "{agent} melaporkan kesalahan",
-  "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana"
+  "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana",
+  "sidebar.openBeside": "Buka di samping",
+  "task.split": "Buka tugas lain di samping",
+  "task.unsplit": "Tutup panel ini",
+  "newTask.moreAgents": "Agen lainnya",
+  "newTask.writerHint": "Siapa yang menulis kode (⇥ untuk ganti)"
 }

@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  Ellipsis,
   Folder,
   FolderGit2,
   FolderPlus,
@@ -92,6 +93,17 @@ export function NewTaskPanel(props: Props) {
   useEffect(() => props.onRefreshEnv(), []);
   const agents = agentOptions(env);
   const noAgent = noAgentInstalled(env);
+  const pickWriter = (id: string) => {
+    pickedAgents.current = true;
+    setChoice((c) => ({ ...c, writer: id }));
+  };
+  /** 在输入框里按 ⇥ / ⇧⇥ 轮换写代码的 Agent（只在装了的里面换）。 */
+  const cycleWriter = (delta: number) => {
+    const installed = agents.filter((a) => a.installed);
+    if (installed.length < 2) return;
+    const at = installed.findIndex((a) => a.id === choice.writer);
+    pickWriter(installed[(at + delta + installed.length) % installed.length].id);
+  };
 
   useModalFocus(input);
   const refocus = () => {
@@ -171,9 +183,13 @@ export function NewTaskPanel(props: Props) {
           placeholder={t("newTask.placeholder", { agent: pluginName(choice.writer) })}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void submit();
+            } else if (e.key === "Tab" && !e.altKey && !e.metaKey && !e.ctrlKey) {
+              e.preventDefault();
+              cycleWriter(e.shiftKey ? -1 : 1);
             }
           }}
         />
@@ -288,30 +304,16 @@ export function NewTaskPanel(props: Props) {
 
         {/* 谁来写，以及附件、语音、开始 */}
         <div className="new-task-bar">
-          <span className="agent-pair">
-            <div className="dropdown-anchor">
-              <button
-                className={`chip ${open === "writer" ? "is-open" : ""}`}
-                title={t("newTask.writer", { agent: pluginName(choice.writer) })}
-                onClick={() => setOpen(open === "writer" ? null : "writer")}
-              >
-                <AgentIcon kind={choice.writer} size={13} />
-              </button>
-              {open === "writer" && (
-                <AgentMenu
-                  title={t("newTask.writerTitle")}
-                  agents={agents}
-                  selected={choice.writer}
-                  onPick={(id) => {
-                    pickedAgents.current = true;
-                    setChoice({ ...choice, writer: id });
-                    refocus();
-                  }}
-                  onClose={() => setOpen(null)}
-                />
-              )}
-            </div>
-          </span>
+          <AgentPicker
+            agents={agents}
+            selected={choice.writer}
+            menuOpen={open === "writer"}
+            onMenu={(show) => setOpen(show ? "writer" : null)}
+            onPick={(id) => {
+              pickWriter(id);
+              refocus();
+            }}
+          />
           <span className="grow" />
           <button className="icon-btn" title={t("newTask.attach")} onClick={() => void attach()}>
             <Paperclip {...ICON} />
@@ -696,3 +698,61 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
   );
 }
 
+/**
+ * 谁来写：装了的 Agent 一字排开，点一下就换，选中的那个显示名字；在输入框里按 ⇥ / ⇧⇥ 也能换。
+ * 没装的（和太旧的）放在最后的"更多"里，带安装命令。
+ */
+function AgentPicker({
+  agents,
+  selected,
+  menuOpen,
+  onMenu,
+  onPick,
+}: {
+  agents: AgentOption[];
+  selected: string;
+  menuOpen: boolean;
+  onMenu(open: boolean): void;
+  onPick(id: string): void;
+}) {
+  const t = useT();
+  const installed = agents.filter((a) => a.installed);
+  const others = agents.length > installed.length;
+  return (
+    <div className="agent-picker" role="radiogroup" aria-label={t("newTask.writerTitle")} title={t("newTask.writerHint")}>
+      {installed.map((a) => (
+        <button
+          key={a.id}
+          role="radio"
+          aria-checked={a.id === selected}
+          className={`agent-pill ${a.id === selected ? "is-on" : ""}`}
+          title={t("newTask.writer", { agent: a.name })}
+          onClick={() => onPick(a.id)}
+        >
+          <AgentIcon kind={a.id} size={14} />
+          {a.id === selected && <span>{a.name}</span>}
+        </button>
+      ))}
+      {others && (
+        <div className="dropdown-anchor">
+          <button
+            className={`icon-btn agent-more ${menuOpen ? "is-open" : ""}`}
+            title={t("newTask.moreAgents")}
+            onClick={() => onMenu(!menuOpen)}
+          >
+            <Ellipsis {...ICON} />
+          </button>
+          {menuOpen && (
+            <AgentMenu
+              title={t("newTask.writerTitle")}
+              agents={agents}
+              selected={selected}
+              onPick={onPick}
+              onClose={() => onMenu(false)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

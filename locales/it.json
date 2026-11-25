@@ -433,5 +433,10 @@
   "chat.allowSession": "Consenti per questa sessione",
   "chat.deny": "Nega",
   "chat.agentError": "{agent} ha segnalato un errore",
-  "tui.chatMode": "{agent} è in modalità chat · apri questa attività nell'app Duolo o passa lì al terminale"
+  "tui.chatMode": "{agent} è in modalità chat · apri questa attività nell'app Duolo o passa lì al terminale",
+  "sidebar.openBeside": "Apri accanto",
+  "task.split": "Apri un'altra attività accanto",
+  "task.unsplit": "Chiudi questo riquadro",
+  "newTask.moreAgents": "Altri agenti",
+  "newTask.writerHint": "Chi scrive il codice (⇥ per cambiare)"
 }

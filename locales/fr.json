@@ -433,5 +433,10 @@
   "chat.allowSession": "Autoriser pour cette session",
   "chat.deny": "Refuser",
   "chat.agentError": "{agent} a signalé une erreur",
-  "tui.chatMode": "{agent} tourne en mode chat · ouvrez cette tâche dans l'app Duolo, ou repassez-y au terminal"
+  "tui.chatMode": "{agent} tourne en mode chat · ouvrez cette tâche dans l'app Duolo, ou repassez-y au terminal",
+  "sidebar.openBeside": "Ouvrir à côté",
+  "task.split": "Ouvrir une autre tâche à côté",
+  "task.unsplit": "Fermer ce volet",
+  "newTask.moreAgents": "Plus d'agents",
+  "newTask.writerHint": "Qui écrit le code (⇥ pour changer)"
 }

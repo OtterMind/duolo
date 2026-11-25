@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use duolo_core::{AgentKey, AgentKind, Command, CommandResult, ProjectId, TaskEvent, TaskId};
-use duolo_core::{Settings, UserError, VoiceConfig};
+use duolo_core::{Settings, Surface, UserError, VoiceConfig};
 use duolo_engine::{check_environment, ops, Size, TaskOptions};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
@@ -276,6 +276,13 @@ pub struct ClosedView {
 #[tauri::command]
 pub async fn start_agent(state: State<'_, AppState>, task: u64, agent: u32) -> Res<()> {
     Ok(state.engine().start_agent(key(task, agent))?)
+}
+
+/// 换个方式运行写代码的 Agent：`terminal` 或 `chat`，接着同一个会话。
+#[tauri::command]
+pub async fn set_surface(state: State<'_, AppState>, task: u64, surface: String) -> Res<()> {
+    let surface = if surface == "chat" { Surface::Chat } else { Surface::Terminal };
+    Ok(state.engine().set_surface(TaskId(task), surface)?)
 }
 
 #[tauri::command]

@@ -414,5 +414,16 @@
   "mobile.settings.version": "Sürüm {version}",
   "mobile.settings.licenses": "Açık kaynak lisansları",
   "mobile.perm.camera": "Duolo, bilgisayarınızda gösterilen kodu taramak için kamerayı kullanır.",
-  "mobile.perm.microphone": "Duolo, kodlama ajanlarınızla konuşabilmeniz için mikrofonu kullanır."
+  "mobile.perm.microphone": "Duolo, kodlama ajanlarınızla konuşabilmeniz için mikrofonu kullanır.",
+  "error.chatUnsupported": "Bu ajan sohbet modunu desteklemiyor.",
+  "task.surfaceTerminal": "Terminal: {agent} kendi komut satırı",
+  "task.surfaceChat": "Sohbet: {agent} ile burada konuşun, aynı oturum",
+  "chat.placeholder": "{agent} için mesaj…",
+  "chat.send": "Gönder",
+  "chat.stop": "Durdur",
+  "chat.thinking": "Düşünüyor…",
+  "chat.working": "Çalışıyor…",
+  "chat.empty": "{agent} ajanına ne yapacağını söyleyin.",
+  "chat.asks": "{agent} onayınızı bekliyor",
+  "tui.chatMode": "{agent} sohbet modunda çalışıyor · bu görevi Duolo uygulamasında açın veya orada terminale geçin"
 }

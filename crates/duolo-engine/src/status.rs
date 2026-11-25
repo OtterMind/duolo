@@ -22,6 +22,17 @@ impl From<AgentState> for AgentStatus {
     }
 }
 
+impl From<duolo_chat::Status> for AgentStatus {
+    fn from(status: duolo_chat::Status) -> Self {
+        match status {
+            duolo_chat::Status::Starting | duolo_chat::Status::Working => Self::Running,
+            duolo_chat::Status::Asking => Self::NeedsInput,
+            duolo_chat::Status::Idle => Self::Idle,
+            duolo_chat::Status::Exited { code, success } => Self::Exited(Exit { code, success }),
+        }
+    }
+}
+
 impl AgentStatus {
     /// 当前语言的状态名。
     pub fn label(self) -> String {

@@ -22,7 +22,7 @@ const STATUS_SETTLE: Duration = Duration::from_millis(1500);
 
 /// 已经记下来、Agent 正在等的提示。
 #[derive(Debug)]
-struct OpenPrompt {
+pub(crate) struct OpenPrompt {
     /// 提示的内容，变了就是另一条提示。
     id: String,
     /// 记成事件时的编号；没记成（写文件失败）时为空。
@@ -36,14 +36,14 @@ pub(crate) struct LiveState {
     pub(crate) log: EventLog,
     /// 上次 poll 之后新记的事件。
     fresh: Vec<TaskEvent>,
-    watchers: HashMap<AgentKey, Watch>,
+    pub(crate) watchers: HashMap<AgentKey, Watch>,
     /// 上次记下的状态和提示，变了才记新事件。
     status: HashMap<AgentKey, String>,
     /// 记下的状态是什么时候变成的（Unix 毫秒）。
     status_since: HashMap<AgentKey, u64>,
     /// 刚变成的状态和变的时间：稳定一会儿才记，避免界面重绘时"运行中 / 空闲"来回跳。
     settling: HashMap<AgentKey, (String, Instant)>,
-    prompt: HashMap<AgentKey, OpenPrompt>,
+    pub(crate) prompt: HashMap<AgentKey, OpenPrompt>,
     diff: HashMap<TaskId, duolo_git::DiffStat>,
     /// Agent 还没准备好时收到的消息，准备好后再发。
     pub(crate) pending: HashMap<AgentKey, Vec<String>>,
@@ -88,6 +88,7 @@ impl Engine {
     pub fn poll_events(&mut self) -> Vec<TaskEvent> {
         self.poll_hooks();
         self.poll_transcripts();
+        self.poll_chats();
         self.poll_agent_states();
         self.poll_diffs();
         std::mem::take(&mut self.live.fresh)
@@ -171,7 +172,7 @@ impl Engine {
     }
 
     /// Agent 亲口说的会话编号（钩子）：直接记下，告诉同一个任务里的其他 Agent。
-    fn set_session(&mut self, key: AgentKey, id: String) {
+    pub(crate) fn set_session(&mut self, key: AgentKey, id: String) {
         let known = self.state.task(key.task).and_then(|t| t.agent(key.agent)).and_then(|a| a.session.clone());
         if known.as_deref() == Some(id.as_str()) {
             return;
@@ -242,7 +243,7 @@ impl Engine {
 
     /// 状态变化、等你选的提示，以及 Agent 准备好之后补发排队的消息。
     fn poll_agent_states(&mut self) {
-        let keys: Vec<AgentKey> = self.sessions.keys().copied().collect();
+        let keys: Vec<AgentKey> = self.sessions.keys().chain(self.chats.keys()).copied().collect();
         for key in keys {
             let status = self.agent_status(key);
             let code = status.code();
@@ -266,7 +267,7 @@ impl Engine {
                 }
             }
             if status == AgentStatus::NeedsInput {
-                if let Some((id, prompt)) = self.prompt_on_screen(key) {
+                if let Some((id, prompt)) = self.open_prompt(key) {
                     if self.live.prompt.get(&key).map(|p| &p.id) != Some(&id) {
                         let options = prompt.options.len();
                         let kind = EventKind::Prompt {
@@ -296,6 +297,16 @@ impl Engine {
         }
     }
 
+    /// Agent 现在等着用户选的提示，和区分它的标识：聊天模式下是它问的问题，终端里看画面。
+    fn open_prompt(&self, key: AgentKey) -> Option<(String, Prompt)> {
+        if let Some(chat) = self.chats.get(&key) {
+            let ask = chat.ask()?;
+            let prompt = Prompt { question: ask.tool, detail: ask.target, options: ask.options };
+            return Some((format!("ask:{}", ask.id), prompt));
+        }
+        self.prompt_on_screen(key)
+    }
+
     /// 画面上现在等着用户选的提示，和区分它的标识。
     fn prompt_on_screen(&self, key: AgentKey) -> Option<(String, Prompt)> {
         let prompt = self.sessions.get(&key)?.with_screen(|screen| parse_prompt(&screen.contents()))?;
@@ -304,7 +315,8 @@ impl Engine {
     }
 
     fn poll_diffs(&mut self) {
-        let tasks: Vec<TaskId> = self.sessions.keys().map(|k| k.task).collect();
+        let mut tasks: Vec<TaskId> = self.sessions.keys().chain(self.chats.keys()).map(|k| k.task).collect();
+        tasks.dedup();
         for task in tasks {
             let Some(stat) = self.diff_stat(task) else { continue };
             if self.live.diff.get(&task) != Some(&stat) {
@@ -342,6 +354,14 @@ impl Engine {
     /// 替用户发一句话（粘贴并回车）。Agent 停在要选的列表上（信任目录、是否升级、是否允许）时，
     /// 回车会变成替用户选，所以先排着，等用户选完再发。
     pub fn submit(&mut self, key: AgentKey, text: &str) -> Result<()> {
+        // 聊天模式下没有对话框会被回车选中：正在干活时排在后面，这一轮结束再发。
+        if let Some(chat) = self.chats.get_mut(&key) {
+            if matches!(chat.status(), duolo_chat::Status::Exited { .. }) {
+                return Err(UserError::AgentNotRunning.into());
+            }
+            chat.send(text);
+            return Ok(());
+        }
         if self.session_mut(key).ok_or(UserError::AgentNotRunning)?.poll_exit().is_some() {
             return Err(UserError::AgentNotRunning.into());
         }
@@ -364,8 +384,7 @@ impl Engine {
         // 还没启动过的空白任务：这句话成为它的需求，随启动交给 Agent，不用再发一遍。
         let becomes_prompt = t.prompt.is_empty() && t.agent(key.agent).is_some_and(|a| !a.launched);
         self.name_task(task, text, None)?;
-        let running = self.sessions.get_mut(&key).is_some_and(|s| s.poll_exit().is_none());
-        if running {
+        if self.is_running(key) {
             self.submit(key, text)
         } else {
             self.start_agent(key)?;
@@ -393,6 +412,11 @@ impl Engine {
 
     /// 刚启动的 Agent 准备好之后再发这句话（并回车）。
     pub(crate) fn queue_message(&mut self, key: AgentKey, text: String) {
+        // 聊天模式下由它自己排队：准备好、上一轮结束再发。
+        if let Some(chat) = self.chats.get(&key) {
+            chat.send(&text);
+            return;
+        }
         self.live.pending.entry(key).or_default().push(text);
     }
 
@@ -400,6 +424,16 @@ impl Engine {
     /// `prompt` 有值时只回答那一条提示，Agent 已经不在等它时报 `promptChanged`。
     pub fn answer(&mut self, task: TaskId, option: usize, prompt: Option<u64>) -> Result<()> {
         let key = self.writer_key(task)?;
+        if let Some(chat) = self.chats.get(&key) {
+            // 聊天模式下按问题的编号回答：已经不在问这个了（被打断、问了下一个）就不答。
+            let open = self.live.prompt.get(&key);
+            let asked = chat.ask().filter(|ask| open.is_some_and(|p| p.id == format!("ask:{}", ask.id)));
+            let current = prompt.is_none_or(|seq| open.is_some_and(|p| p.seq == Some(seq)));
+            return match asked {
+                Some(ask) if current && chat.answer(ask.id, option) => Ok(()),
+                _ => Err(UserError::PromptChanged.into()),
+            };
+        }
         if let Some(seq) = prompt {
             // 画面可能刚变，上次轮询记下的还没更新：和现在画面上的比。
             let waiting = self.agent_status(key) == AgentStatus::NeedsInput;
@@ -417,6 +451,10 @@ impl Engine {
     /// 打断 Agent 正在做的事。
     pub fn interrupt(&mut self, task: TaskId) -> Result<()> {
         let key = self.writer_key(task)?;
+        if let Some(chat) = self.chats.get(&key) {
+            chat.cancel();
+            return Ok(());
+        }
         let interrupt = self.plugin_of(key)?.keys().interrupt.clone();
         self.write(key, interrupt.as_bytes())
     }

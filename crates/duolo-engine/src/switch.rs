@@ -67,13 +67,15 @@ impl Engine {
             return self.writer_key(id);
         }
         let old = self.writer_key(id)?;
-        let was_running = self.sessions.contains_key(&old);
+        let was_running = self.sessions.contains_key(&old) || self.chats.contains_key(&old);
         let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
         let current = task.agent(old.agent).ok_or(UserError::AgentNotRunning)?;
         let handoff = self.handoff(task, current);
         let revived = self.revivable(task, &kind);
         let note = revived.and_then(|r| r.left.as_ref()).map(|left| self.welcome_back(task, left));
         let revived = revived.map(|r| r.id);
+        // 接手的照旧在聊天模式下运行，它不支持时在终端里。
+        let surface = self.surface_for(&kind, current.surface);
         let departure = Departure { at: now_secs(), seq: self.live.log.last_seq(id), commit: snapshot };
 
         let new_id = self.update(|state| {
@@ -86,6 +88,7 @@ impl Engine {
                     AgentSpec { prompt: handoff, ..AgentSpec::new(t.next_agent_id(), kind.clone(), AgentRole::Writer) }
                 }
             };
+            let next = AgentSpec { surface, ..next };
             let mut leaving = std::mem::replace(&mut t.agents[at], next);
             leaving.left = Some(departure);
             leaving.resume_note = None;

@@ -7,9 +7,10 @@
 | `duolo-core` | 领域模型（项目、任务、Agent）、配置、`state.json` 持久化、文本工具 | 无 UI、无进程 |
 | `duolo-agent` | Agent 插件：每种 Agent 怎么启动、恢复、审阅，画面怎么认，会话记录怎么读（见 [agents.md](agents.md)） | core |
 | `duolo-git` | git 命令行封装：仓库定位、worktree、改动统计 | git |
+| `duolo-chat` | 聊天模式：不开终端，通过 Agent 的结构化协议（现在是 ACP）对话，交出对话、问题和正在写的话 | core |
 | `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态（规则由插件给） | portable-pty、vt100 |
 | `duolo-voice` | 语音：录麦克风发给 Duolo 服务器识别（要的话顺便整理）、生成热词和对话提示 | core |
-| `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、git、pty |
+| `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、chat、git、pty |
 | `duolo-app` | 桌面应用后端（Tauri）：把 Engine 的能力作为命令提供给界面，推送状态快照和 Agent 输出 | engine、voice、tauri |
 | `app/` | 桌面应用界面（React + xterm.js）：侧边栏、首页、任务页、语音 | 只通过 Tauri 命令访问后端 |
 | `duolo-tui` | 终端界面（`duolo tui`，适合 SSH）：自己做 VT 合成 | engine、voice、ratatui |
@@ -132,6 +133,25 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 - 语音：`duolo-voice` 用 cpal 录系统当前的输入设备，转成 16 kHz 单声道 PCM，通过 WebSocket 发给服务器的 `/v1/voice`
   （协议见 `server/src/voice.ts`），服务器转给豆包流式识别。开始时带上 `hints.rs` 从任务事件里取的热词和最近的对话。
   没登录过时先领一个匿名身份（`~/.duolo/account.json`）。三个系统同一套，没有本机识别。
+
+## 聊天模式
+
+写代码的 Agent 可以在终端里跑它自己的命令行，也可以在聊天模式下跑（`AgentSpec.surface`），任务顶栏一键切换，
+接着同一个会话（同一个会话编号，换个方式启动）。插件有 `[chat]` 才能切；上次的选择记在 `settings.json`，新任务照着用。
+
+- **协议**：`duolo-chat` 用 ACP（Agent Client Protocol）。启动 `<命令> <chat.args>`，JSON-RPC 一行一条走标准输入输出：
+  `initialize` → 接回（`session/load`，不知道编号时先 `session/list` 找这个目录最近的一次）或新开（`session/new`，
+  再发第一句话）→ 每句话一个 `session/prompt`。不声明读写文件、开终端的能力，Agent 自己做。
+  以后 Codex 的 app-server、Claude 的 stream-json 也放在这个 crate，引擎看到的都是 `Chat`。
+- **线程**：写线程、读线程、读错误输出的线程、按顺序走流程的线程；引擎只取结果（`take_updates`、`status`、`draft`、`ask`），
+  拿着引擎的锁不等 Agent。正在干活时发来的话排在后面，这一轮结束再发。
+- **事件**：`session/update` 拼成和终端模式一样的事件（你说的话、Agent 的回复、工具调用），工具名换成会话记录里的说法
+  （`execute` → Bash）。正在写的话不记事件，放在快照的 `draft` 里，写完才记。接回会话时 Agent 会重放以前的对话，
+  已经记过的（在终端里读会话记录记下的）按内容去重，没记过的补上。
+- **问题**：`session/request_permission` 记成 `Prompt` 事件（工具、命令或文件、Agent 给的选项），手机和桌面都能答；
+  答的时候按问题的编号对，Agent 已经不在问这个了就报 `promptChanged`。打断（`session/cancel`）时在问的问题当作取消。
+- **测试**：`crates/duolo-chat/tests/fixtures/` 是用真实 CLI 录下的收发，测试程序自己当假 Agent 照着回答
+  （`duolo_chat::testing`），引擎的测试也这样跑完整的一轮。
 
 ## 跨平台
 

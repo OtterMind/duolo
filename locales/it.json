@@ -414,5 +414,16 @@
   "mobile.settings.version": "Versione {version}",
   "mobile.settings.licenses": "Licenze open source",
   "mobile.perm.camera": "Duolo usa la fotocamera per scansionare il codice mostrato sul computer.",
-  "mobile.perm.microphone": "Duolo usa il microfono per farti parlare con i tuoi agenti di programmazione."
+  "mobile.perm.microphone": "Duolo usa il microfono per farti parlare con i tuoi agenti di programmazione.",
+  "error.chatUnsupported": "Questo agente non supporta la modalità chat.",
+  "task.surfaceTerminal": "Terminale: la riga di comando di {agent}",
+  "task.surfaceChat": "Chat: parla con {agent} qui, stessa sessione",
+  "chat.placeholder": "Messaggio a {agent}…",
+  "chat.send": "Invia",
+  "chat.stop": "Ferma",
+  "chat.thinking": "Sta pensando…",
+  "chat.working": "Al lavoro…",
+  "chat.empty": "Di' a {agent} cosa fare.",
+  "chat.asks": "{agent} ha bisogno della tua conferma",
+  "tui.chatMode": "{agent} è in modalità chat · apri questa attività nell'app Duolo o passa lì al terminale"
 }

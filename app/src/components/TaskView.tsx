@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ellipsis, GitBranch, X } from "lucide-react";
+import { Ellipsis, GitBranch, MessagesSquare, SquareTerminal, X } from "lucide-react";
 
 import { useT } from "../i18n";
 
-import { api, type Agent, type Diff, type Task } from "../lib/api";
+import { api, type Agent, type Diff, type Surface, type Task } from "../lib/api";
 import type { AgentOption } from "../lib/agents";
 import { elapsed, isLive, writerOf } from "../lib/format";
 import * as terminals from "../lib/terminals";
-import type { Voice } from "../lib/voice";
+import type { Voice, VoiceTarget } from "../lib/voice";
+import { ChatView } from "./ChatView";
 import { StatusIcon } from "./StatusIcon";
 import { AgentIcon } from "./AgentIcon";
 import { AgentList, Popover } from "./AgentMenu";
@@ -19,6 +20,8 @@ import { isMac, kbd } from "../lib/platform";
 interface Props {
   task: Task;
   voice: Voice;
+  /** 聊天模式下，语音文字插到对话的输入框里。 */
+  setVoiceTarget(target: VoiceTarget | null): void;
   reviewOpen: boolean;
   /** 这个任务的审阅 Agent 本机装了没有。 */
   /** 可以换成的 Agent。 */
@@ -34,11 +37,14 @@ export function TaskView(props: Props) {
   const { task, voice, reviewOpen, agents, onReviewOpenChange, onClose, onError } = props;
   const t = useT();
   const agent = writerOf(task) ?? task.agents[0];
+  const chat = agent.surface === "chat";
   const ref = { task: task.id, agent: agent.id };
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
   const [agentMenu, setAgentMenu] = useState(false);
-  const focusTerminal = () => terminals.terminalFor(ref).term.focus();
+  const focusTerminal = () => {
+    if (!chat) terminals.terminalFor(ref).term.focus();
+  };
 
   /** 叫 `reviewer`（不给就是上次叫的那个）来审阅。 */
   const startReview = (reviewer?: string) => {
@@ -90,6 +96,7 @@ export function TaskView(props: Props) {
           )}
         </span>
         <span className="grow" data-tauri-drag-region />
+        {agent.chat && <SurfaceSwitch task={task} agent={agent} onError={onError} />}
         <ReviewButton
           task={task}
           open={reviewOpen}
@@ -118,8 +125,21 @@ export function TaskView(props: Props) {
 
       <div className="task-body">
         <div className="task-main">
-          <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
-          <VoiceBar agent={ref} voice={voice} />
+          {chat ? (
+            <ChatView
+              key={`${task.id}:${agent.id}`}
+              task={task}
+              agent={agent}
+              voice={voice}
+              setVoiceTarget={props.setVoiceTarget}
+              onError={onError}
+            />
+          ) : (
+            <>
+              <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
+              <VoiceBar agent={ref} voice={voice} />
+            </>
+          )}
         </div>
         {reviewOpen && (
           <ReviewPanel
@@ -135,6 +155,32 @@ export function TaskView(props: Props) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** 终端 / 聊天：同一个会话换个方式继续，Agent 会重新启动。 */
+function SurfaceSwitch({ task, agent, onError }: { task: Task; agent: Agent; onError(err: unknown): void }) {
+  const t = useT();
+  const pick = (surface: Surface) => {
+    if (surface !== agent.surface) api.setSurface(task.id, surface).catch(onError);
+  };
+  return (
+    <div className="segmented" role="group">
+      <button
+        className={`icon-btn ${agent.surface === "terminal" ? "is-on" : ""}`}
+        title={t("task.surfaceTerminal", { agent: agent.name })}
+        onClick={() => pick("terminal")}
+      >
+        <SquareTerminal size={14} strokeWidth={1.75} />
+      </button>
+      <button
+        className={`icon-btn ${agent.surface === "chat" ? "is-on" : ""}`}
+        title={t("task.surfaceChat", { agent: agent.name })}
+        onClick={() => pick("chat")}
+      >
+        <MessagesSquare size={14} strokeWidth={1.75} />
+      </button>
     </div>
   );
 }

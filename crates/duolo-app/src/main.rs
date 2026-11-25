@@ -197,6 +197,7 @@ fn main() {
             commands::start_agent,
             commands::start_reviewer,
             commands::switch_writer,
+            commands::set_surface,
             commands::set_reviewer,
             commands::start_review,
             commands::cancel_review,

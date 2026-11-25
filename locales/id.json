@@ -414,5 +414,16 @@
   "mobile.settings.version": "Versi {version}",
   "mobile.settings.licenses": "Lisensi sumber terbuka",
   "mobile.perm.camera": "Duolo memakai kamera untuk memindai kode yang tampil di komputer.",
-  "mobile.perm.microphone": "Duolo memakai mikrofon agar Anda bisa berbicara dengan agen pemrograman."
+  "mobile.perm.microphone": "Duolo memakai mikrofon agar Anda bisa berbicara dengan agen pemrograman.",
+  "error.chatUnsupported": "Agen ini tidak mendukung mode obrolan.",
+  "task.surfaceTerminal": "Terminal: baris perintah {agent} sendiri",
+  "task.surfaceChat": "Obrolan: bicara dengan {agent} di sini, sesi yang sama",
+  "chat.placeholder": "Pesan untuk {agent}…",
+  "chat.send": "Kirim",
+  "chat.stop": "Hentikan",
+  "chat.thinking": "Berpikir…",
+  "chat.working": "Sedang bekerja…",
+  "chat.empty": "Beri tahu {agent} apa yang harus dilakukan.",
+  "chat.asks": "{agent} perlu persetujuan Anda",
+  "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana"
 }

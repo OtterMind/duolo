@@ -56,6 +56,9 @@ pub struct Manifest {
     pub session_list: Option<SessionListSpec>,
     #[serde(default)]
     pub env: EnvSpec,
+    /// 聊天模式：通过结构化协议对话，界面由 Duolo 画。没有时只能在终端里用。
+    #[serde(default)]
+    pub chat: Option<ChatSpec>,
 }
 
 /// 没安装时提示用户运行的命令，各系统不同时分开写。
@@ -249,6 +252,23 @@ pub enum TrustScope {
     Repo,
 }
 
+/// 聊天模式认识的协议。
+pub const CHAT_PROTOCOLS: &[&str] = &["acp"];
+
+/// 聊天模式怎么启动。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChatSpec {
+    /// 协议：`acp`（Agent Client Protocol，JSON-RPC 走标准输入输出）。
+    pub protocol: String,
+    /// 跟在命令后面的参数，例如 `["acp"]`。
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// 启动时设置的环境变量。
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EnvSpec {
@@ -290,6 +310,7 @@ impl Manifest {
             hooks: None,
             session_list: None,
             env: EnvSpec::default(),
+            chat: None,
         }
     }
 
@@ -333,6 +354,9 @@ impl Manifest {
             };
             ensure!(inside(&trust.file), "trust file must be a path inside the home directory");
             ensure!(trust.env_file.as_deref().is_none_or(inside), "trust env_file must be a relative path");
+        }
+        if let Some(chat) = &self.chat {
+            ensure!(CHAT_PROTOCOLS.contains(&chat.protocol.as_str()), "unknown chat protocol {:?}", chat.protocol);
         }
         if let Some(color) = &self.icon_color {
             let hex = color.strip_prefix('#').unwrap_or_default();
@@ -386,6 +410,7 @@ mod tests {
         fails(&format!("{MINIMAL}[start]\nprompt = \"flag\"\n"), "prompt_flag");
         fails(&format!("{MINIMAL}[start]\nresume_session_args = [\"-r\"]\n"), "must contain {session}");
         fails(&format!("{MINIMAL}[start]\nsession_id_args = [\"--id\"]\n"), "session_id_args must contain");
+        fails(&format!("{MINIMAL}[chat]\nprotocol = \"smoke-signals\"\n"), "unknown chat protocol");
         fails(&format!("{MINIMAL}icon_color = \"red;}}\"\n"), "icon_color");
         fails(&format!("{MINIMAL}[transcript]\nformat = \"nope\"\nhome = \".x\"\n"), "transcript format");
         fails(&format!("{MINIMAL}[transcript]\nformat = \"claude\"\nhome = \"../x\"\n"), "home directory");

@@ -414,5 +414,16 @@
   "mobile.settings.version": "版本 {version}",
   "mobile.settings.licenses": "开源许可",
   "mobile.perm.camera": "Duolo 用相机扫描电脑上显示的二维码。",
-  "mobile.perm.microphone": "Duolo 用麦克风听你说话，把需求交给编程 Agent。"
+  "mobile.perm.microphone": "Duolo 用麦克风听你说话，把需求交给编程 Agent。",
+  "error.chatUnsupported": "这个 Agent 不支持聊天模式。",
+  "task.surfaceTerminal": "终端：用 {agent} 自己的命令行",
+  "task.surfaceChat": "聊天：在这里和 {agent} 对话，接着同一个会话",
+  "chat.placeholder": "给 {agent} 发消息…",
+  "chat.send": "发送",
+  "chat.stop": "停下",
+  "chat.thinking": "思考中…",
+  "chat.working": "正在处理…",
+  "chat.empty": "告诉 {agent} 要做什么。",
+  "chat.asks": "{agent} 需要你确认",
+  "tui.chatMode": "{agent} 在聊天模式下运行 · 在 Duolo 应用里打开这个任务，或者在那里切回终端"
 }

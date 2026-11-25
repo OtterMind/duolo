@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 duolo-agent.workspace = true
+duolo-chat.workspace = true
 duolo-core.workspace = true
 duolo-git.workspace = true
 duolo-pty.workspace = true

@@ -414,5 +414,16 @@
   "mobile.settings.version": "Phiên bản {version}",
   "mobile.settings.licenses": "Giấy phép mã nguồn mở",
   "mobile.perm.camera": "Duolo dùng máy ảnh để quét mã hiển thị trên máy tính.",
-  "mobile.perm.microphone": "Duolo dùng micrô để bạn nói với các agent lập trình."
+  "mobile.perm.microphone": "Duolo dùng micrô để bạn nói với các agent lập trình.",
+  "error.chatUnsupported": "Agent này không hỗ trợ chế độ trò chuyện.",
+  "task.surfaceTerminal": "Terminal: dòng lệnh riêng của {agent}",
+  "task.surfaceChat": "Trò chuyện: nói chuyện với {agent} tại đây, cùng phiên",
+  "chat.placeholder": "Nhắn cho {agent}…",
+  "chat.send": "Gửi",
+  "chat.stop": "Dừng",
+  "chat.thinking": "Đang suy nghĩ…",
+  "chat.working": "Đang làm…",
+  "chat.empty": "Hãy cho {agent} biết cần làm gì.",
+  "chat.asks": "{agent} cần bạn xác nhận",
+  "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó"
 }

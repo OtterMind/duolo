@@ -81,6 +81,17 @@ impl AgentRole {
     }
 }
 
+/// Agent 在哪里运行。同一次会话可以来回切换。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Surface {
+    /// 在终端里运行它自己的命令行界面。
+    #[default]
+    Terminal,
+    /// 通过它的结构化协议对话，界面由 Duolo 画（插件要有 `[chat]`）。
+    Chat,
+}
+
 /// 任务里的一个 Agent。运行时状态（进程、屏幕）不在这里，由调度引擎持有。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSpec {
@@ -102,11 +113,24 @@ pub struct AgentSpec {
     /// 下次恢复会话后先发给它的话（换回来时，这期间发生了什么）。
     #[serde(default)]
     pub resume_note: Option<String>,
+    /// 在终端里还是聊天模式下运行。旧数据里没有：终端。
+    #[serde(default)]
+    pub surface: Surface,
 }
 
 impl AgentSpec {
     pub fn new(id: u32, kind: AgentKind, role: AgentRole) -> Self {
-        Self { id, kind, role, launched: false, session: None, prompt: None, left: None, resume_note: None }
+        Self {
+            id,
+            kind,
+            role,
+            launched: false,
+            session: None,
+            prompt: None,
+            left: None,
+            resume_note: None,
+            surface: Surface::Terminal,
+        }
     }
 }
 

@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use duolo_core::{t, tf};
+use duolo_core::{t, tf, Surface};
 use duolo_engine::AgentStatus;
 use duolo_pty::Size;
 use ratatui::buffer::Buffer;
@@ -217,6 +217,11 @@ fn render_agent(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     let focused = app.focus == Focus::Main && app.mode == Mode::Normal;
+    // 聊天模式下没有终端画面，对话在桌面应用里看。
+    if app.engine.surface_of(key) == Surface::Chat {
+        centered(frame, area, Line::styled(tf("tui.chatMode", &[("agent", &name)]), theme::muted()));
+        return;
+    }
     let Some(session) = app.engine.session(key) else { return };
     let just_started = session.started().elapsed() < STARTING_GRACE;
     let (cursor, cursor_hidden, row_tail_empty, blank) = session.with_screen(|screen| {

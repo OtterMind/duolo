@@ -414,5 +414,16 @@
   "mobile.settings.version": "バージョン {version}",
   "mobile.settings.licenses": "オープンソースライセンス",
   "mobile.perm.camera": "Duolo はコンピュータに表示されたコードのスキャンにカメラを使用します。",
-  "mobile.perm.microphone": "Duolo はコーディングエージェントに話しかけるためにマイクを使用します。"
+  "mobile.perm.microphone": "Duolo はコーディングエージェントに話しかけるためにマイクを使用します。",
+  "error.chatUnsupported": "この Agent はチャットモードに対応していません。",
+  "task.surfaceTerminal": "ターミナル：{agent} 自身のコマンドライン",
+  "task.surfaceChat": "チャット：ここで {agent} と会話（同じセッションを継続）",
+  "chat.placeholder": "{agent} にメッセージ…",
+  "chat.send": "送信",
+  "chat.stop": "停止",
+  "chat.thinking": "考え中…",
+  "chat.working": "作業中…",
+  "chat.empty": "{agent} にやることを伝えてください。",
+  "chat.asks": "{agent} が確認を求めています",
+  "tui.chatMode": "{agent} はチャットモードで実行中 · Duolo アプリでこのタスクを開くか、そこでターミナルに切り替えてください"
 }

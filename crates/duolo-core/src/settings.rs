@@ -21,11 +21,13 @@ pub struct Settings {
     pub voice_organize: Option<bool>,
     /// 上次叫来审阅的 Agent（插件 id）。任务自己没选过时用它，再没有就用 `config.toml` 的 `reviewer`。
     pub reviewer: Option<String>,
+    /// 上次选的运行方式（`terminal` / `chat`），新任务的 Agent 支持的话照着用。
+    pub surface: Option<crate::Surface>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: LANGUAGE_AUTO.into(), voice_organize: None, reviewer: None }
+        Self { language: LANGUAGE_AUTO.into(), voice_organize: None, reviewer: None, surface: None }
     }
 }
 

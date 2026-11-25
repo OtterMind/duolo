@@ -414,5 +414,16 @@
   "mobile.settings.version": "버전 {version}",
   "mobile.settings.licenses": "오픈 소스 라이선스",
   "mobile.perm.camera": "Duolo는 컴퓨터에 표시된 코드를 스캔하는 데 카메라를 사용합니다.",
-  "mobile.perm.microphone": "Duolo는 코딩 에이전트에게 말할 수 있도록 마이크를 사용합니다."
+  "mobile.perm.microphone": "Duolo는 코딩 에이전트에게 말할 수 있도록 마이크를 사용합니다.",
+  "error.chatUnsupported": "이 Agent는 채팅 모드를 지원하지 않습니다.",
+  "task.surfaceTerminal": "터미널: {agent} 자체 명령줄",
+  "task.surfaceChat": "채팅: 여기서 {agent}와 대화 (같은 세션 이어서)",
+  "chat.placeholder": "{agent}에게 메시지…",
+  "chat.send": "보내기",
+  "chat.stop": "중지",
+  "chat.thinking": "생각 중…",
+  "chat.working": "작업 중…",
+  "chat.empty": "{agent}에게 할 일을 알려 주세요.",
+  "chat.asks": "{agent}가 확인을 요청합니다",
+  "tui.chatMode": "{agent}가 채팅 모드로 실행 중 · Duolo 앱에서 이 작업을 열거나 터미널로 전환하세요"
 }

@@ -27,6 +27,23 @@ export interface Agent {
   status: Status;
   /** 当前进程的编号，变化时要重新订阅输出。 */
   session: number | null;
+  /** 在哪里运行：它自己的命令行，或者 Duolo 画的对话。 */
+  surface: Surface;
+  /** 能不能在聊天模式下运行。 */
+  chat: boolean;
+  /** 聊天模式下正在写的话、在想、在用的工具（还没记成事件）。 */
+  draft: Draft | null;
+  /** 聊天模式下出错的原因（Agent 自己说的）。 */
+  error: string | null;
+}
+
+export type Surface = "terminal" | "chat";
+
+export interface Draft {
+  text: string;
+  thinking: boolean;
+  tool: string | null;
+  target: string | null;
 }
 
 export interface Task {
@@ -238,6 +255,8 @@ export const api = {
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
   switchWriter: (task: number, kind: string) => invoke<number>("switch_writer", { task, kind }),
+  /** 换个方式运行写代码的 Agent，接着同一个会话。 */
+  setSurface: (task: number, surface: Surface) => invoke<void>("set_surface", { task, surface }),
   setReviewer: (task: number, kind: string) => invoke<void>("set_reviewer", { task, kind }),
   /** 叫 `reviewer`（不给就是上次叫的）在后台审阅任务的改动。 */
   startReview: (task: number, reviewer?: string) => invoke<void>("start_review", { task, reviewer }),

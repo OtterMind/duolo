@@ -414,5 +414,16 @@
   "mobile.settings.version": "Версия {version}",
   "mobile.settings.licenses": "Лицензии открытого ПО",
   "mobile.perm.camera": "Duolo использует камеру, чтобы отсканировать код на экране компьютера.",
-  "mobile.perm.microphone": "Duolo использует микрофон, чтобы вы могли говорить с агентами."
+  "mobile.perm.microphone": "Duolo использует микрофон, чтобы вы могли говорить с агентами.",
+  "error.chatUnsupported": "Этот агент не поддерживает режим чата.",
+  "task.surfaceTerminal": "Терминал: собственная командная строка {agent}",
+  "task.surfaceChat": "Чат: общайтесь с {agent} здесь, тот же сеанс",
+  "chat.placeholder": "Сообщение для {agent}…",
+  "chat.send": "Отправить",
+  "chat.stop": "Остановить",
+  "chat.thinking": "Думает…",
+  "chat.working": "Работает…",
+  "chat.empty": "Скажите {agent}, что сделать.",
+  "chat.asks": "{agent} ждёт вашего подтверждения",
+  "tui.chatMode": "{agent} работает в режиме чата · откройте задачу в приложении Duolo или переключите там на терминал"
 }

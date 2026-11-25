@@ -12,6 +12,7 @@ repository = "https://github.com/OtterMind/duolo"
 [workspace.dependencies]
 duolo-core = { path = "crates/duolo-core" }
 duolo-agent = { path = "crates/duolo-agent" }
+duolo-chat = { path = "crates/duolo-chat" }
 duolo-git = { path = "crates/duolo-git" }
 duolo-pty = { path = "crates/duolo-pty" }
 duolo-voice = { path = "crates/duolo-voice" }

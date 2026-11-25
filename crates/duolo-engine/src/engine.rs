@@ -4,13 +4,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use duolo_agent::{Plugin, Registry, Start};
+use duolo_chat::Chat;
 use duolo_core::config::{CHANGES_IN_FILE, CHANGES_IN_GIT};
 use duolo_core::hook::HOOK_DIR_ENV;
 use duolo_core::process::OneShot;
 use duolo_core::text::{derive_title, now_secs, slug};
 use duolo_core::{
     AgentKey, AgentKind, AgentRole, AgentSpec, Config, EventKind, Paths, Project, ProjectId, Review, Settings, Stamp,
-    State, Store, Task, TaskId, UserError, Verdict,
+    State, Store, Surface, Task, TaskId, UserError, Verdict,
 };
 use duolo_git::DiffStat;
 use duolo_pty::{OutputHook, OutputSink, Rules, Session, SessionSpec, Size};
@@ -69,6 +70,7 @@ pub struct Closing {
     task: Task,
     repo: Option<PathBuf>,
     sessions: Vec<Session>,
+    chats: Vec<Chat>,
     review: Option<ReviewJob>,
 }
 
@@ -76,7 +78,7 @@ impl Closing {
     /// 停下 Agent，保存没提交的改动，删除 worktree。
     pub fn run(&mut self) -> Result<Closed> {
         // Agent 都停下来之后再保存，免得保存之后又写进来新的改动。
-        stop_all(std::mem::take(&mut self.sessions), self.review.take());
+        stop_all(std::mem::take(&mut self.sessions), std::mem::take(&mut self.chats), self.review.take());
         let task = &self.task;
         let mut closed = Closed::default();
         if task.worktree.exists() {
@@ -101,10 +103,13 @@ impl Closing {
 }
 
 /// 同时停下这些 Agent 和审阅，等它们的进程都消失。
-fn stop_all(sessions: Vec<Session>, reviews: impl IntoIterator<Item = ReviewJob>) {
+fn stop_all(sessions: Vec<Session>, chats: Vec<Chat>, reviews: impl IntoIterator<Item = ReviewJob>) {
     std::thread::scope(|scope| {
         for mut session in sessions {
             scope.spawn(move || session.stop());
+        }
+        for mut chat in chats {
+            scope.spawn(move || chat.stop());
         }
         for review in reviews {
             scope.spawn(move || review.stop());
@@ -156,9 +161,9 @@ fn rename_when_free(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 pub struct Engine {
-    paths: Paths,
+    pub(crate) paths: Paths,
     config: Config,
-    agents: Registry,
+    pub(crate) agents: Registry,
     store: Store,
     /// 内存里的状态。只通过 [`Engine::update`] 修改，别的进程改了由 [`Engine::sync`] 读进来。
     pub(crate) state: State,
@@ -167,6 +172,8 @@ pub struct Engine {
     /// 启动时发现、要告诉用户的问题（数据文件损坏、配置或插件写错了）。
     notices: Vec<UserError>,
     pub(crate) sessions: HashMap<AgentKey, Session>,
+    /// 在聊天模式下运行的 Agent（见 `chat.rs`）。一个 Agent 只会在 `sessions`、`chats` 之一里。
+    pub(crate) chats: HashMap<AgentKey, Chat>,
     /// 每次启动进程都分配一个新编号，界面据此判断要不要重新订阅输出。
     pub(crate) session_ids: HashMap<AgentKey, u64>,
     next_session_id: u64,
@@ -183,6 +190,8 @@ pub struct Engine {
     reply_language: String,
     /// 上次叫来审阅的 Agent（`settings.json` 的 `reviewer`）。
     last_reviewer: Option<AgentKind>,
+    /// 上次选的运行方式（`settings.json` 的 `surface`），新任务照着用。
+    pub(crate) last_surface: Option<Surface>,
     pane: Size,
     on_output: Option<OutputHook>,
     diffs: Diffs,
@@ -240,7 +249,9 @@ impl Engine {
         };
         remove_leftovers(&paths.worktrees());
         crate::review::remove_leftovers(&paths.reviews());
-        let last_reviewer = Settings::load(&paths.settings_file()).ok().and_then(|s| s.reviewer).map(AgentKind);
+        let settings = Settings::load(&paths.settings_file()).unwrap_or_default();
+        let last_reviewer = settings.reviewer.map(AgentKind);
+        let last_surface = settings.surface;
         Ok(Self {
             paths,
             config,
@@ -250,6 +261,7 @@ impl Engine {
             stamp,
             notices,
             sessions: HashMap::new(),
+            chats: HashMap::new(),
             session_ids: HashMap::new(),
             next_session_id: 1,
             resuming: HashSet::new(),
@@ -259,6 +271,7 @@ impl Engine {
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
             last_reviewer,
+            last_surface,
             pane: Size::new(24, 80),
             on_output: None,
             diffs: Diffs::default(),
@@ -334,6 +347,7 @@ impl Engine {
         self.stamp = stamp;
         for id in old.tasks.iter().map(|t| t.id).filter(|id| self.state.task(*id).is_none()).collect::<Vec<_>>() {
             self.sessions.retain(|key, _| key.task != id);
+            self.chats.retain(|key, _| key.task != id);
             self.reviews.remove(&id);
             self.diffs.remove(id);
             self.forget_task(id);
@@ -341,11 +355,13 @@ impl Engine {
         let gone: Vec<AgentKey> = self
             .sessions
             .keys()
+            .chain(self.chats.keys())
             .filter(|key| self.state.task(key.task).is_some_and(|t| t.agent(key.agent).is_none()))
             .copied()
             .collect();
         for key in gone {
             self.sessions.remove(&key);
+            self.chats.remove(&key);
             self.resuming.remove(&key);
             self.session_ids.remove(&key);
             let successor = self.writer_key(key.task).ok();
@@ -484,7 +500,8 @@ impl Engine {
             None => slug(&title),
         };
         let worktree = self.paths.worktrees().join(&project.id.0).join(format!("{id}-{label}"));
-        let writer = AgentSpec::new(0, writer, AgentRole::Writer);
+        let mut writer = AgentSpec::new(0, writer, AgentRole::Writer);
+        writer.surface = self.surface_for(&writer.kind, self.last_surface.unwrap_or_default());
         let task = Task {
             id,
             project: project.id,
@@ -613,7 +630,8 @@ impl Engine {
         }
         let repo = task.repo.clone().or_else(|| self.state.project(&task.project).map(|p| p.root.clone()));
         let sessions = self.sessions.extract_if(|key, _| key.task == id).map(|(_, session)| session).collect();
-        Ok(Closing { task, repo, sessions, review: self.reviews.remove(&id) })
+        let chats = self.chats.extract_if(|key, _| key.task == id).map(|(_, chat)| chat).collect();
+        Ok(Closing { task, repo, sessions, chats, review: self.reviews.remove(&id) })
     }
 
     /// 关闭任务的最后一步：`result` 是 [`Closing::run`] 的结果，失败时任务照旧。
@@ -767,10 +785,8 @@ impl Engine {
 
     /// 启动 Agent。第一次启动会带上需求，之后用恢复会话的方式启动。已在运行时什么也不做。
     pub fn start_agent(&mut self, key: AgentKey) -> Result<()> {
-        if let Some(session) = self.sessions.get_mut(&key) {
-            if session.poll_exit().is_none() {
-                return Ok(());
-            }
+        if self.is_running(key) {
+            return Ok(());
         }
         self.spawn(key, false)
     }
@@ -851,6 +867,10 @@ impl Engine {
     /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
     fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
         self.check_open(key.task)?;
+        if self.runs_in_chat(key) {
+            return self.spawn_chat(key, fresh);
+        }
+        self.chats.remove(&key);
         // 启动过的接着上次的会话；恢复不了的（不知道会话编号，插件又不能"恢复最近一次"）带着需求重新开始。
         let spec = self.state.task(key.task).and_then(|t| t.agent(key.agent)).cloned();
         let resumable =
@@ -920,6 +940,16 @@ impl Engine {
 
     pub fn stop_agent(&mut self, key: AgentKey) {
         self.sessions.remove(&key);
+        self.chats.remove(&key);
+    }
+
+    /// 有进程在跑（终端或者聊天模式）。
+    pub(crate) fn is_running(&mut self, key: AgentKey) -> bool {
+        match (self.sessions.get_mut(&key), self.chats.get_mut(&key)) {
+            (Some(session), _) => session.poll_exit().is_none(),
+            (_, Some(chat)) => !matches!(chat.status(), duolo_chat::Status::Exited { .. }),
+            _ => false,
+        }
     }
 
     /// 订阅 Agent 的原始输出，先重放已有输出。Agent 没有运行时报错。
@@ -952,6 +982,9 @@ impl Engine {
     }
 
     pub fn agent_status(&mut self, key: AgentKey) -> AgentStatus {
+        if let Some(chat) = self.chats.get_mut(&key) {
+            return chat.status().into();
+        }
         match self.sessions.get_mut(&key) {
             Some(session) => session.state().into(),
             None => AgentStatus::NotStarted,
@@ -960,8 +993,10 @@ impl Engine {
 
     pub fn summary(&mut self) -> Summary {
         let mut summary = Summary::default();
-        for session in self.sessions.values_mut() {
-            match AgentStatus::from(session.state()) {
+        let terminal = self.sessions.values_mut().map(|s| AgentStatus::from(s.state()));
+        let chat = self.chats.values_mut().map(|c| AgentStatus::from(c.status()));
+        for status in terminal.collect::<Vec<_>>().into_iter().chain(chat) {
+            match status {
                 AgentStatus::NeedsInput => summary.needs_input += 1,
                 AgentStatus::Running => summary.running += 1,
                 _ => {}
@@ -972,6 +1007,7 @@ impl Engine {
 
     pub fn has_live_sessions(&mut self) -> bool {
         self.sessions.values_mut().any(|s| s.poll_exit().is_none())
+            || self.chats.values_mut().any(|c| c.poll_exit().is_none())
     }
 
     /// 任务相对基准分支的改动统计。在后台算，这里马上返回最近一次的结果；第一次还没算完时是 None，
@@ -988,7 +1024,8 @@ impl Engine {
     /// 结束所有 Agent 和审阅，等它们的进程都消失。
     pub fn shutdown(&mut self) {
         let sessions = self.sessions.drain().map(|(_, session)| session).collect();
-        stop_all(sessions, self.reviews.drain().map(|(_, review)| review).collect::<Vec<_>>());
+        let chats = self.chats.drain().map(|(_, chat)| chat).collect();
+        stop_all(sessions, chats, self.reviews.drain().map(|(_, review)| review).collect::<Vec<_>>());
     }
 
     /// 启动 Agent 的命令。第二项是要等 Agent 准备好后再粘贴过去的第一句话（见下面的说明），一般是 None。
@@ -1061,7 +1098,7 @@ impl Engine {
 
     /// 启动前替用户信任任务的目录，Agent 就不会先停在"信任这个文件夹吗"上。用户添加项目就是信任它。
     /// 记不下来时它照样会问，不影响启动。
-    fn trust_folder(&self, key: AgentKey) {
+    pub(crate) fn trust_folder(&self, key: AgentKey) {
         let (Some(task), Ok(plugin)) = (self.state.task(key.task), self.plugin_of(key)) else { return };
         let project = self.state.project(&task.project).map(|p| p.root.clone());
         let Some(repo) = task.repo.clone().or(project) else { return };
@@ -1294,7 +1331,7 @@ mod tests {
             let err = cli.close_task(from_app).unwrap_err();
             assert!(matches!(err.downcast_ref(), Some(UserError::FolderInUse { .. })), "{err:#}");
             assert!(cli.state().task(from_app).is_some());
-            stop_all(app.sessions.drain().map(|(_, session)| session).collect(), None);
+            stop_all(app.sessions.drain().map(|(_, session)| session).collect(), Vec::new(), None);
         }
         cli.close_task(from_app).unwrap();
         app.sync();

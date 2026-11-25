@@ -12,7 +12,7 @@ mod transcript;
 mod trust;
 
 pub use hooks::HookEvent;
-pub use manifest::{Keys, Manifest, PromptVia, Screen};
-pub use plugin::{Launch, Plugin, Start};
+pub use manifest::{Keys, Manifest, PromptVia, Screen, CHAT_PROTOCOLS};
+pub use plugin::{ChatLaunch, Launch, Plugin, Start};
 pub use registry::Registry;
 pub use transcript::{Entry, Home, Sessions, Watch};

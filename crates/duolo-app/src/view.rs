@@ -1,8 +1,8 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
 use duolo_core::wire::{ReviewFacts, TaskState};
-use duolo_core::{AgentRole, State, Task, Verdict};
-use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Engine, Plugin};
+use duolo_core::{AgentRole, State, Surface, Task, Verdict};
+use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Draft, Engine, Plugin};
 use serde::Serialize;
 
 /// 侧边栏和首页需要的全部状态。后台定时生成，内容变化时推送给界面。
@@ -79,6 +79,31 @@ pub struct AgentView {
     pub status: Status,
     /// 当前进程的编号，变化时界面要重新订阅输出。
     pub session: Option<u64>,
+    /// 在哪里运行：`terminal`（它自己的命令行）或 `chat`（界面自己画对话）。
+    pub surface: &'static str,
+    /// 这种 Agent 能不能在聊天模式下运行。
+    pub chat: bool,
+    /// 聊天模式下正在写的话、在想、在用的工具。
+    pub draft: Option<DraftView>,
+    /// 聊天模式下出错的原因（Agent 自己说的，不翻译）。
+    pub error: Option<String>,
+}
+
+/// 聊天模式下 Agent 正在做的事，还没记成事件。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftView {
+    pub text: String,
+    pub thinking: bool,
+    pub tool: Option<String>,
+    pub target: Option<String>,
+}
+
+impl From<Draft> for DraftView {
+    fn from(draft: Draft) -> Self {
+        let (tool, target) = draft.tool.map_or((None, None), |(tool, target)| (Some(tool), Some(target)));
+        Self { text: draft.text, thinking: draft.thinking, tool, target }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -226,6 +251,13 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             },
             status: engine.agent_status(task.key(agent.id)).into(),
             session: engine.session_id(task.key(agent.id)),
+            surface: match engine.surface_of(task.key(agent.id)) {
+                Surface::Terminal => "terminal",
+                Surface::Chat => "chat",
+            },
+            chat: agent.role == AgentRole::Writer && engine.supports_chat(&agent.kind),
+            draft: engine.chat_draft(task.key(agent.id)).map(Into::into),
+            error: engine.chat_error(task.key(agent.id)),
         })
         .collect();
     let state = {

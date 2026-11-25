@@ -1310,6 +1310,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "duolo-chat"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "duolo-core",
+ "serde_json",
+]
+
+[[package]]
 name = "duolo-cli"
 version = "0.1.0"
 dependencies = [
@@ -1346,6 +1355,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "duolo-agent",
+ "duolo-chat",
  "duolo-core",
  "duolo-git",
  "duolo-pty",

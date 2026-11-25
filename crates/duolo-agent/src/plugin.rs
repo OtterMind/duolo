@@ -45,6 +45,16 @@ pub struct Launch {
     pub env: Vec<(String, String)>,
 }
 
+/// 在聊天模式下启动它的命令。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatLaunch {
+    /// 协议，见 [`crate::manifest::CHAT_PROTOCOLS`]。
+    pub protocol: String,
+    pub program: String,
+    pub args: Vec<String>,
+    pub env: Vec<(String, String)>,
+}
+
 impl Plugin {
     pub(crate) fn new(manifest: Manifest, icon: Option<String>) -> Self {
         Self { manifest, icon, review_command: None }
@@ -213,6 +223,17 @@ impl Plugin {
         }
         let env = spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         Launch { program: self.command().to_string(), args, paste, env }
+    }
+
+    /// 在聊天模式下启动它的命令；只能在终端里用时为 None。
+    pub fn chat(&self) -> Option<ChatLaunch> {
+        let spec = self.manifest.chat.as_ref()?;
+        Some(ChatLaunch {
+            protocol: spec.protocol.clone(),
+            program: self.command().to_string(),
+            args: spec.args.clone(),
+            env: spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+        })
     }
 
     /// 后台审阅的命令；不支持审阅时为 None。

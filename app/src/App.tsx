@@ -315,12 +315,16 @@ export function App() {
   /** 新建任务面板打开时，语音文字插到面板里。 */
   const panelTarget = useRef<VoiceTarget | null>(null);
   const setPanelTarget = useCallback((target: VoiceTarget | null) => (panelTarget.current = target), []);
+  /** 任务在聊天模式下时，语音文字插到对话的输入框里。 */
+  const chatTarget = useRef<VoiceTarget | null>(null);
+  const setChatTarget = useCallback((target: VoiceTarget | null) => (chatTarget.current = target), []);
   const currentRef = useRef(current);
   currentRef.current = current;
   const voice = useVoice({
     ready: env?.find((c) => c.kind === "voice")?.ok ?? false,
     target: () => {
       if (panelTarget.current) return panelTarget.current;
+      if (chatTarget.current) return chatTarget.current;
       const cur = currentRef.current;
       const writer = cur && writerOf(cur.task);
       return cur && writer ? { kind: "agent", ref: { task: cur.task.id, agent: writer.id } } : null;
@@ -416,6 +420,7 @@ export function App() {
           <TaskView
             task={current.task}
             voice={voice}
+            setVoiceTarget={setChatTarget}
             reviewOpen={reviewOpen === current.task.id}
             agents={agentOptions(env)}
             onReviewOpenChange={(open) => setReviewOpen(open ? current.task.id : null)}

@@ -91,6 +91,11 @@ scope = "worktree"         # worktree：任务的目录（关任务时删掉这�
 
 [env]
 remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变量
+
+[chat]                     # 聊天模式：不开终端，Duolo 通过协议和它对话、自己画界面；没有就只能在终端里用
+protocol = "acp"           # 现在只有 acp（Agent Client Protocol，JSON-RPC 走标准输入输出）
+args = ["acp"]             # 跟在命令后面
+env = { TOY_NO_UPDATE = "1" }
 ```
 
 只有 `schema`、`id`、`name`、`command` 必填。写了不认识的字段会报错，免得拼错了没发现。
@@ -122,11 +127,15 @@ remove = ["TOY_SESSION"]   # 启动任何 Agent 时都不传下去的环境变�
   Duolo 才不会在这时发消息、替用户按回车。
 - **状态尽量让它自己报告**（OSC 7501，Program Status Protocol）：Duolo 会回答它的询问，收到报告以后状态以报告为准，
   画面上的字（`[screen]`）只在它不报告、或者还没开始报告（启动时的对话框）时用。程序改了界面也不受影响。
+- **聊天模式和终端用同一套会话**：`[chat]` 开的会话编号要能交给 `resume_session_args` 接着用（反过来也一样），
+  用户才能随时切换。用真实的 CLI 录一遍收发（`crates/duolo-chat/tests/fixtures/`，格式见 `duolo_chat::testing`），
+  测试照着它回答；`cargo test -p duolo-chat --test acp real_opencode -- --ignored` 这样的测试用真的程序跑一遍。
 - **升级后先看能不能用**：`cargo test -p duolo-engine real_commands -- --ignored` 用真实的 CLI 试一遍参数；
   不认得 `session_id_args` 的版本，Duolo 发现后会改为不定编号重新开始。
 
 ## 现在还做不到的
 
-- 没有终端界面的 Agent（只有网页或 ACP 协议的）。
+- 只有 ACP、没有终端界面的 Agent：任务默认先在终端里启动，聊天模式要在任务里切过去。
+- 聊天模式下的审阅者：后台审阅照旧用 `[review]`，在终端里打开的审阅者也照旧在终端里。
 - 没有编号的确认框不能在手机上回答。
 - 终端界面里还不能换写代码的 Agent（可以在另一个终端里用 `duolo switch`）。

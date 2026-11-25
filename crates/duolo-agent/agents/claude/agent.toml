@@ -5,8 +5,18 @@ name = "Claude"
 command = "claude"
 icon_color = "#d97757"
 
+# 官方的安装脚本，不用先装 Node（和 T3 Code 一样）。
 [install]
-default = "npm install -g @anthropic-ai/claude-code"
+default = "curl -fsSL https://claude.ai/install.sh | bash"
+windows = "irm https://claude.ai/install.ps1 | iex"
+
+# Claude 的订阅（Pro、Max）直接登录 Claude Code，额度和客户端共用。装了 Claude 桌面版就说明用户有这个账号。
+[account]
+status_args = ["auth", "status"]
+login_args = ["auth", "login"]
+apps = [
+  { name = "Claude", macos = ["/Applications/Claude.app", "~/Applications/Claude.app"], windows = ["{LOCALAPPDATA}/AnthropicClaude/claude.exe"] },
+]
 
 [start]
 prompt = "argument"

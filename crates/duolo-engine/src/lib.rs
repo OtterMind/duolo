@@ -15,14 +15,16 @@ mod naming;
 pub mod ops;
 mod prompt;
 mod review;
+mod setup;
 mod status;
 mod switch;
 
 pub use duolo_agent::{Plugin, Registry};
 pub use duolo_chat::Draft;
 pub use duolo_git::DiffStat;
-pub use duolo_pty::Size;
+pub use duolo_pty::{Session, Size};
 pub use engine::{repos_in, Closed, Closing, Engine, NewTask, TaskOptions};
 pub use env::{check_environment, Check, CheckKind};
 pub use naming::suggest_branch;
+pub use setup::{start_setup, SetupStep};
 pub use status::{AgentStatus, Summary};

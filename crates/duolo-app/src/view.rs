@@ -182,6 +182,10 @@ pub struct CheckView {
     pub version: String,
     /// 装的版本太旧时，最低要求的版本。
     pub minimum: String,
+    /// 本机装了的、用同一个账号的桌面客户端，没有时为空。
+    pub app: String,
+    /// 有没有登录；不知道时为 null。
+    pub signed_in: Option<bool>,
 }
 
 impl From<Check> for CheckView {
@@ -200,6 +204,8 @@ impl From<Check> for CheckView {
             command: check.command,
             version: check.version,
             minimum: check.minimum,
+            app: check.app,
+            signed_in: check.signed_in,
         }
     }
 }

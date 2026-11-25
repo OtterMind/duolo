@@ -445,5 +445,22 @@
   "sidebar.taskCount": "Задач: {count}",
   "command.nextWaiting": "К следующей задаче, ожидающей вас",
   "command.split": "Разделить: открыть другую задачу рядом",
-  "command.unsplit": "Закрыть разделение"
+  "command.unsplit": "Закрыть разделение",
+  "setup.install": "Установить",
+  "setup.signIn": "Войти",
+  "setup.installAndSignIn": "Установить и войти",
+  "setup.installTitle": "Установка {agent}",
+  "setup.signInTitle": "Вход в {agent}",
+  "setup.installHint": "Запускается официальный установщик: {command}",
+  "setup.signInHint": "Браузер откроет вход в {agent}. Если появится код, вставьте его ниже.",
+  "setup.ready": "{agent} готов",
+  "setup.readyBody": "{agent} установлен, вход выполнен. Выберите его при создании задачи.",
+  "setup.failed": "Не завершено. Посмотрите вывод выше и попробуйте снова.",
+  "setup.notFound": "Установлено, но Duolo пока не находит команду {agent}. Перезапустите Duolo или проверьте в новом терминале, что она запускается.",
+  "setup.retry": "Повторить",
+  "setup.done": "Готово",
+  "setup.notSignedIn": "Вход не выполнен",
+  "setup.notSignedInHint": "В {agent} ещё не выполнен вход.",
+  "setup.appFound": "У вас есть {app}: {agent} работает с тем же аккаунтом без доплаты.",
+  "setup.dismiss": "Больше не показывать"
 }

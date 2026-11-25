@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} tác vụ",
   "command.nextWaiting": "Đến tác vụ tiếp theo đang chờ bạn",
   "command.split": "Chia đôi: mở tác vụ khác bên cạnh",
-  "command.unsplit": "Đóng chia đôi"
+  "command.unsplit": "Đóng chia đôi",
+  "setup.install": "Cài đặt",
+  "setup.signIn": "Đăng nhập",
+  "setup.installAndSignIn": "Cài đặt và đăng nhập",
+  "setup.installTitle": "Cài đặt {agent}",
+  "setup.signInTitle": "Đăng nhập {agent}",
+  "setup.installHint": "Đang chạy trình cài đặt chính thức: {command}",
+  "setup.signInHint": "Trình duyệt sẽ mở trang đăng nhập {agent}. Nếu hiện mã, hãy dán vào bên dưới.",
+  "setup.ready": "{agent} đã sẵn sàng",
+  "setup.readyBody": "{agent} đã được cài và đăng nhập. Chọn nó khi tạo tác vụ.",
+  "setup.failed": "Chưa hoàn tất. Xem kết quả phía trên rồi thử lại.",
+  "setup.notFound": "Đã cài, nhưng Duolo chưa tìm thấy lệnh của {agent}. Khởi động lại Duolo, hoặc mở terminal mới để kiểm tra lệnh chạy được.",
+  "setup.retry": "Thử lại",
+  "setup.done": "Xong",
+  "setup.notSignedIn": "Chưa đăng nhập",
+  "setup.notSignedInHint": "{agent} chưa đăng nhập.",
+  "setup.appFound": "Bạn có {app}: {agent} dùng cùng tài khoản, không tốn thêm phí.",
+  "setup.dismiss": "Không hiện lại"
 }

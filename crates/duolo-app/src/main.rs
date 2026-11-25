@@ -9,6 +9,7 @@
 mod commands;
 mod fnkey;
 mod platform;
+mod setup;
 #[cfg(unix)]
 mod shell_env;
 mod view;
@@ -47,6 +48,8 @@ pub struct AppState {
     quit_seen: AtomicBool,
     /// 正在用系统弹窗问要不要退出。
     asking_quit: AtomicBool,
+    /// 正在运行的一键安装或登录。
+    setup: setup::Setup,
 }
 
 impl AppState {
@@ -119,6 +122,7 @@ fn main() {
         open_request: Mutex::new(path_arg(std::env::args().skip(1), None).inspect(|p| eprintln!("open request: {p}"))),
         quit_seen: AtomicBool::new(false),
         asking_quit: AtomicBool::new(false),
+        setup: setup::Setup::default(),
     };
 
     let builder = tauri::Builder::default()
@@ -206,6 +210,10 @@ fn main() {
             commands::newline,
             commands::send_text,
             commands::resize,
+            setup::setup_start,
+            setup::setup_write,
+            setup::setup_resize,
+            setup::setup_stop,
             commands::diff_stat,
             commands::reveal,
             commands::open_terminal,

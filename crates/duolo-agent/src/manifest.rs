@@ -59,6 +59,44 @@ pub struct Manifest {
     /// 聊天模式：通过结构化协议对话，界面由 Duolo 画。没有时只能在终端里用。
     #[serde(default)]
     pub chat: Option<ChatSpec>,
+    /// 账号：查有没有登录、怎么登录，以及用同一个账号的桌面客户端。
+    #[serde(default)]
+    pub account: Option<AccountSpec>,
+}
+
+/// 账号。装了用同一个账号的桌面客户端、却没装这个 CLI 时，界面提示可以一键装上，用同一个账号登录。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AccountSpec {
+    /// 查有没有登录的参数：已登录时退出码为 0。没写时不查。
+    pub status_args: Vec<String>,
+    /// 登录的参数。在终端里运行：它会打开浏览器，有时要用户把授权码粘贴回来。
+    pub login_args: Vec<String>,
+    /// 用同一个账号的桌面客户端。
+    pub apps: Vec<AppSpec>,
+}
+
+/// 一个桌面客户端：名字和各系统上可能装在哪里。路径里 `~` 是家目录，`{变量名}` 换成环境变量。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AppSpec {
+    pub name: String,
+    pub macos: Vec<String>,
+    pub windows: Vec<String>,
+    pub linux: Vec<String>,
+}
+
+impl AppSpec {
+    /// 当前系统上可能的位置。
+    pub fn paths(&self) -> &[String] {
+        if cfg!(target_os = "macos") {
+            &self.macos
+        } else if cfg!(windows) {
+            &self.windows
+        } else {
+            &self.linux
+        }
+    }
 }
 
 /// 没安装时提示用户运行的命令，各系统不同时分开写。
@@ -306,6 +344,7 @@ impl Manifest {
             icon_color: None,
             minimum_version: None,
             install: Install::default(),
+            account: None,
             start: StartSpec::default(),
             review: None,
             quick: None,
@@ -325,6 +364,9 @@ impl Manifest {
         ensure!(!self.id.is_empty() && self.id.chars().all(id_ok), "invalid id {:?}: use a-z, 0-9, - and _", self.id);
         ensure!(!self.name.trim().is_empty(), "name is empty");
         ensure!(!self.command.trim().is_empty(), "command is empty");
+        if let Some(account) = &self.account {
+            ensure!(account.apps.iter().all(|a| !a.name.trim().is_empty()), "account.apps: name is empty");
+        }
         if self.start.prompt == PromptVia::Flag {
             ensure!(!self.start.prompt_flag.is_empty(), "prompt = \"flag\" needs prompt_flag");
         }

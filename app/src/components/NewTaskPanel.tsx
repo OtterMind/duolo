@@ -17,6 +17,7 @@ import {
   Sparkles,
   SquareTerminal,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
@@ -35,6 +36,7 @@ import { useModalFocus } from "../lib/modal";
 import { pluginName, pluginOf } from "../lib/plugins";
 import { AgentIcon } from "./AgentIcon";
 import { AgentMenu, CopyCommand, Popover } from "./AgentMenu";
+import { onSetupReady, requestSetup } from "../lib/setup";
 import { Waveform } from "./VoiceBar";
 import { TALK_KEY } from "../lib/platform";
 
@@ -99,6 +101,8 @@ export function NewTaskPanel(props: Props) {
     pickedAgents.current = true;
     setChoice((c) => ({ ...c, writer: id }));
   };
+  // 一键装好、登录好的 Agent 顺手选上。
+  useEffect(() => onSetupReady(pickWriter), []);
   /** 在输入框里按 ⇥ / ⇧⇥ 轮换写代码的 Agent（只在装了的里面换）。 */
   const cycleWriter = (delta: number) => {
     const installed = agents.filter((a) => a.installed);
@@ -373,7 +377,11 @@ export function NewTaskPanel(props: Props) {
           </button>
         </div>
       </div>
-      {noAgent && <NoAgentNotice agents={agents} onRecheck={props.onRefreshEnv} />}
+      {noAgent ? (
+        <NoAgentNotice agents={agents} onRecheck={props.onRefreshEnv} />
+      ) : (
+        <SetupHint agents={agents} writer={choice.writer} />
+      )}
     </div>
   );
 }
@@ -723,17 +731,82 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
           {t("newTask.recheck")}
         </button>
       </div>
+      {/* 装了同一个账号的桌面客户端的排在前面：这些用户已经有账号，装上登录就能用。 */}
       {agents
         .filter((a) => a.install)
+        .sort((a, b) => Number(!!b.app) - Number(!!a.app))
         .map((a) => (
           <div key={a.id} className="install-row">
             <AgentIcon kind={a.id} size={14} />
-            <code className="grow">{a.install}</code>
+            <div className="grow install-what">
+              {a.app && <span className="install-app">{t("setup.appFound", { app: a.app, agent: a.name })}</span>}
+              <code>{a.install}</code>
+            </div>
             <CopyCommand command={a.install} />
+            <button className="btn small primary" onClick={() => requestSetup(a.id)}>
+              {t(a.signedIn === null ? "setup.install" : "setup.installAndSignIn")}
+            </button>
           </div>
         ))}
     </div>
   );
+}
+
+/**
+ * 有 Agent 可用时的提示（最多一条）：选中的 Agent 还没登录；或者装了某个桌面客户端（ChatGPT、Claude），
+ * 对应的 CLI 却没装——用户已经有这个账号，一键装上、登录就能用，不另外收费。
+ */
+function SetupHint({ agents, writer }: { agents: AgentOption[]; writer: string }) {
+  const t = useT();
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const selected = agents.find((a) => a.id === writer && a.installed && a.signedIn === false);
+  const fromApp = agents.find((a) => !a.installed && a.app && a.install && !dismissed.includes(a.id));
+  const agent = selected ?? fromApp;
+  if (!agent) return null;
+  return (
+    <div className="panel-notice setup-hint" role="status">
+      <AgentIcon kind={agent.id} size={14} />
+      <span className="grow">
+        {selected
+          ? t("setup.notSignedInHint", { agent: agent.name })
+          : t("setup.appFound", { app: agent.app, agent: agent.name })}
+      </span>
+      <button className="btn small primary" onClick={() => requestSetup(agent.id)}>
+        {t(selected ? "setup.signIn" : "setup.installAndSignIn")}
+      </button>
+      {!selected && (
+        <button
+          className="icon-btn"
+          title={t("setup.dismiss")}
+          onClick={() => {
+            const next = [...dismissed, agent.id];
+            setDismissed(next);
+            writeDismissed(next);
+          }}
+        >
+          <X size={13} strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+const DISMISSED_KEY = "duolo.setupHintDismissed";
+
+function readDismissed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissed(ids: string[]) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+  } catch {
+    // 记不住就下次再提示。
+  }
 }
 
 /**

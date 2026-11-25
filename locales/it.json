@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} attività",
   "command.nextWaiting": "Vai alla prossima attività che ti aspetta",
   "command.split": "Vista divisa: apri un'altra attività accanto",
-  "command.unsplit": "Chiudi vista divisa"
+  "command.unsplit": "Chiudi vista divisa",
+  "setup.install": "Installa",
+  "setup.signIn": "Accedi",
+  "setup.installAndSignIn": "Installa e accedi",
+  "setup.installTitle": "Installa {agent}",
+  "setup.signInTitle": "Accedi a {agent}",
+  "setup.installHint": "Esecuzione dell'installer ufficiale: {command}",
+  "setup.signInHint": "Il browser apre l'accesso a {agent}. Se mostra un codice, incollalo qui sotto.",
+  "setup.ready": "{agent} è pronto",
+  "setup.readyBody": "{agent} è installato e hai effettuato l'accesso. Sceglilo quando crei un'attività.",
+  "setup.failed": "Non completato. Guarda l'output sopra e riprova.",
+  "setup.notFound": "Installato, ma Duolo non trova ancora il comando di {agent}. Riavvia Duolo o verifica in un nuovo terminale che funzioni.",
+  "setup.retry": "Riprova",
+  "setup.done": "Fatto",
+  "setup.notSignedIn": "Accesso non effettuato",
+  "setup.notSignedInHint": "{agent} non ha ancora effettuato l'accesso.",
+  "setup.appFound": "Hai {app}: {agent} usa lo stesso account, senza costi aggiuntivi.",
+  "setup.dismiss": "Non mostrare più"
 }

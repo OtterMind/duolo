@@ -16,6 +16,10 @@ export interface AgentOption {
   install: string;
   /** 装了但太旧时：装的版本和最低要求。 */
   tooOld: { version: string; minimum: string } | null;
+  /** 本机装了的、用同一个账号的桌面客户端（例如 ChatGPT），没有时为空。 */
+  app: string;
+  /** 有没有登录；不知道时为 null。 */
+  signedIn: boolean | null;
 }
 
 /** 新建任务时选的：谁来写。审阅不在这里选，要的时候在任务里随时叫（见 TaskView 的审阅按钮）。 */
@@ -35,6 +39,8 @@ export function agentOptions(env: Check[] | null): AgentOption[] {
       reviews: pluginOf(c.agent)?.reviews ?? true,
       install: c.install,
       tooOld: c.minimum ? { version: c.version, minimum: c.minimum } : null,
+      app: c.app,
+      signedIn: c.signedIn,
     }));
 }
 

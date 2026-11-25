@@ -1990,3 +1990,54 @@ body.is-resizing * {
 .side-command:hover {
   background: var(--hover);
 }
+
+/* 一键安装、登录 Agent */
+
+.setup-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+.setup-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.setup-terminal {
+  height: 260px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #161616;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.setup-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px !important;
+}
+.setup-result .ok {
+  color: var(--ok, #8fc286);
+  flex: none;
+}
+.setup-result .warn {
+  flex: none;
+}
+.setup-hint {
+  gap: 10px;
+}
+.install-what {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.install-app {
+  color: var(--text);
+  font-size: 12.5px;
+}
+.install-what code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

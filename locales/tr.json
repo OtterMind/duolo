@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} görev",
   "command.nextWaiting": "Sizi bekleyen sonraki göreve git",
   "command.split": "Bölünmüş görünüm: yanına başka bir görev aç",
-  "command.unsplit": "Bölünmüş görünümü kapat"
+  "command.unsplit": "Bölünmüş görünümü kapat",
+  "setup.install": "Kur",
+  "setup.signIn": "Giriş yap",
+  "setup.installAndSignIn": "Kur ve giriş yap",
+  "setup.installTitle": "{agent} kuruluyor",
+  "setup.signInTitle": "{agent} hesabına giriş",
+  "setup.installHint": "Resmi yükleyici çalışıyor: {command}",
+  "setup.signInHint": "Tarayıcınız {agent} giriş sayfasını açar. Bir kod gösterirse aşağıya yapıştırın.",
+  "setup.ready": "{agent} hazır",
+  "setup.readyBody": "{agent} kuruldu ve giriş yapıldı. Görev oluştururken seçebilirsiniz.",
+  "setup.failed": "Tamamlanmadı. Yukarıdaki çıktıya bakıp tekrar deneyin.",
+  "setup.notFound": "Kuruldu ama Duolo henüz {agent} komutunu bulamıyor. Duolo'yu yeniden başlatın veya yeni bir terminalde çalıştığını kontrol edin.",
+  "setup.retry": "Tekrar dene",
+  "setup.done": "Bitti",
+  "setup.notSignedIn": "Giriş yapılmadı",
+  "setup.notSignedInHint": "{agent} için henüz giriş yapılmadı.",
+  "setup.appFound": "{app} yüklü: {agent} aynı hesapla, ek ücret olmadan çalışır.",
+  "setup.dismiss": "Bir daha gösterme"
 }

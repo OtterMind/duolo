@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} 個任務",
   "command.nextWaiting": "跳到下一個等你確認的任務",
   "command.split": "分割畫面：在旁邊開啟另一個任務",
-  "command.unsplit": "關閉分割畫面"
+  "command.unsplit": "關閉分割畫面",
+  "setup.install": "安裝",
+  "setup.signIn": "登入",
+  "setup.installAndSignIn": "安裝並登入",
+  "setup.installTitle": "安裝 {agent}",
+  "setup.signInTitle": "登入 {agent}",
+  "setup.installHint": "正在執行官方安裝指令碼：{command}",
+  "setup.signInHint": "瀏覽器會開啟 {agent} 的登入頁。如果頁面給出授權碼，貼到下面。",
+  "setup.ready": "{agent} 可以用了",
+  "setup.readyBody": "{agent} 已經裝好並登入，新建任務時選它就行。",
+  "setup.failed": "沒有完成。看看上面的輸出，再試一次。",
+  "setup.notFound": "裝好了，但 Duolo 還找不到 {agent} 的指令。重新啟動 Duolo，或開啟新終端機看看能不能執行。",
+  "setup.retry": "再試一次",
+  "setup.done": "完成",
+  "setup.notSignedIn": "未登入",
+  "setup.notSignedInHint": "{agent} 還沒登入。",
+  "setup.appFound": "你裝了 {app}：{agent} 用同一個帳號，不另外收費。",
+  "setup.dismiss": "不再提示"
 }

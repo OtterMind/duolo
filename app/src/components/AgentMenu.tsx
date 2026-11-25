@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Download, LogIn } from "lucide-react";
 
 import { useT } from "../i18n";
 import type { AgentOption } from "../lib/agents";
+import { requestSetup } from "../lib/setup";
 import { AgentIcon } from "./AgentIcon";
 
 /** 选谁写或谁审：一个下拉框，里面一组 Agent。 */
@@ -45,7 +46,9 @@ export function AgentList({
             <button key={a.id} className="menu-item" onClick={() => onPick(a.id)}>
               <AgentIcon kind={a.id} size={14} />
               <span>{a.name}</span>
+              {a.signedIn === false && <span className="meta">{t("setup.notSignedIn")}</span>}
               <span className="grow" />
+              {a.signedIn === false && <SetupButton agent={a} />}
               {a.id === selected && <Check size={13} strokeWidth={2} />}
             </button>
           ) : (
@@ -55,11 +58,34 @@ export function AgentList({
               <span className="meta">{a.tooOld ? t("newTask.tooOld", a.tooOld) : t("newTask.notInstalled")}</span>
               <span className="grow" />
               {a.install && <CopyCommand command={a.install} />}
+              {a.install && <SetupButton agent={a} />}
             </div>
           ),
         )}
       </div>
     </>
+  );
+}
+
+/** 一键安装（没装、太旧时）或登录（没登录时）。 */
+export function SetupButton({ agent }: { agent: AgentOption }) {
+  const t = useT();
+  const signIn = agent.installed;
+  const label = signIn ? t("setup.signIn") : t("setup.install");
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      className="icon-btn"
+      title={signIn ? t("setup.signInTitle", { agent: agent.name }) : t("setup.installTitle", { agent: agent.name })}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        requestSetup(agent.id);
+      }}
+    >
+      {signIn ? <LogIn size={13} strokeWidth={1.75} /> : <Download size={13} strokeWidth={1.75} />}
+    </span>
   );
 }
 

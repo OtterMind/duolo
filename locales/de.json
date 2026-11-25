@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} Aufgaben",
   "command.nextWaiting": "Zur nächsten Aufgabe, die auf dich wartet",
   "command.split": "Geteilte Ansicht: weitere Aufgabe daneben öffnen",
-  "command.unsplit": "Geteilte Ansicht schließen"
+  "command.unsplit": "Geteilte Ansicht schließen",
+  "setup.install": "Installieren",
+  "setup.signIn": "Anmelden",
+  "setup.installAndSignIn": "Installieren und anmelden",
+  "setup.installTitle": "{agent} installieren",
+  "setup.signInTitle": "Bei {agent} anmelden",
+  "setup.installHint": "Offizieller Installer läuft: {command}",
+  "setup.signInHint": "Dein Browser öffnet die Anmeldung für {agent}. Wenn ein Code angezeigt wird, füge ihn unten ein.",
+  "setup.ready": "{agent} ist bereit",
+  "setup.readyBody": "{agent} ist installiert und angemeldet. Wähle es beim Erstellen einer Aufgabe.",
+  "setup.failed": "Nicht abgeschlossen. Sieh dir die Ausgabe oben an und versuche es erneut.",
+  "setup.notFound": "Installiert, aber Duolo findet den Befehl von {agent} noch nicht. Starte Duolo neu oder prüfe in einem neuen Terminal, ob er läuft.",
+  "setup.retry": "Erneut versuchen",
+  "setup.done": "Fertig",
+  "setup.notSignedIn": "Nicht angemeldet",
+  "setup.notSignedInHint": "{agent} ist noch nicht angemeldet.",
+  "setup.appFound": "Du hast {app}: {agent} nutzt dasselbe Konto, ohne Zusatzkosten.",
+  "setup.dismiss": "Nicht mehr anzeigen"
 }

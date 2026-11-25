@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} tarefas",
   "command.nextWaiting": "Ir para a próxima tarefa que espera por você",
   "command.split": "Tela dividida: abrir outra tarefa ao lado",
-  "command.unsplit": "Fechar tela dividida"
+  "command.unsplit": "Fechar tela dividida",
+  "setup.install": "Instalar",
+  "setup.signIn": "Entrar",
+  "setup.installAndSignIn": "Instalar e entrar",
+  "setup.installTitle": "Instalar {agent}",
+  "setup.signInTitle": "Entrar no {agent}",
+  "setup.installHint": "Executando o instalador oficial: {command}",
+  "setup.signInHint": "Seu navegador abre o login do {agent}. Se aparecer um código, cole abaixo.",
+  "setup.ready": "{agent} está pronto",
+  "setup.readyBody": "{agent} está instalado e conectado. Escolha-o ao criar uma tarefa.",
+  "setup.failed": "Não terminou. Veja a saída acima e tente de novo.",
+  "setup.notFound": "Instalado, mas o Duolo ainda não encontra o comando do {agent}. Reinicie o Duolo ou abra um terminal novo e verifique se funciona.",
+  "setup.retry": "Tentar de novo",
+  "setup.done": "Concluir",
+  "setup.notSignedIn": "Não conectado",
+  "setup.notSignedInHint": "{agent} ainda não está conectado.",
+  "setup.appFound": "Você tem o {app}: o {agent} usa a mesma conta, sem custo extra.",
+  "setup.dismiss": "Não mostrar novamente"
 }

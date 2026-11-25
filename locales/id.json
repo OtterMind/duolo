@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} tugas",
   "command.nextWaiting": "Ke tugas berikutnya yang menunggu Anda",
   "command.split": "Tampilan terpisah: buka tugas lain di samping",
-  "command.unsplit": "Tutup tampilan terpisah"
+  "command.unsplit": "Tutup tampilan terpisah",
+  "setup.install": "Pasang",
+  "setup.signIn": "Masuk",
+  "setup.installAndSignIn": "Pasang dan masuk",
+  "setup.installTitle": "Pasang {agent}",
+  "setup.signInTitle": "Masuk ke {agent}",
+  "setup.installHint": "Menjalankan pemasang resmi: {command}",
+  "setup.signInHint": "Browser Anda membuka halaman masuk {agent}. Jika menampilkan kode, tempel di bawah.",
+  "setup.ready": "{agent} siap",
+  "setup.readyBody": "{agent} sudah terpasang dan masuk. Pilih saat membuat tugas.",
+  "setup.failed": "Belum selesai. Lihat keluaran di atas, lalu coba lagi.",
+  "setup.notFound": "Sudah terpasang, tetapi Duolo belum menemukan perintah {agent}. Mulai ulang Duolo, atau buka terminal baru dan periksa apakah bisa dijalankan.",
+  "setup.retry": "Coba lagi",
+  "setup.done": "Selesai",
+  "setup.notSignedIn": "Belum masuk",
+  "setup.notSignedInHint": "{agent} belum masuk.",
+  "setup.appFound": "Anda punya {app}: {agent} memakai akun yang sama, tanpa biaya tambahan.",
+  "setup.dismiss": "Jangan tampilkan lagi"
 }

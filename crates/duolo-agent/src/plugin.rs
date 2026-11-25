@@ -133,6 +133,24 @@ impl Plugin {
         self.manifest.install.command()
     }
 
+    /// 查有没有登录的命令；插件没写时为 None。
+    pub fn account_status(&self) -> Option<Vec<String>> {
+        let args = &self.manifest.account.as_ref()?.status_args;
+        (!args.is_empty()).then(|| std::iter::once(self.command().to_string()).chain(args.iter().cloned()).collect())
+    }
+
+    /// 登录的参数；插件没写时为 None。
+    pub fn login_args(&self) -> Option<&[String]> {
+        let args = &self.manifest.account.as_ref()?.login_args;
+        (!args.is_empty()).then_some(args.as_slice())
+    }
+
+    /// 本机装了的、用同一个账号的桌面客户端的名字。
+    pub fn installed_app(&self) -> Option<&str> {
+        let apps = &self.manifest.account.as_ref()?.apps;
+        apps.iter().find(|app| app.paths().iter().any(|p| expand(p).exists())).map(|app| app.name.as_str())
+    }
+
     /// 单色的 SVG 图标。
     pub fn icon(&self) -> Option<&str> {
         self.icon.as_deref()
@@ -310,6 +328,28 @@ impl Plugin {
     }
 }
 
+/// 客户端的路径：`~` 换成家目录，`{变量名}` 换成环境变量（没有这个变量时整个路径不算）。
+fn expand(path: &str) -> std::path::PathBuf {
+    let mut out = String::new();
+    let mut rest = path;
+    if let Some(tail) = rest.strip_prefix("~/").or_else(|| rest.strip_prefix("~\\")) {
+        out.push_str(&process::home_dir().display().to_string());
+        out.push('/');
+        rest = tail;
+    }
+    while let Some(start) = rest.find('{') {
+        let Some(len) = rest[start..].find('}') else { break };
+        out.push_str(&rest[..start]);
+        match std::env::var(&rest[start + 1..start + len]) {
+            Ok(value) => out.push_str(&value),
+            Err(_) => return std::path::PathBuf::new(),
+        }
+        rest = &rest[start + len + 1..];
+    }
+    out.push_str(rest);
+    out.into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,5 +469,26 @@ mod tests {
         });
         assert!(custom.manifest.start.resume_args.is_empty(), "写成空的就是空的");
         assert_eq!(custom.review().unwrap(), OneShot::from(vec!["my-review".to_string()]));
+    }
+
+    #[test]
+    fn account_and_desktop_apps() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Toy.app");
+        std::fs::create_dir(&app).unwrap();
+        std::env::set_var("DUOLO_TEST_APPS", dir.path());
+        let paths = "[\"/nowhere/Toy.app\", \"{DUOLO_TEST_APPS}/Toy.app\", \"{DUOLO_NO_SUCH_VAR}/Toy.app\"]";
+        let text = format!(
+            "schema = 1\nid = \"x\"\nname = \"X\"\ncommand = \"x\"\n[account]\nstatus_args = [\"auth\", \"status\"]\n\
+             login_args = [\"login\"]\napps = [{{ name = \"Toy\", macos = {paths}, windows = {paths}, linux = {paths} }}]\n"
+        );
+        let p = Plugin::new(Manifest::parse(&text).unwrap(), None);
+        assert_eq!(p.installed_app(), Some("Toy"));
+        assert_eq!(p.account_status().unwrap(), ["x", "auth", "status"]);
+        assert_eq!(p.login_args().unwrap(), ["login"]);
+        assert_eq!(expand("{DUOLO_NO_SUCH_VAR}/a"), std::path::PathBuf::new(), "没有这个变量时整个路径不算");
+        assert!(expand("~/Apps/Toy.app").starts_with(process::home_dir()));
+        // 没写 [account] 的：不查登录，也不认客户端。
+        assert!(plugin("").installed_app().is_none() && plugin("").account_status().is_none());
     }
 }

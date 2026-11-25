@@ -6,8 +6,20 @@ command = "codex"
 # 更旧的版本少了 Duolo 要用的东西（和 Orca 的下限一样）。
 minimum_version = "0.136.0"
 
+# 官方的安装脚本，不用先装 Node（和 T3 Code 一样）。
 [install]
-default = "npm install -g @openai/codex"
+default = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+windows = "irm https://chatgpt.com/codex/install.ps1 | iex"
+
+# ChatGPT 的账号（Plus、Pro、Team）直接登录 Codex，用的是同一份额度。
+# 装了 ChatGPT 或 Codex 的桌面客户端，就说明用户有这个账号。
+[account]
+status_args = ["login", "status"]
+login_args = ["login"]
+apps = [
+  { name = "ChatGPT", macos = ["/Applications/ChatGPT.app", "~/Applications/ChatGPT.app"] },
+  { name = "Codex", macos = ["/Applications/Codex.app", "~/Applications/Codex.app"] },
+]
 
 [start]
 # 启动时的"有新版本"对话框：在那里按回车会选"现在升级"，装完就退出。

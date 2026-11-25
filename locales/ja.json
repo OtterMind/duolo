@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} 件のタスク",
   "command.nextWaiting": "あなたの確認を待つ次のタスクへ移動",
   "command.split": "分割表示：別のタスクを横に開く",
-  "command.unsplit": "分割表示を閉じる"
+  "command.unsplit": "分割表示を閉じる",
+  "setup.install": "インストール",
+  "setup.signIn": "サインイン",
+  "setup.installAndSignIn": "インストールしてサインイン",
+  "setup.installTitle": "{agent} をインストール",
+  "setup.signInTitle": "{agent} にサインイン",
+  "setup.installHint": "公式インストーラーを実行中：{command}",
+  "setup.signInHint": "ブラウザで {agent} のサインインページが開きます。コードが表示されたら下に貼り付けてください。",
+  "setup.ready": "{agent} の準備ができました",
+  "setup.readyBody": "{agent} はインストールされ、サインイン済みです。タスク作成時に選べます。",
+  "setup.failed": "完了しませんでした。上の出力を確認して、もう一度お試しください。",
+  "setup.notFound": "インストールしましたが、Duolo はまだ {agent} のコマンドを見つけられません。Duolo を再起動するか、新しいターミナルで実行できるか確認してください。",
+  "setup.retry": "再試行",
+  "setup.done": "完了",
+  "setup.notSignedIn": "未サインイン",
+  "setup.notSignedInHint": "{agent} はまだサインインしていません。",
+  "setup.appFound": "{app} をお使いです：{agent} は同じアカウントで、追加料金なしで使えます。",
+  "setup.dismiss": "今後表示しない"
 }

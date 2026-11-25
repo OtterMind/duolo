@@ -107,7 +107,14 @@ export interface Check {
   version: string;
   /** 装的版本太旧时，最低要求的版本。 */
   minimum: string;
+  /** 本机装了的、用同一个账号的桌面客户端，没有时为空。 */
+  app: string;
+  /** 有没有登录；不知道时为 null。 */
+  signedIn: boolean | null;
 }
+
+/** 一键安装 Agent，或者登录它的账号。 */
+export type SetupStep = "install" | "login";
 
 /** 一种 Agent 的名字和图标。 */
 export interface AgentPlugin {
@@ -291,4 +298,14 @@ export const api = {
     channel.onmessage = (data) => onData(data instanceof ArrayBuffer ? new Uint8Array(data) : Uint8Array.from(data));
     return invoke<void>("attach", { ...r, onData: channel });
   },
+
+  /** 在单独的终端里安装 Agent 或登录账号，结束时发 `setup-exit` 事件。 */
+  setupStart(agent: string, step: SetupStep, rows: number, cols: number, onData: (bytes: Uint8Array) => void) {
+    const channel = new Channel<ArrayBuffer | number[]>();
+    channel.onmessage = (data) => onData(data instanceof ArrayBuffer ? new Uint8Array(data) : Uint8Array.from(data));
+    return invoke<void>("setup_start", { agent, step, rows, cols, onData: channel });
+  },
+  setupWrite: (data: string) => invoke<void>("setup_write", { data }),
+  setupResize: (rows: number, cols: number) => invoke<void>("setup_resize", { rows, cols }),
+  setupStop: () => invoke<void>("setup_stop"),
 };

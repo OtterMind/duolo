@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} tasks",
   "command.nextWaiting": "Go to the next task waiting for you",
   "command.split": "Split view: open another task beside this one",
-  "command.unsplit": "Close split view"
+  "command.unsplit": "Close split view",
+  "setup.install": "Install",
+  "setup.signIn": "Sign in",
+  "setup.installAndSignIn": "Install and sign in",
+  "setup.installTitle": "Install {agent}",
+  "setup.signInTitle": "Sign in to {agent}",
+  "setup.installHint": "Running the official installer: {command}",
+  "setup.signInHint": "Your browser opens to sign in to {agent}. If it shows a code, paste it below.",
+  "setup.ready": "{agent} is ready",
+  "setup.readyBody": "{agent} is installed and signed in. Pick it when you create a task.",
+  "setup.failed": "Didn't finish. See the output above, then try again.",
+  "setup.notFound": "Installed, but Duolo can't find {agent}'s command yet. Restart Duolo, or open a new terminal and check that it runs.",
+  "setup.retry": "Try again",
+  "setup.done": "Done",
+  "setup.notSignedIn": "Not signed in",
+  "setup.notSignedInHint": "{agent} isn't signed in yet.",
+  "setup.appFound": "You have {app}: {agent} works with the same account, at no extra cost.",
+  "setup.dismiss": "Don't show again"
 }

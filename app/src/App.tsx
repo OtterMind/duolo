@@ -18,6 +18,8 @@ import { Confirm, type ConfirmSpec } from "./components/Confirm";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneDivider } from "./components/PaneDivider";
+import { SetupDialog } from "./components/SetupDialog";
+import { onSetupRequest } from "./lib/setup";
 import { loadLayout, saveLayout } from "./lib/layout";
 import { isMac, matches } from "./lib/platform";
 
@@ -229,6 +231,11 @@ export function App() {
 
   /** 重新检查环境，例如用户刚装好 Claude 或 Codex。 */
   const refreshEnv = useCallback(() => void api.environment().then(setEnv, () => {}), []);
+
+  /** 正在一键安装或登录的 Agent。 */
+  const [setupAgent, setSetupAgent] = useState<string | null>(null);
+  useEffect(() => onSetupRequest(setSetupAgent), []);
+  const setupOption = setupAgent ? agentOptions(env).find((a) => a.id === setupAgent) : undefined;
 
   // 打开应用直接进入命令行：有任务就打开最近的那个，没有就新建一个。
   const booted = useRef(false);
@@ -555,6 +562,15 @@ export function App() {
           />
         )}
       </main>
+      {setupOption && (
+        <SetupDialog
+          agent={setupOption}
+          onClose={() => {
+            setSetupAgent(null);
+            refreshEnv();
+          }}
+        />
+      )}
       {panel && snap && (
         <NewTaskPanel
           snap={snap}

@@ -26,9 +26,16 @@ command = "toy"            # 可执行文件
 icon_color = "#d97757"     # 图标颜色，可省略（跟随文字颜色）
 minimum_version = "1.2.0"  # 最低能用的版本（`--version` 打印的）。更旧的不能选，环境检查里提示升级；读不出版本时照样用
 
-[install]                  # 没安装时给用户复制的命令
-default = "npm install -g toy"
-windows = "winget install toy"   # 还可以有 macos、linux
+[install]                  # 没安装时的安装命令：可以复制，也可以一键运行（用户的 shell 里，Windows 上是 PowerShell）
+default = "curl -fsSL https://toy.dev/install.sh | sh"   # 最好用官方的安装脚本，不要求先装 Node
+windows = "irm https://toy.dev/install.ps1 | iex"        # 还可以有 macos、linux
+
+[account]                  # 账号：一键登录，以及认出用同一个账号的桌面客户端
+status_args = ["auth", "status"] # 查有没有登录：已登录时退出码为 0
+login_args = ["auth", "login"]   # 登录：在终端窗口里运行，会打开浏览器，授权码可以粘贴回来
+apps = [                   # 装了这些客户端，说明用户有这个账号：没装 CLI 时提示一键装上、用同一个账号登录
+  { name = "Toy", macos = ["/Applications/Toy.app", "~/Applications/Toy.app"], windows = ["{LOCALAPPDATA}/Toy/toy.exe"] },
+]                          # 路径里 ~ 是家目录，{变量名} 换成环境变量
 
 [start]                    # 在终端里启动
 args = []                  # 每次都带上；config.toml 的 args 会换掉它们

@@ -445,5 +445,22 @@
   "sidebar.taskCount": "{count} 个任务",
   "command.nextWaiting": "跳到下一个等你确认的任务",
   "command.split": "分屏：在旁边打开另一个任务",
-  "command.unsplit": "关闭分屏"
+  "command.unsplit": "关闭分屏",
+  "setup.install": "安装",
+  "setup.signIn": "登录",
+  "setup.installAndSignIn": "安装并登录",
+  "setup.installTitle": "安装 {agent}",
+  "setup.signInTitle": "登录 {agent}",
+  "setup.installHint": "正在运行官方安装脚本：{command}",
+  "setup.signInHint": "浏览器会打开 {agent} 的登录页。如果页面给出授权码，粘贴到下面。",
+  "setup.ready": "{agent} 可以用了",
+  "setup.readyBody": "{agent} 已经装好并登录，新建任务时选它就行。",
+  "setup.failed": "没有完成。看看上面的输出，再试一次。",
+  "setup.notFound": "装好了，但 Duolo 还找不到 {agent} 的命令。重启 Duolo，或者打开新终端看看能不能运行。",
+  "setup.retry": "再试一次",
+  "setup.done": "完成",
+  "setup.notSignedIn": "未登录",
+  "setup.notSignedInHint": "{agent} 还没登录。",
+  "setup.appFound": "你装了 {app}：{agent} 用同一个账号，不另外收费。",
+  "setup.dismiss": "不再提示"
 }

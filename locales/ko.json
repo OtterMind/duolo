@@ -445,5 +445,22 @@
   "sidebar.taskCount": "작업 {count}개",
   "command.nextWaiting": "확인을 기다리는 다음 작업으로 이동",
   "command.split": "분할 보기: 옆에 다른 작업 열기",
-  "command.unsplit": "분할 보기 닫기"
+  "command.unsplit": "분할 보기 닫기",
+  "setup.install": "설치",
+  "setup.signIn": "로그인",
+  "setup.installAndSignIn": "설치 후 로그인",
+  "setup.installTitle": "{agent} 설치",
+  "setup.signInTitle": "{agent} 로그인",
+  "setup.installHint": "공식 설치 스크립트 실행 중: {command}",
+  "setup.signInHint": "브라우저에서 {agent} 로그인 페이지가 열립니다. 코드가 표시되면 아래에 붙여 넣으세요.",
+  "setup.ready": "{agent} 준비 완료",
+  "setup.readyBody": "{agent}이(가) 설치되고 로그인되었습니다. 작업을 만들 때 선택하세요.",
+  "setup.failed": "완료되지 않았습니다. 위의 출력을 확인하고 다시 시도하세요.",
+  "setup.notFound": "설치했지만 Duolo가 아직 {agent} 명령을 찾지 못합니다. Duolo를 다시 시작하거나 새 터미널에서 실행되는지 확인하세요.",
+  "setup.retry": "다시 시도",
+  "setup.done": "완료",
+  "setup.notSignedIn": "로그인 안 됨",
+  "setup.notSignedInHint": "{agent}에 아직 로그인하지 않았습니다.",
+  "setup.appFound": "{app}이(가) 설치되어 있습니다: {agent}은(는) 같은 계정으로 추가 비용 없이 사용할 수 있습니다.",
+  "setup.dismiss": "다시 표시 안 함"
 }

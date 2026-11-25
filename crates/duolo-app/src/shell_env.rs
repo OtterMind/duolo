@@ -44,6 +44,13 @@ pub fn load() {
     }
 }
 
+/// 重新读一遍登录 shell 的 PATH（刚装好的 Agent 可能把自己的目录加进了 shell 的配置）。
+pub fn refresh_path() {
+    if let Some(path) = login_env().and_then(|mut env| env.remove(std::ffi::OsStr::new("PATH"))) {
+        std::env::set_var("PATH", path);
+    }
+}
+
 fn additions(
     current: &HashMap<OsString, OsString>,
     login: HashMap<OsString, OsString>,

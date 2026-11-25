@@ -10,7 +10,7 @@ import "@xterm/xterm/css/xterm.css";
 import { agentKey, api, type AgentRef } from "./api";
 import { isMac } from "./platform";
 
-const THEME: ITheme = {
+export const THEME: ITheme = {
   // 背景透明，由外层元素提供底色，这样输入块可以垫在文字下面。
   background: "rgba(0, 0, 0, 0)",
   foreground: "#d6d6d6",
@@ -34,6 +34,10 @@ const THEME: ITheme = {
   brightCyan: "#8dd0d0",
   brightWhite: "#f2f2f2",
 };
+
+/** 终端字体：和 Warp 一样默认用 Hack；中文等字形回退到系统字体。 */
+export const FONT_FAMILY =
+  'Hack, "SF Mono", Menlo, "Cascadia Mono", Consolas, "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Noto Sans CJK SC", monospace';
 
 /** 输入框底色：比终端背景浅一档，参考 Warp 的输入区。 */
 const INPUT_BG = "#232323";
@@ -114,8 +118,7 @@ function create(ref: AgentRef): Entry {
   const term = new Terminal({
     // 和 Warp 一样默认用 Hack；中文等字形回退到系统字体。
     // Windows 回退到 Cascadia Mono / Consolas，Linux 回退到 DejaVu Sans Mono。
-    fontFamily:
-      'Hack, "SF Mono", Menlo, "Cascadia Mono", Consolas, "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Noto Sans CJK SC", monospace',
+    fontFamily: FONT_FAMILY,
     // 字号、行高和 Warp 的默认一样。
     fontSize: 13,
     lineHeight: 1.2,

@@ -46,7 +46,7 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 
 ## Install
 
-You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`), [Codex](https://github.com/openai/codex) (`npm install -g @openai/codex`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`), [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`) or [Grok](https://x.ai/cli) (`curl -fsSL https://x.ai/cli/install.sh | bash`). Building from source also needs Rust 1.89+, Node 20+ and pnpm.
+You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`curl -fsSL https://claude.ai/install.sh | bash`), [Codex](https://github.com/openai/codex) (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`), [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`) or [Grok](https://x.ai/cli) (`curl -fsSL https://x.ai/cli/install.sh | bash`). Duolo can also install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account. If it sees the Claude or ChatGPT desktop app, it offers to. Building from source also needs Rust 1.89+, Node 20+ and pnpm.
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

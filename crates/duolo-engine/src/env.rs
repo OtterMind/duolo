@@ -39,6 +39,10 @@ pub struct Check {
     pub install: String,
     /// 装的版本太旧时，最低要求的版本；不旧时为空。
     pub minimum: String,
+    /// 本机装了的、用同一个账号的桌面客户端（Agent 才有），没有时为空。
+    pub app: String,
+    /// 有没有登录；没装、插件不知道怎么查或者查不出来时为 None。
+    pub signed_in: Option<bool>,
 }
 
 /// 检查 git、每一种 Agent（默认的写代码和审阅 Agent 排在前面）、语音。
@@ -64,6 +68,8 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
         version: String::new(),
         minimum: String::new(),
         detail: if config.server.is_empty() { t("env.notConfigured") } else { t("env.configured") },
+        app: String::new(),
+        signed_in: None,
     });
     checks
 }
@@ -82,6 +88,8 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
                     None => check.detail.clone(),
                 },
                 minimum: too_old.unwrap_or_default().to_string(),
+                app: plugin.installed_app().unwrap_or_default().to_string(),
+                signed_in: plugin.account_status().filter(|_| check.ok).and_then(signed_in),
                 ..check
             }
         }
@@ -95,8 +103,16 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
             detail: t("env.notInConfig"),
             install: String::new(),
             minimum: String::new(),
+            app: String::new(),
+            signed_in: None,
         },
     }
+}
+
+/// 运行查登录的命令：退出码为 0 是登录了。超时或者运行不了时不知道。
+fn signed_in(argv: Vec<String>) -> Option<bool> {
+    let prompted = Prompted::new(&OneShot::from(argv), None)?;
+    output_within(prompted, VERSION_TIMEOUT).ok().map(|(status, _)| status.success())
 }
 
 fn command_check(kind: CheckKind, name: &str, command: &str) -> Check {
@@ -114,6 +130,8 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
         version: String::new(),
         detail: tf("env.missing", &[("command", &command.program())]),
         minimum: String::new(),
+        app: String::new(),
+        signed_in: None,
     };
     let Some(prompted) = Prompted::new(&command, None) else { return base };
     match output_within(prompted, timeout) {

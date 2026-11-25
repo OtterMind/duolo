@@ -253,17 +253,23 @@ pub enum TrustScope {
 }
 
 /// 聊天模式认识的协议。
-pub const CHAT_PROTOCOLS: &[&str] = &["acp"];
+pub const CHAT_PROTOCOLS: &[&str] = &["acp", "claude", "codex"];
 
 /// 聊天模式怎么启动。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChatSpec {
-    /// 协议：`acp`（Agent Client Protocol，JSON-RPC 走标准输入输出）。
+    /// 协议：`acp`（Agent Client Protocol）、`claude`（Claude Code 的 stream-json）、`codex`（Codex 的 app-server）。
     pub protocol: String,
     /// 跟在命令后面的参数，例如 `["acp"]`。
     #[serde(default)]
     pub args: Vec<String>,
+    /// 接回会话要靠启动参数时（`claude`）：接回某次会话加的参数，`{session}` 换成会话编号。
+    #[serde(default)]
+    pub resume_session_args: Vec<String>,
+    /// 同上，接回这个目录里最近的一次时加的参数。
+    #[serde(default)]
+    pub resume_args: Vec<String>,
     /// 启动时设置的环境变量。
     #[serde(default)]
     pub env: std::collections::BTreeMap<String, String>,

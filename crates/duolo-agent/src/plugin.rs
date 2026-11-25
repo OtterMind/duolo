@@ -52,6 +52,8 @@ pub struct ChatLaunch {
     pub protocol: String,
     pub program: String,
     pub args: Vec<String>,
+    pub resume_session_args: Vec<String>,
+    pub resume_args: Vec<String>,
     pub env: Vec<(String, String)>,
 }
 
@@ -232,6 +234,8 @@ impl Plugin {
             protocol: spec.protocol.clone(),
             program: self.command().to_string(),
             args: spec.args.clone(),
+            resume_session_args: spec.resume_session_args.clone(),
+            resume_args: spec.resume_args.clone(),
             env: spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
         })
     }

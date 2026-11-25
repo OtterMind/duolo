@@ -425,5 +425,9 @@
   "chat.working": "Al lavoro…",
   "chat.empty": "Di' a {agent} cosa fare.",
   "chat.asks": "{agent} ha bisogno della tua conferma",
+  "chat.allow": "Consenti",
+  "chat.allowAlways": "Consenti sempre",
+  "chat.allowSession": "Consenti per questa sessione",
+  "chat.deny": "Nega",
   "tui.chatMode": "{agent} è in modalità chat · apri questa attività nell'app Duolo o passa lì al terminale"
 }

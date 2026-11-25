@@ -425,5 +425,9 @@
   "chat.working": "Working…",
   "chat.empty": "Tell {agent} what to do.",
   "chat.asks": "{agent} needs your OK",
+  "chat.allow": "Allow",
+  "chat.allowAlways": "Always allow",
+  "chat.allowSession": "Allow for this session",
+  "chat.deny": "Deny",
   "tui.chatMode": "{agent} is running in chat mode · open this task in the Duolo app, or switch it to the terminal there"
 }

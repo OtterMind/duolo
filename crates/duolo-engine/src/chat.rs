@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use duolo_chat::{Chat, Draft, Entry, Spec, Update};
+use duolo_chat::{Chat, Draft, Entry, Protocol, Spec, Update};
 use duolo_core::{AgentKey, AgentKind, AgentRole, EventKind, Settings, Speaker, Surface, TaskId, UserError};
 
 use crate::engine::Engine;
@@ -82,9 +82,13 @@ impl Engine {
         let resumed = !fresh && agent.launched;
         // 第一句话只在新开会话时发；接不回原来的会话时也要用，所以总是带上。
         let prompt = agent.prompt.clone().or_else(|| Some(task.prompt.clone()).filter(|p| !p.is_empty()));
+        let protocol = Protocol::from_name(&launch.protocol).ok_or(UserError::ChatUnsupported)?;
         let spec = Spec {
+            protocol,
             program: launch.program,
             args: launch.args,
+            resume_session_args: launch.resume_session_args,
+            resume_args: launch.resume_args,
             env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())].into_iter().chain(launch.env).collect(),
             env_remove: self.agents.env_remove(),
             cwd: task.worktree.clone(),
@@ -317,12 +321,12 @@ mod tests {
     #[test]
     fn only_agents_with_chat_can_switch() {
         let (_dir, mut engine, project) = engine("permission.txt");
-        let opts = crate::TaskOptions { writer: Some(AgentKind("claude".into())), ..Default::default() };
+        let opts = crate::TaskOptions { writer: Some(AgentKind("pi".into())), ..Default::default() };
         let task = engine.create_task_with(&project, "x", &opts).unwrap();
         let err = engine.set_surface(task, Surface::Chat).unwrap_err();
         assert_eq!(err.downcast_ref(), Some(&UserError::ChatUnsupported));
         assert!(engine.supports_chat(&AgentKind("fake".into())));
-        assert!(!engine.supports_chat(&AgentKind("claude".into())));
+        assert!(!engine.supports_chat(&AgentKind("pi".into())));
     }
 
     #[test]

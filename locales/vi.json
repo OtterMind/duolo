@@ -425,5 +425,9 @@
   "chat.working": "Đang làm…",
   "chat.empty": "Hãy cho {agent} biết cần làm gì.",
   "chat.asks": "{agent} cần bạn xác nhận",
+  "chat.allow": "Cho phép",
+  "chat.allowAlways": "Luôn cho phép",
+  "chat.allowSession": "Cho phép trong phiên này",
+  "chat.deny": "Từ chối",
   "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó"
 }

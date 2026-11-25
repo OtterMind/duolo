@@ -7,7 +7,7 @@
 | `duolo-core` | 领域模型（项目、任务、Agent）、配置、`state.json` 持久化、文本工具 | 无 UI、无进程 |
 | `duolo-agent` | Agent 插件：每种 Agent 怎么启动、恢复、审阅，画面怎么认，会话记录怎么读（见 [agents.md](agents.md)） | core |
 | `duolo-git` | git 命令行封装：仓库定位、worktree、改动统计 | git |
-| `duolo-chat` | 聊天模式：不开终端，通过 Agent 的结构化协议（现在是 ACP）对话，交出对话、问题和正在写的话 | core |
+| `duolo-chat` | 聊天模式：不开终端，通过 Agent 的结构化协议（ACP、Claude 的 stream-json、Codex 的 app-server）对话，交出对话、问题和正在写的话 | core |
 | `duolo-pty` | 在 PTY 里运行 Agent CLI，VT 解析维护屏幕，按输出节奏和屏幕内容识别状态（规则由插件给） | portable-pty、vt100 |
 | `duolo-voice` | 语音：录麦克风发给 Duolo 服务器识别（要的话顺便整理）、生成热词和对话提示 | core |
 | `duolo-engine` | 调度：任务生命周期、worktree、Agent 启动与恢复、会话管理 | core、agent、chat、git、pty |
@@ -139,18 +139,26 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 写代码的 Agent 可以在终端里跑它自己的命令行，也可以在聊天模式下跑（`AgentSpec.surface`），任务顶栏一键切换，
 接着同一个会话（同一个会话编号，换个方式启动）。插件有 `[chat]` 才能切；上次的选择记在 `settings.json`，新任务照着用。
 
-- **协议**：`duolo-chat` 用 ACP（Agent Client Protocol）。启动 `<命令> <chat.args>`，JSON-RPC 一行一条走标准输入输出：
-  `initialize` → 接回（`session/load`，不知道编号时先 `session/list` 找这个目录最近的一次）或新开（`session/new`，
-  再发第一句话）→ 每句话一个 `session/prompt`。不声明读写文件、开终端的能力，Agent 自己做。
-  以后 Codex 的 app-server、Claude 的 stream-json 也放在这个 crate，引擎看到的都是 `Chat`。
+- **协议**：插件的 `chat.protocol` 选一种，启动 `<命令> <chat.args>`，都是一行一条 JSON 走标准输入输出，引擎看到的都是 `Chat`。
+  每种协议（`Driver`）只管握手开会话、发一句话、把收到的消息换成对话的变化（`conversation`），线程、排队、问题都是共用的。
+  - `acp`（Agent Client Protocol，OpenCode 等）：`initialize` → 接回（`session/load`，不知道编号时先 `session/list`
+    找这个目录最近的一次）或新开（`session/new`，再发第一句话）→ 每句话一个 `session/prompt`。
+    不声明读写文件、开终端的能力，Agent 自己做。
+  - `claude`（Claude Code 的 stream-json，Agent SDK 用的同一套）：接回靠启动参数（`chat.resume_session_args`），
+    以前的对话不重放（在终端里时已经从会话记录里记下了）；新会话的编号等它收到第一句话才说。
+    授权走 `--permission-prompt-tool stdio`，也就是 `can_use_tool` 请求；打断用 `interrupt`。
+  - `codex`（Codex 的 app-server，VS Code 插件用的同一套）：`thread/start` / `thread/resume`（编号和 `codex resume`
+    的一样，接回时带着以前的对话）→ 每句话一个 `turn/start`，`turn/completed` 通知这一轮结束；运行命令、改文件前的授权是它发来的请求。
 - **线程**：写线程、读线程、读错误输出的线程、按顺序走流程的线程；引擎只取结果（`take_updates`、`status`、`draft`、`ask`），
   拿着引擎的锁不等 Agent。正在干活时发来的话排在后面，这一轮结束再发。
 - **事件**：`session/update` 拼成和终端模式一样的事件（你说的话、Agent 的回复、工具调用），工具名换成会话记录里的说法
   （`execute` → Bash）。正在写的话不记事件，放在快照的 `draft` 里，写完才记。接回会话时 Agent 会重放以前的对话，
   已经记过的（在终端里读会话记录记下的）按内容去重，没记过的补上。
-- **问题**：`session/request_permission` 记成 `Prompt` 事件（工具、命令或文件、Agent 给的选项），手机和桌面都能答；
-  答的时候按问题的编号对，Agent 已经不在问这个了就报 `promptChanged`。打断（`session/cancel`）时在问的问题当作取消。
-- **测试**：`crates/duolo-chat/tests/fixtures/` 是用真实 CLI 录下的收发，测试程序自己当假 Agent 照着回答
+- **问题**：授权请求记成 `Prompt` 事件（工具、命令或文件、选项），手机和桌面都能答；ACP 的选项名由 Agent 给，
+  另外两种由 Duolo 给（翻译过的"允许""总是允许""拒绝"）。答的时候按问题的编号对，Agent 已经不在问这个了就报
+  `promptChanged`。打断时在问的问题当作取消。
+- **测试**：`crates/duolo-chat/tests/fixtures/` 是用真实 CLI 录下的收发（设 `DUOLO_CHAT_RECORD` 跑
+  `real_<agent>` 测试录，去掉账号信息、路径换成 `/work/demo`），测试程序自己当假 Agent 照着回答
   （`duolo_chat::testing`），引擎的测试也这样跑完整的一轮。
 
 ## 跨平台

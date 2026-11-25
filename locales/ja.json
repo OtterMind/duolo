@@ -425,5 +425,9 @@
   "chat.working": "作業中…",
   "chat.empty": "{agent} にやることを伝えてください。",
   "chat.asks": "{agent} が確認を求めています",
+  "chat.allow": "許可",
+  "chat.allowAlways": "常に許可",
+  "chat.allowSession": "このセッション中は許可",
+  "chat.deny": "拒否",
   "tui.chatMode": "{agent} はチャットモードで実行中 · Duolo アプリでこのタスクを開くか、そこでターミナルに切り替えてください"
 }

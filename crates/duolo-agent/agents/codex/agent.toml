@@ -78,3 +78,8 @@ file = ".codex/config.toml"
 env = "CODEX_HOME"
 env_file = "config.toml"
 scope = "repo"
+
+# 聊天模式：app-server（VS Code 插件用的同一套）。会话（thread）编号和 `codex resume` 用的一样。
+[chat]
+protocol = "codex"
+args = ["app-server", "-c", "check_for_update_on_startup=false"]

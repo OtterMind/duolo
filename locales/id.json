@@ -425,5 +425,9 @@
   "chat.working": "Sedang bekerja…",
   "chat.empty": "Beri tahu {agent} apa yang harus dilakukan.",
   "chat.asks": "{agent} perlu persetujuan Anda",
+  "chat.allow": "Izinkan",
+  "chat.allowAlways": "Selalu izinkan",
+  "chat.allowSession": "Izinkan untuk sesi ini",
+  "chat.deny": "Tolak",
   "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana"
 }

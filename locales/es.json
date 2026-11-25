@@ -425,5 +425,9 @@
   "chat.working": "Trabajando…",
   "chat.empty": "Dile a {agent} qué hacer.",
   "chat.asks": "{agent} necesita tu aprobación",
+  "chat.allow": "Permitir",
+  "chat.allowAlways": "Permitir siempre",
+  "chat.allowSession": "Permitir en esta sesión",
+  "chat.deny": "Denegar",
   "tui.chatMode": "{agent} se ejecuta en modo chat · abre esta tarea en la app Duolo o cambia allí a la terminal"
 }

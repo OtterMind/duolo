@@ -84,3 +84,20 @@ remove = [
   "CLAUDE_PID",
   "CLAUDE_EFFORT",
 ]
+
+# 聊天模式：stream-json（Agent SDK 用的同一套），授权请求交给 Duolo 回答。会话和终端里是同一套，接回也用 --resume。
+# 它问用户选择题的工具（AskUserQuestion）在这里答不了，关掉，让它直接在回复里问。
+[chat]
+protocol = "claude"
+args = [
+  "-p",
+  "--input-format", "stream-json",
+  "--output-format", "stream-json",
+  "--verbose",
+  "--include-partial-messages",
+  "--permission-prompt-tool", "stdio",
+  "--disallowedTools", "AskUserQuestion",
+]
+resume_session_args = ["--resume", "{session}"]
+resume_args = ["--continue"]
+env = { DISABLE_AUTOUPDATER = "1" }

@@ -425,5 +425,9 @@
   "chat.working": "Çalışıyor…",
   "chat.empty": "{agent} ajanına ne yapacağını söyleyin.",
   "chat.asks": "{agent} onayınızı bekliyor",
+  "chat.allow": "İzin ver",
+  "chat.allowAlways": "Her zaman izin ver",
+  "chat.allowSession": "Bu oturum için izin ver",
+  "chat.deny": "Reddet",
   "tui.chatMode": "{agent} sohbet modunda çalışıyor · bu görevi Duolo uygulamasında açın veya orada terminale geçin"
 }

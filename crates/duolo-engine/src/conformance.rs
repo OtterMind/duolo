@@ -221,7 +221,8 @@ fn reads_its_own_conversation() {
 /// 除了插件自己和默认配置，代码里不出现产品的名字：要按 Agent 区分的事写进插件的声明。
 #[test]
 fn only_plugins_know_product_names() {
-    let allowed = ["duolo-agent", "duolo-core/src/config.rs", "duolo-engine/src/conformance.rs"];
+    // duolo-chat 实现各家的聊天协议，和 duolo-agent 读各家的会话记录一样，协议名就是产品名。
+    let allowed = ["duolo-agent", "duolo-chat", "duolo-core/src/config.rs", "duolo-engine/src/conformance.rs"];
     let mut sources = Vec::new();
     let mut dirs = vec![repo().join("crates"), repo().join("app/src")];
     while let Some(dir) = dirs.pop() {

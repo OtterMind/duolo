@@ -425,5 +425,9 @@
   "chat.working": "正在处理…",
   "chat.empty": "告诉 {agent} 要做什么。",
   "chat.asks": "{agent} 需要你确认",
+  "chat.allow": "允许",
+  "chat.allowAlways": "总是允许",
+  "chat.allowSession": "本次会话内允许",
+  "chat.deny": "拒绝",
   "tui.chatMode": "{agent} 在聊天模式下运行 · 在 Duolo 应用里打开这个任务，或者在那里切回终端"
 }

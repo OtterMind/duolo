@@ -1314,6 +1314,7 @@ name = "duolo-chat"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "duolo-agent",
  "duolo-core",
  "serde_json",
 ]

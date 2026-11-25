@@ -1,32 +1,35 @@
 //! 聊天模式：Agent 不在终端里运行，Duolo 通过它的结构化协议对话，界面自己画。
 //!
-//! 现在用的是 ACP（Agent Client Protocol）：JSON-RPC 走标准输入输出，OpenCode、Grok、Antigravity 等都支持。
-//! 以后 Codex 的 app-server、Claude 的 stream-json 也放在这里，对外都是同一个 [`Chat`]。
+//! 支持的协议见 [`Protocol`]：都是一行一条 JSON，走标准输入输出，对外都是同一个 [`Chat`]。
+//! 每种协议只管把收到的消息换成对话的变化（见 `conversation`），握手、开会话、发一句话。
 //!
-//! 线程：写线程（往标准输入写，Agent 不读也不会卡住调用方）、读线程（回复交给等着的人，更新拼成对话）、
+//! 线程：写线程（往标准输入写，Agent 不读也不会卡住调用方）、读线程（回复交给等着的人，别的交给协议）、
 //! 读错误输出的线程（留最后几行，启动失败时给用户看），以及按顺序走流程的线程（握手、开会话、一句句发）。
 //! 调用方只取结果，不等 Agent。
 
 mod acp;
+mod claude;
+mod codex;
+mod conversation;
 mod rpc;
 pub mod testing;
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, Stdio};
 use std::sync::mpsc;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use duolo_core::process;
 use duolo_core::proctree::ProcessTree;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use acp::Conversation;
-use rpc::{lock, wait, Failure, Incoming, Rpc};
+use conversation::Conversation;
+use rpc::{lock, Failure, Framing, Incoming, Rpc};
 
 /// 握手、开会话最长等多久（第一次启动可能要装插件、连模型服务）。
 const SETUP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -36,12 +39,58 @@ const GRACE: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 /// 错误输出留最后几行。
 const STDERR_LINES: usize = 20;
+/// 设了这个环境变量（一个文件路径）时，把和 Agent 的收发都记到这个文件里，用来录测试数据。
+pub const RECORD_ENV: &str = "DUOLO_CHAT_RECORD";
+
+/// 和 Agent 说话用的协议。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Protocol {
+    /// ACP（Agent Client Protocol，<https://agentclientprotocol.com>）。
+    #[default]
+    Acp,
+    /// Claude Code 的 stream-json（`-p --input-format stream-json --output-format stream-json`）。
+    Claude,
+    /// Codex 的 app-server。
+    Codex,
+}
+
+impl Protocol {
+    /// 插件声明里的名字。
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "acp" => Some(Self::Acp),
+            "claude" => Some(Self::Claude),
+            "codex" => Some(Self::Codex),
+            _ => None,
+        }
+    }
+
+    fn driver(self) -> Arc<dyn Driver> {
+        match self {
+            Self::Acp => Arc::new(acp::Acp),
+            Self::Claude => Arc::<claude::Claude>::default(),
+            Self::Codex => Arc::new(codex::Codex),
+        }
+    }
+
+    fn framing(self) -> Framing {
+        match self {
+            Self::Claude => Framing::Control,
+            Self::Acp | Self::Codex => Framing::JsonRpc,
+        }
+    }
+}
 
 /// 怎么启动。
 #[derive(Debug, Clone, Default)]
 pub struct Spec {
+    pub protocol: Protocol,
     pub program: String,
     pub args: Vec<String>,
+    /// 接回会话靠启动参数的协议（Claude）：接回 `session` 时加上的参数，`{session}` 换成会话编号。
+    pub resume_session_args: Vec<String>,
+    /// 同上，接回这个目录里最近的一次时加上的参数。
+    pub resume_args: Vec<String>,
     pub env: Vec<(String, String)>,
     pub env_remove: Vec<String>,
     pub cwd: PathBuf,
@@ -108,8 +157,8 @@ pub struct Draft {
 
 /// 一个在聊天模式下运行的 Agent。丢掉就结束它（在后台）。
 pub struct Chat {
-    shared: Arc<Shared>,
-    rpc: Rpc,
+    link: Arc<Link>,
+    driver: Arc<dyn Driver>,
     child: Option<Child>,
     tree: ProcessTree,
     exit: Option<(u32, bool)>,
@@ -140,6 +189,10 @@ struct Inner {
     session: Option<String>,
     ready: bool,
     working: bool,
+    /// 协议自己的这一轮的编号（打断时用）。
+    turn: Option<String>,
+    /// 这一轮结束了（协议用通知告诉结束时）：成功，或者 Agent 说的原因。
+    turn_end: Option<Result<(), String>>,
     /// 读不到输出了（进程退出或者关了标准输出）。
     closed: bool,
     /// 握手、开会话失败：Agent 说的原因。
@@ -152,15 +205,25 @@ struct Inner {
 #[derive(Debug)]
 struct PendingAsk {
     ask: Ask,
+    /// 要回复的请求。
     request: Value,
-    option_ids: Vec<String>,
+    /// 每个选项回给 Agent 的内容。
+    answers: Vec<Value>,
+    /// 打断时回给 Agent 的内容。
+    cancel: Value,
 }
 
 impl Chat {
     /// 启动。马上返回，握手、开会话在后台做。
     pub fn spawn(spec: Spec) -> Result<Self> {
+        let mut args = spec.args.clone();
+        match &spec.session {
+            Some(id) => args.extend(spec.resume_session_args.iter().map(|a| a.replace("{session}", id))),
+            None if spec.resume_latest => args.extend(spec.resume_args.iter().cloned()),
+            None => {}
+        }
         let mut cmd = process::command(&spec.program);
-        cmd.args(&spec.args)
+        cmd.args(&args)
             .current_dir(&spec.cwd)
             // 有的程序（例如 OpenCode）按 PWD 找项目，见 `Prompted::in_dir`。
             .env("PWD", &spec.cwd)
@@ -178,13 +241,20 @@ impl Chat {
         let stderr = child.stderr.take().context("no stderr")?;
 
         let (out, lines) = mpsc::channel::<String>();
-        let rpc = Rpc::new(out);
+        let rpc = Rpc::new(out, spec.protocol.framing());
         let shared = Arc::new(Shared::default());
         lock(&shared.inner).conversation = Conversation::new(&spec.cwd);
+        let link = Arc::new(Link { shared: shared.clone(), rpc });
+        let driver = spec.protocol.driver();
+        let record = Recorder::open();
 
+        let writer_record = record.clone();
         thread::Builder::new().name("duolo-chat-writer".into()).spawn(move || {
             let mut stdin = stdin;
             for line in lines {
+                if let Some(record) = &writer_record {
+                    record.line(">> ", &line);
+                }
                 if stdin
                     .write_all(line.as_bytes())
                     .and_then(|()| stdin.write_all(b"\n"))
@@ -195,10 +265,10 @@ impl Chat {
                 }
             }
         })?;
-        let (reader_shared, reader_rpc) = (shared.clone(), rpc.clone());
+        let (reader_link, reader_driver) = (link.clone(), driver.clone());
         thread::Builder::new()
             .name("duolo-chat-reader".into())
-            .spawn(move || read(stdout, &reader_shared, &reader_rpc))?;
+            .spawn(move || read(stdout, &reader_link, reader_driver.as_ref(), record.as_deref()))?;
         let stderr_shared = shared.clone();
         thread::Builder::new().name("duolo-chat-stderr".into()).spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
@@ -209,63 +279,64 @@ impl Chat {
                 }
             }
         })?;
-        let (driver_shared, driver_rpc) = (shared.clone(), rpc.clone());
+        let (driver_link, driver_driver) = (link.clone(), driver.clone());
         thread::Builder::new()
             .name("duolo-chat-driver".into())
-            .spawn(move || drive(&driver_shared, &driver_rpc, &spec))?;
+            .spawn(move || drive(&driver_link, driver_driver.as_ref(), &spec))?;
 
-        Ok(Self { shared, rpc, child: Some(child), tree, exit: None, started: Instant::now() })
+        Ok(Self { link, driver, child: Some(child), tree, exit: None, started: Instant::now() })
     }
 
     /// 发一句话。正在干活时排在后面，这一轮结束再发。
     pub fn send(&self, text: &str) {
-        lock(&self.shared.inner).queue.push_back(text.to_string());
-        self.shared.wake.notify_all();
+        self.link.inner().queue.push_back(text.to_string());
+        self.link.shared.wake.notify_all();
     }
 
     /// 打断：停下这一轮，排着的话也不发了，在问的问题当作取消。
     pub fn cancel(&self) {
-        let mut inner = lock(&self.shared.inner);
+        let mut inner = self.link.inner();
         inner.queue.clear();
         if let Some(pending) = inner.ask.take() {
-            self.rpc.respond(pending.request, json!({"outcome": {"outcome": "cancelled"}}));
+            self.link.rpc.respond(pending.request, pending.cancel);
         }
-        if let (true, Some(session)) = (inner.working, inner.session.clone()) {
-            self.rpc.notify("session/cancel", json!({"sessionId": session}));
+        let working = inner.working;
+        drop(inner);
+        if working {
+            self.driver.interrupt(&self.link);
         }
     }
 
     /// 回答问题 `ask`（选第 `option` 个，从 0 开始）。已经不在问这个了返回 false。
     pub fn answer(&self, ask: u64, option: usize) -> bool {
-        let mut inner = lock(&self.shared.inner);
-        let fits = inner.ask.as_ref().is_some_and(|p| p.ask.id == ask && option < p.option_ids.len());
+        let mut inner = self.link.inner();
+        let fits = inner.ask.as_ref().is_some_and(|p| p.ask.id == ask && option < p.answers.len());
         if !fits {
             return false;
         }
-        let pending = inner.ask.take().expect("checked above");
-        let id = pending.option_ids[option].clone();
-        self.rpc.respond(pending.request, json!({"outcome": {"outcome": "selected", "optionId": id}}));
+        let mut pending = inner.ask.take().expect("checked above");
+        self.link.rpc.respond(pending.request, pending.answers.swap_remove(option));
         true
     }
 
     /// 在等用户回答的问题。
     pub fn ask(&self) -> Option<Ask> {
-        lock(&self.shared.inner).ask.as_ref().map(|p| p.ask.clone())
+        self.link.inner().ask.as_ref().map(|p| p.ask.clone())
     }
 
     /// 上次取过之后发生的事，取一次就清空。
     pub fn take_updates(&self) -> Vec<Update> {
-        std::mem::take(&mut lock(&self.shared.inner).updates)
+        std::mem::take(&mut self.link.inner().updates)
     }
 
     pub fn draft(&self) -> Draft {
-        lock(&self.shared.inner).conversation.draft()
+        self.link.inner().conversation.draft()
     }
 
     /// 出错的原因（Agent 自己说的，不翻译）：启动失败、一轮对话失败，或者退出前最后的错误输出。
     pub fn error(&mut self) -> Option<String> {
         let failed = matches!(self.status(), Status::Exited { success: false, .. });
-        let inner = lock(&self.shared.inner);
+        let inner = self.link.inner();
         let tail = || {
             let tail: Vec<&str> = inner.stderr.iter().map(String::as_str).filter(|l| !l.trim().is_empty()).collect();
             (!tail.is_empty()).then(|| tail[tail.len().saturating_sub(5)..].join("\n"))
@@ -277,7 +348,7 @@ impl Chat {
         if let Some((code, success)) = self.poll_exit() {
             return Status::Exited { code, success };
         }
-        let inner = lock(&self.shared.inner);
+        let inner = self.link.inner();
         if inner.failed.is_some() {
             drop(inner);
             // 握手、开会话失败：这个进程没用了。
@@ -312,7 +383,7 @@ impl Chat {
 
     /// 结束它和它启动的所有进程，等它们真的消失。会等一会儿，不要拿着锁调用。
     pub fn stop(&mut self) {
-        self.rpc.close();
+        self.link.rpc.close();
         let Some(mut child) = self.child.take() else { return };
         stop_process(&mut child, &self.tree, self.exit.is_some());
         if let Ok(Some(status)) = child.try_wait() {
@@ -322,7 +393,7 @@ impl Chat {
     }
 
     fn stop_in_background(&mut self) {
-        self.rpc.close();
+        self.link.rpc.close();
         let Some(mut child) = self.child.take() else { return };
         let tree = std::mem::replace(&mut self.tree, ProcessTree::empty());
         let exited = self.exit.is_some();
@@ -362,40 +433,22 @@ fn wait_exit(child: &mut Child, timeout: Duration) -> bool {
     }
 }
 
-/// 读线程：回复交给等着的人，更新拼成对话，问题记下来等用户回答。
-fn read(stdout: impl std::io::Read, shared: &Shared, rpc: &Rpc) {
+/// 读线程：回复交给等着的人，别的交给协议处理。
+fn read(stdout: impl std::io::Read, link: &Link, driver: &dyn Driver, record: Option<&Recorder>) {
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        match rpc.dispatch(&line) {
-            Some(Incoming::Notification { method, params }) if method == "session/update" => {
-                let mut inner = lock(&shared.inner);
-                inner.conversation.update(&params["update"]);
-                collect(&mut inner);
-            }
-            Some(Incoming::Request { id, method, params }) if method == "session/request_permission" => {
-                let mut inner = lock(&shared.inner);
-                let (tool, target) = inner.conversation.permission(&params["toolCall"]);
-                collect(&mut inner);
-                let options = params["options"].as_array().cloned().unwrap_or_default();
-                let names = options.iter().map(|o| o["name"].as_str().unwrap_or_default().to_string()).collect();
-                let option_ids =
-                    options.iter().map(|o| o["optionId"].as_str().unwrap_or_default().to_string()).collect();
-                inner.next_ask += 1;
-                let ask = Ask { id: inner.next_ask, tool, target, options: names };
-                if let Some(old) = inner.ask.replace(PendingAsk { ask, request: id, option_ids }) {
-                    rpc.respond(old.request, json!({"outcome": {"outcome": "cancelled"}}));
-                }
-            }
-            // 没说过支持的（读写文件、开终端）：告诉它不支持，它会自己做。
-            Some(Incoming::Request { id, .. }) => rpc.respond_error(id, -32601, "method not supported"),
-            Some(Incoming::Notification { .. }) | None => {}
+        if let Some(record) = record {
+            record.line("<< ", &line);
+        }
+        if let Some(message) = link.rpc.dispatch(&line) {
+            driver.incoming(link, message);
         }
     }
-    let mut inner = lock(&shared.inner);
+    let mut inner = link.inner();
     inner.closed = true;
     inner.ask = None;
     drop(inner);
-    rpc.close();
-    shared.wake.notify_all();
+    link.rpc.close();
+    link.shared.wake.notify_all();
 }
 
 /// 写完的对话交出去；在重放以前的对话时先攒着。
@@ -408,17 +461,15 @@ fn collect(inner: &mut Inner) {
 }
 
 /// 按顺序走流程：握手、接回或新开会话，然后一句句发。
-fn drive(shared: &Shared, rpc: &Rpc, spec: &Spec) {
-    let Some(session) = open_session(shared, rpc, spec) else { return };
-    {
-        let mut inner = lock(&shared.inner);
-        inner.session = Some(session.clone());
-        inner.updates.push(Update::Session(session.clone()));
-        inner.ready = true;
+fn drive(link: &Link, driver: &dyn Driver, spec: &Spec) {
+    if let Err(failure) = driver.open(link, spec) {
+        link.fail(failure);
+        return;
     }
+    link.inner().ready = true;
     loop {
         let text = {
-            let mut inner = lock(&shared.inner);
+            let mut inner = link.inner();
             loop {
                 if inner.closed {
                     return;
@@ -426,31 +477,147 @@ fn drive(shared: &Shared, rpc: &Rpc, spec: &Spec) {
                 if let Some(text) = inner.queue.pop_front() {
                     break text;
                 }
-                inner = shared.wake.wait(inner).unwrap_or_else(|p| p.into_inner());
+                inner = link.shared.wake.wait(inner).unwrap_or_else(|p| p.into_inner());
             }
         };
         {
-            let mut inner = lock(&shared.inner);
+            let mut inner = link.inner();
             inner.working = true;
             inner.error = None;
+            inner.turn_end = None;
             inner.updates.push(Update::Entry(Entry::User(text.clone())));
         }
-        let prompt = json!({"sessionId": session, "prompt": [{"type": "text", "text": text}]});
-        let reply = wait(&rpc.request("session/prompt", prompt), None);
-        let mut inner = lock(&shared.inner);
+        let result = driver.prompt(link, &text);
+        let mut inner = link.inner();
         inner.conversation.finish_turn();
         collect(&mut inner);
         inner.working = false;
-        if let Err(Failure::Rejected(err)) = reply {
-            inner.error = Some(err.message);
+        inner.turn = None;
+        if let Err(reason) = result {
+            inner.error = Some(reason);
         }
     }
 }
 
-/// 握手，接回原来的会话（接不回来就新开，新开的先发第一句话），返回会话编号。失败时记下原因，返回 None。
-fn open_session(shared: &Shared, rpc: &Rpc, spec: &Spec) -> Option<String> {
-    let fail = |failure: Failure| -> Option<String> {
-        let mut inner = lock(&shared.inner);
+/// 一种协议：怎么握手开会话、怎么发一句话、收到的消息怎么处理。
+trait Driver: Send + Sync {
+    /// 读线程收到的请求、通知（回复已经交给等着的人了）。
+    fn incoming(&self, link: &Link, message: Incoming);
+    /// 握手，接回原来的会话（用 [`Link::set_session`] 报会话编号，[`Link::history`] 交以前的对话），
+    /// 或者新开（用 [`Link::first_prompt`] 排上第一句话）。
+    fn open(&self, link: &Link, spec: &Spec) -> Result<(), Failure>;
+    /// 发一句话，等这一轮结束。出错时返回 Agent 说的原因。
+    fn prompt(&self, link: &Link, text: &str) -> Result<(), String>;
+    /// 打断正在干的这一轮。
+    fn interrupt(&self, link: &Link);
+}
+
+/// 协议和共享的状态之间：读线程、流程线程、调用方都通过它改状态。
+struct Link {
+    shared: Arc<Shared>,
+    rpc: Rpc,
+}
+
+impl Link {
+    fn inner(&self) -> MutexGuard<'_, Inner> {
+        lock(&self.shared.inner)
+    }
+
+    /// 改对话；写完的交出去。
+    fn conversation<R>(&self, change: impl FnOnce(&mut Conversation) -> R) -> R {
+        let mut inner = self.inner();
+        let result = change(&mut inner.conversation);
+        collect(&mut inner);
+        result
+    }
+
+    fn session(&self) -> Option<String> {
+        self.inner().session.clone()
+    }
+
+    /// 这次用的会话编号；变了才报。
+    fn set_session(&self, id: &str) {
+        let mut inner = self.inner();
+        if !id.is_empty() && inner.session.as_deref() != Some(id) {
+            inner.session = Some(id.to_string());
+            inner.updates.push(Update::Session(id.to_string()));
+        }
+    }
+
+    /// 新开的会话：第一句话排在最前面。
+    fn first_prompt(&self, spec: &Spec) {
+        if let Some(prompt) = spec.prompt.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+            self.inner().queue.push_front(prompt.to_string());
+        }
+    }
+
+    /// 开始重放以前的对话：这期间写完的对话先攒着，你说的话也记下。
+    fn begin_history(&self) {
+        let mut inner = self.inner();
+        inner.history = Some(Vec::new());
+        inner.conversation.replaying = true;
+    }
+
+    /// 重放完了；`keep` 为假时（没接回来）丢掉。
+    fn end_history(&self, keep: bool) {
+        let mut inner = self.inner();
+        inner.conversation.finish_turn();
+        collect(&mut inner);
+        inner.conversation.replaying = false;
+        let history = inner.history.take().unwrap_or_default();
+        if keep {
+            inner.updates.push(Update::History(history));
+        }
+    }
+
+    /// 以前的对话（协议直接给出全部时用）。
+    fn history(&self, entries: Vec<Entry>) {
+        self.inner().updates.push(Update::History(entries));
+    }
+
+    /// Agent 问用户：每个选项的名字和选它时回给 Agent 的内容；`cancel` 是打断时回的。
+    fn ask(&self, request: Value, (tool, target): (String, String), options: Vec<(String, Value)>, cancel: Value) {
+        let mut inner = self.inner();
+        inner.next_ask += 1;
+        let (names, answers) = options.into_iter().unzip();
+        let ask = Ask { id: inner.next_ask, tool, target, options: names };
+        if let Some(old) = inner.ask.replace(PendingAsk { ask, request, answers, cancel }) {
+            self.rpc.respond(old.request, old.cancel);
+        }
+    }
+
+    /// 协议自己的这一轮的编号（打断时用）。
+    fn set_turn(&self, id: Option<String>) {
+        self.inner().turn = id;
+    }
+
+    fn turn(&self) -> Option<String> {
+        self.inner().turn.clone()
+    }
+
+    /// 这一轮结束了（协议用通知告诉的时候）。
+    fn end_turn(&self, result: Result<(), String>) {
+        self.inner().turn_end = Some(result);
+        self.shared.wake.notify_all();
+    }
+
+    /// 等 [`Link::end_turn`]；进程没了也算结束。
+    fn wait_turn(&self) -> Result<(), String> {
+        let mut inner = self.inner();
+        loop {
+            if let Some(result) = inner.turn_end.take() {
+                return result;
+            }
+            if inner.closed {
+                return Ok(());
+            }
+            inner = self.shared.wake.wait(inner).unwrap_or_else(|p| p.into_inner());
+        }
+    }
+
+    /// 握手、开会话失败。
+    fn fail(&self, failure: Failure) {
+        let mut inner = self.inner();
         if !inner.closed {
             inner.failed = Some(match failure {
                 Failure::Rejected(err) => err.message,
@@ -458,60 +625,20 @@ fn open_session(shared: &Shared, rpc: &Rpc, spec: &Spec) -> Option<String> {
                 Failure::Closed => String::new(),
             });
         }
-        None
-    };
-    let init = json!({
-        "protocolVersion": 1,
-        "clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false},
-        "clientInfo": {"name": "duolo", "version": env!("CARGO_PKG_VERSION")},
-    });
-    let caps = match wait(&rpc.request("initialize", init), Some(SETUP_TIMEOUT)) {
-        Ok(caps) => caps["agentCapabilities"].clone(),
-        Err(failure) => return fail(failure),
-    };
-    let cwd = spec.cwd.display().to_string();
-    let earlier = match &spec.session {
-        Some(id) => Some(id.clone()),
-        None if spec.resume_latest && caps["sessionCapabilities"].get("list").is_some() => {
-            latest_session(rpc, &spec.cwd)
-        }
-        None => None,
-    };
-    if let Some(id) = earlier.filter(|_| caps["loadSession"].as_bool() == Some(true)) {
-        {
-            let mut inner = lock(&shared.inner);
-            inner.history = Some(Vec::new());
-            inner.conversation.replaying = true;
-        }
-        let load = json!({"sessionId": id, "cwd": cwd, "mcpServers": []});
-        let loaded = wait(&rpc.request("session/load", load), Some(SETUP_TIMEOUT));
-        let mut inner = lock(&shared.inner);
-        inner.conversation.finish_turn();
-        collect(&mut inner);
-        inner.conversation.replaying = false;
-        let history = inner.history.take().unwrap_or_default();
-        if loaded.is_ok() {
-            inner.updates.push(Update::History(history));
-            return Some(id);
-        }
     }
-    let created = wait(&rpc.request("session/new", json!({"cwd": cwd, "mcpServers": []})), Some(SETUP_TIMEOUT));
-    let id = match created.map(|r| r["sessionId"].as_str().map(str::to_string)) {
-        Ok(Some(id)) => id,
-        Ok(None) => return fail(Failure::Rejected(rpc::RpcError { code: 0, message: "no sessionId".into() })),
-        Err(failure) => return fail(failure),
-    };
-    if let Some(prompt) = spec.prompt.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
-        lock(&shared.inner).queue.push_front(prompt.to_string());
-    }
-    Some(id)
 }
 
-/// 这个目录里最近的一次会话。
-fn latest_session(rpc: &Rpc, cwd: &Path) -> Option<String> {
-    let list =
-        wait(&rpc.request("session/list", json!({"cwd": cwd.display().to_string()})), Some(SETUP_TIMEOUT)).ok()?;
-    let mut sessions: Vec<&Value> = list["sessions"].as_array()?.iter().collect();
-    sessions.sort_by(|a, b| b["updatedAt"].as_str().cmp(&a["updatedAt"].as_str()));
-    sessions.first()?["sessionId"].as_str().map(str::to_string)
+/// 设了 [`RECORD_ENV`] 时把收发记下来（`>> ` 是发的、`<< ` 是收的），用来做测试数据。
+struct Recorder(Mutex<std::fs::File>);
+
+impl Recorder {
+    fn open() -> Option<Arc<Self>> {
+        let path = std::env::var_os(RECORD_ENV)?;
+        let file = std::fs::OpenOptions::new().create(true).append(true).open(path).ok()?;
+        Some(Arc::new(Self(Mutex::new(file))))
+    }
+
+    fn line(&self, prefix: &str, line: &str) {
+        let _ = writeln!(lock(&self.0), "{prefix}{line}");
+    }
 }

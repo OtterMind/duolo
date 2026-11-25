@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
   Ellipsis,
+  Folder,
+  FolderOpen,
   FolderPlus,
   Plus,
   Search,
@@ -101,8 +101,9 @@ export function Sidebar(props: Props) {
           return (
             <section key={project.id} className="side-project">
               <div className="side-project-head">
+                {/* 项目是分组标题：文件夹图标（合上 / 打开就是收起 / 展开）加上比任务名醒目的名字。 */}
                 <button className="project-toggle" onClick={() => toggleCollapsed(project.id)} title={project.root}>
-                  {folded ? <ChevronRight size={12} strokeWidth={2} /> : <ChevronDown size={12} strokeWidth={2} />}
+                  {folded ? <Folder {...ICON} className="project-icon" /> : <FolderOpen {...ICON} className="project-icon" />}
                   <span className="ellipsis">{project.name}</span>
                 </button>
                 {folded && project.tasks.length > 0 && <span className="meta">{project.tasks.length}</span>}
@@ -197,8 +198,9 @@ function TaskRow({
     >
       <div className="task-line">
         {/* 状态在行首，和手机端、GitHub 的列表一样；名字在悬停提示里。 */}
-        <span className="row-status">
-          {untitled && task.state !== "needs_you" ? null : <StateIcon task={task} />}
+        {/* 空白任务也画状态（淡一些）：这一列空着，看起来像缩进在上一个任务下面。 */}
+        <span className={`row-status ${untitled && task.state !== "needs_you" ? "is-faded" : ""}`}>
+          <StateIcon task={task} />
         </span>
         <span className={untitled ? "is-faded" : ""}>
           <AgentIcon kind={writer?.kind ?? ""} title={writer?.name} />

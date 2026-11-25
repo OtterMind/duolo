@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Columns2, Ellipsis, GitBranch, MessagesSquare, PanelRightClose, SquareTerminal, X } from "lucide-react";
+import { ChevronDown, Columns2, Ellipsis, GitBranch, MessagesSquare, PanelRightClose, SquareTerminal, X } from "lucide-react";
 
 import { useT } from "../i18n";
 
@@ -68,11 +68,13 @@ export function TaskView(props: Props) {
       <header className="topbar" data-tauri-drag-region>
         <div className="dropdown-anchor">
           <button
-            className={`icon-btn agent-switch ${agentMenu ? "is-open" : ""}`}
+            className={`agent-switch ${agentMenu ? "is-open" : ""}`}
             title={t("task.writer", { agent: agent.name })}
             onClick={() => setAgentMenu((m) => !m)}
           >
             <AgentIcon kind={agent.kind} />
+            <span>{agent.name}</span>
+            <ChevronDown size={12} strokeWidth={1.75} className="dim" />
           </button>
           {agentMenu && (
             <SwitchMenu

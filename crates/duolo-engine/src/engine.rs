@@ -39,6 +39,8 @@ pub struct TaskOptions {
     pub writer: Option<AgentKind>,
     /// 审阅的 Agent。
     pub reviewer: Option<AgentKind>,
+    /// 写代码的 Agent 在终端里还是聊天模式下运行，默认和上次一样。选了的记下来，下次照着用。
+    pub surface: Option<Surface>,
 }
 
 /// 关闭任务的结果。
@@ -501,6 +503,9 @@ impl Engine {
         };
         let worktree = self.paths.worktrees().join(&project.id.0).join(format!("{id}-{label}"));
         let mut writer = AgentSpec::new(0, writer, AgentRole::Writer);
+        if let Some(surface) = opts.surface {
+            self.remember_surface(surface);
+        }
         writer.surface = self.surface_for(&writer.kind, self.last_surface.unwrap_or_default());
         let task = Task {
             id,

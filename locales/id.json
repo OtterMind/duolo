@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Berlangsung",
   "sidebar.reviewFailed": "Gagal",
   "sidebar.languageAuto": "Ikuti sistem",
-  "sidebar.search": "Cari tugas",
+  "sidebar.search": "Cari tugas dan perintah",
   "sidebar.waiting": "{count} menunggu Anda",
   "sidebar.rename": "Ganti nama",
   "sidebar.reviewTitle": "Tinjauan {agent}",
@@ -438,5 +438,12 @@
   "task.split": "Buka tugas lain di samping",
   "task.unsplit": "Tutup panel ini",
   "newTask.moreAgents": "Agen lainnya",
-  "newTask.writerHint": "Siapa yang menulis kode (⇥ untuk ganti)"
+  "newTask.writerHint": "Siapa yang menulis kode (⇥ untuk ganti)",
+  "newTask.surfaceTerminal": "Jalankan {agent} di terminalnya sendiri",
+  "newTask.surfaceChat": "Mengobrol dengan {agent} di sini",
+  "task.dividerHint": "Seret untuk mengubah ukuran, klik dua kali untuk membagi rata",
+  "sidebar.taskCount": "{count} tugas",
+  "command.nextWaiting": "Ke tugas berikutnya yang menunggu Anda",
+  "command.split": "Tampilan terpisah: buka tugas lain di samping",
+  "command.unsplit": "Tutup tampilan terpisah"
 }

@@ -119,6 +119,8 @@ export interface AgentPlugin {
   color: string | null;
   /** 能不能用来审阅。 */
   reviews: boolean;
+  /** 能不能在聊天模式下运行。 */
+  chat: boolean;
 }
 
 /** 关闭任务的结果。 */
@@ -182,6 +184,8 @@ export interface NewTaskOptions {
   branch?: string | null;
   writer?: string;
   reviewer?: string;
+  /** 在终端里还是聊天模式下运行，默认和上次一样。 */
+  surface?: Surface;
 }
 
 export interface VoiceStatus {
@@ -234,6 +238,7 @@ export const api = {
       branch: opts.branch ?? null,
       writer: opts.writer || null,
       reviewer: opts.reviewer || null,
+      surface: opts.surface ?? null,
     }),
   taskEvents: (task: number, after: number) => invoke<TaskEvent[]>("task_events", { task, after }),
   execute: (command: RemoteCommand) => invoke<CommandResult>("execute", { command }),
@@ -245,7 +250,7 @@ export const api = {
   createProjectFolder: (name: string, parent: string | null) =>
     invoke<string>("create_project_folder", { name, parent }),
   agentPlugins: () => invoke<AgentPlugin[]>("agent_plugins"),
-  agentDefaults: () => invoke<{ writer: string; reviewer: string }>("agent_defaults"),
+  agentDefaults: () => invoke<{ writer: string; reviewer: string; surface: Surface }>("agent_defaults"),
   renameTask: (task: number, title: string) => invoke<void>("rename_task", { task, title }),
   branches: (repo: string) => invoke<string[]>("branches", { repo }),
   discoverRepos: () => invoke<Repo[]>("discover_repos"),

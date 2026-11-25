@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Läuft",
   "sidebar.reviewFailed": "Fehlgeschlagen",
   "sidebar.languageAuto": "Systemsprache",
-  "sidebar.search": "Aufgaben suchen",
+  "sidebar.search": "Aufgaben und Befehle suchen",
   "sidebar.waiting": "{count} warten auf dich",
   "sidebar.rename": "Umbenennen",
   "sidebar.reviewTitle": "{agent}-Prüfung",
@@ -438,5 +438,12 @@
   "task.split": "Eine weitere Aufgabe daneben öffnen",
   "task.unsplit": "Diesen Bereich schließen",
   "newTask.moreAgents": "Weitere Agenten",
-  "newTask.writerHint": "Wer den Code schreibt (⇥ zum Wechseln)"
+  "newTask.writerHint": "Wer den Code schreibt (⇥ zum Wechseln)",
+  "newTask.surfaceTerminal": "{agent} im eigenen Terminal ausführen",
+  "newTask.surfaceChat": "Hier mit {agent} chatten",
+  "task.dividerHint": "Ziehen zum Anpassen, Doppelklick teilt gleichmäßig",
+  "sidebar.taskCount": "{count} Aufgaben",
+  "command.nextWaiting": "Zur nächsten Aufgabe, die auf dich wartet",
+  "command.split": "Geteilte Ansicht: weitere Aufgabe daneben öffnen",
+  "command.unsplit": "Geteilte Ansicht schließen"
 }

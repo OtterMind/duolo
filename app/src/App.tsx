@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
@@ -11,12 +11,14 @@ import { useVoice, type VoiceTarget } from "./lib/voice";
 import { useProjectAdder } from "./lib/projects";
 import { AddProjectDialog } from "./components/AddProject";
 import { agentOptions, type AgentChoice } from "./lib/agents";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, type SearchCommand } from "./components/Sidebar";
 import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
+import { PaneDivider } from "./components/PaneDivider";
+import { loadLayout, saveLayout } from "./lib/layout";
 import { isMac, matches } from "./lib/platform";
 
 /** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
@@ -54,6 +56,10 @@ export function App() {
    * 点旁边那一格就换成操作它，两格的位置不变。
    */
   const [beside, setBeside] = useState<{ task: number; left: boolean } | null>(null);
+  /** 上次关掉应用时的样子，启动时还原。 */
+  const saved = useRef(loadLayout());
+  /** 分屏时左边一格占的比例（拖中间的线调整）。 */
+  const [ratio, setRatio] = useState(saved.current.ratio);
   const viewRef = useRef(view);
   viewRef.current = view;
   const besideRef = useRef(beside);
@@ -149,7 +155,11 @@ export function App() {
       const norm = (path?: string) => path?.replace(/\\/g, "/");
       const sameRepo = (repo: string) => !opts.repo || norm(opts.repo) === norm(repo ? `${p?.root}/${repo}` : p?.root);
       const blank = p?.tasks.find(
-        (t) => t.untitled && sameRepo(t.repo) && (!opts.writer || writerOf(t)?.kind === opts.writer),
+        (t) =>
+          t.untitled &&
+          sameRepo(t.repo) &&
+          (!opts.writer || writerOf(t)?.kind === opts.writer) &&
+          (!opts.surface || writerOf(t)?.surface === opts.surface),
       );
       setPanel(null);
       if (!prompt && !opts.base && !opts.branch && blank) return openTask(blank.id);
@@ -229,11 +239,20 @@ export function App() {
       const s = await refresh();
       const requested = await api.takeOpenRequest();
       if (requested) return addProject(requested);
+      // 还原上次看的任务和分屏；任务不在了就打开最近的。
+      const last = saved.current;
       const latest = allTasks(s).sort((a, b) => b.createdAt - a.createdAt)[0];
-      if (latest) openTask(latest.id);
-      else if (s.projects.length > 0) await createTask(s.projects[0].id, "");
+      const first = last.task !== null && findTask(s, last.task) ? last.task : latest?.id;
+      if (first !== undefined) {
+        openTask(first);
+        if (last.beside && last.beside.task !== first && findTask(s, last.beside.task)) setBeside(last.beside);
+      } else if (s.projects.length > 0) await createTask(s.projects[0].id, "");
     })();
   }, [refresh, addProject, openTask, createTask]);
+
+  useEffect(() => {
+    if (view.kind === "task") saveLayout({ task: view.task, beside, ratio });
+  }, [view, beside, ratio]);
 
   // 旁边那个任务关掉了（或者和正在操作的是同一个）：不再分屏。
   useEffect(() => {
@@ -408,6 +427,29 @@ export function App() {
   handlers.current["next-waiting"] = jumpToWaiting;
   handlers.current["split"] = toggleSplit;
 
+  /** ⌘K 搜索框里能搜到的命令，和菜单、快捷键做的事一样。 */
+  const run = (id: string) => () => handlers.current[id]?.();
+  const searchCommands: SearchCommand[] = [
+    { id: "new-task", label: t("menu.newTask"), keys: "⌘N", run: run("new-task") },
+    { id: "add-project", label: t("menu.addProject"), keys: "⌘O", run: run("add-project") },
+    { id: "next-waiting", label: t("command.nextWaiting"), keys: "⌥↓", run: run("next-waiting") },
+    { id: "prev-task", label: t("menu.prevTask"), keys: "⌘⌥↑", run: run("prev-task") },
+    { id: "next-task", label: t("menu.nextTask"), keys: "⌘⌥↓", run: run("next-task") },
+    ...(current
+      ? [
+          {
+            id: "split",
+            label: t(beside ? "command.unsplit" : "command.split"),
+            keys: "⌘\\",
+            run: run("split"),
+          },
+          { id: "review", label: t("menu.review"), keys: "⌘⇧R", run: run("review") },
+          { id: "reveal", label: t(isMac ? "task.reveal" : "task.openFolder"), keys: "⌘⇧F", run: run("reveal") },
+          { id: "close-task", label: t("menu.closeTask"), keys: "⌘⇧W", run: run("close-task") },
+        ]
+      : []),
+  ];
+
   useEffect(() => {
     const unlistenMenu = listen<string>("menu", (e) => handlers.current[e.payload]?.());
     // macOS 上菜单里的快捷键由原生菜单处理；Windows / Linux 没有原生菜单，全部在这里处理。
@@ -466,17 +508,20 @@ export function App() {
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}
+        commands={searchCommands}
         onError={fail}
       />
       <main className="main">
         {view.kind === "task" && current ? (
           <div className="panes">
-            {(besideTask ? (beside?.left ? [besideTask, current] : [current, besideTask]) : [current]).map(({ task }) => {
+            {(besideTask ? (beside?.left ? [besideTask, current] : [current, besideTask]) : [current]).map(({ task }, i) => {
               const active = task.id === current.task.id;
               return (
+                <Fragment key={task.id}>
+                  {i > 0 && <PaneDivider ratio={ratio} onChange={setRatio} />}
                 <div
-                  key={task.id}
                   className={`pane ${besideTask && active ? "is-active" : ""}`}
+                  style={besideTask ? { flex: `${i === 0 ? ratio : 1 - ratio} 1 0` } : undefined}
                   // 点旁边那一格（包括里面的按钮、终端）就换成操作它。
                   onMouseDownCapture={() => !active && openTask(task.id)}
                 >
@@ -494,6 +539,7 @@ export function App() {
                     onError={fail}
                   />
                 </div>
+                </Fragment>
               );
             })}
           </div>

@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Sürüyor",
   "sidebar.reviewFailed": "Başarısız",
   "sidebar.languageAuto": "Sistem dili",
-  "sidebar.search": "Görev ara",
+  "sidebar.search": "Görev ve komut ara",
   "sidebar.waiting": "{count} görev sizi bekliyor",
   "sidebar.rename": "Yeniden adlandır",
   "sidebar.reviewTitle": "{agent} incelemesi",
@@ -438,5 +438,12 @@
   "task.split": "Yanında başka bir görev aç",
   "task.unsplit": "Bu bölmeyi kapat",
   "newTask.moreAgents": "Diğer ajanlar",
-  "newTask.writerHint": "Kodu kim yazacak (değiştirmek için ⇥)"
+  "newTask.writerHint": "Kodu kim yazacak (değiştirmek için ⇥)",
+  "newTask.surfaceTerminal": "{agent} kendi terminalinde çalıştır",
+  "newTask.surfaceChat": "Burada {agent} ile sohbet et",
+  "task.dividerHint": "Boyutlandırmak için sürükleyin, eşit bölmek için çift tıklayın",
+  "sidebar.taskCount": "{count} görev",
+  "command.nextWaiting": "Sizi bekleyen sonraki göreve git",
+  "command.split": "Bölünmüş görünüm: yanına başka bir görev aç",
+  "command.unsplit": "Bölünmüş görünümü kapat"
 }

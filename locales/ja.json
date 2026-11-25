@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "実行中",
   "sidebar.reviewFailed": "失敗",
   "sidebar.languageAuto": "システムに合わせる",
-  "sidebar.search": "タスクを検索",
+  "sidebar.search": "タスクとコマンドを検索",
   "sidebar.waiting": "{count} 件があなたを待っています",
   "sidebar.rename": "名前を変更",
   "sidebar.reviewTitle": "{agent} レビュー",
@@ -438,5 +438,12 @@
   "task.split": "横にもう一つタスクを開く",
   "task.unsplit": "このペインを閉じる",
   "newTask.moreAgents": "その他のエージェント",
-  "newTask.writerHint": "コードを書くエージェント（⇥ で切り替え）"
+  "newTask.writerHint": "コードを書くエージェント（⇥ で切り替え）",
+  "newTask.surfaceTerminal": "{agent} を自身のターミナルで実行",
+  "newTask.surfaceChat": "ここで {agent} とチャット",
+  "task.dividerHint": "ドラッグで幅を調整、ダブルクリックで半分ずつに戻す",
+  "sidebar.taskCount": "{count} 件のタスク",
+  "command.nextWaiting": "あなたの確認を待つ次のタスクへ移動",
+  "command.split": "分割表示：別のタスクを横に開く",
+  "command.unsplit": "分割表示を閉じる"
 }

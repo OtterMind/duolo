@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "进行中",
   "sidebar.reviewFailed": "失败",
   "sidebar.languageAuto": "跟随系统",
-  "sidebar.search": "搜索任务",
+  "sidebar.search": "搜索任务和命令",
   "sidebar.waiting": "{count} 个任务在等你确认",
   "sidebar.rename": "重命名",
   "sidebar.reviewTitle": "{agent} 审阅",
@@ -438,5 +438,12 @@
   "task.split": "在旁边再打开一个任务",
   "task.unsplit": "关闭这一格",
   "newTask.moreAgents": "更多 Agent",
-  "newTask.writerHint": "谁来写代码（⇥ 切换）"
+  "newTask.writerHint": "谁来写代码（⇥ 切换）",
+  "newTask.surfaceTerminal": "在终端里运行 {agent} 自己的命令行",
+  "newTask.surfaceChat": "在这里和 {agent} 对话",
+  "task.dividerHint": "拖动调整宽度，双击恢复一半一半",
+  "sidebar.taskCount": "{count} 个任务",
+  "command.nextWaiting": "跳到下一个等你确认的任务",
+  "command.split": "分屏：在旁边打开另一个任务",
+  "command.unsplit": "关闭分屏"
 }

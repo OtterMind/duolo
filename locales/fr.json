@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "En cours",
   "sidebar.reviewFailed": "Échec",
   "sidebar.languageAuto": "Langue du système",
-  "sidebar.search": "Rechercher des tâches",
+  "sidebar.search": "Rechercher des tâches et des commandes",
   "sidebar.waiting": "{count} vous attendent",
   "sidebar.rename": "Renommer",
   "sidebar.reviewTitle": "Relecture {agent}",
@@ -438,5 +438,12 @@
   "task.split": "Ouvrir une autre tâche à côté",
   "task.unsplit": "Fermer ce volet",
   "newTask.moreAgents": "Plus d'agents",
-  "newTask.writerHint": "Qui écrit le code (⇥ pour changer)"
+  "newTask.writerHint": "Qui écrit le code (⇥ pour changer)",
+  "newTask.surfaceTerminal": "Exécuter {agent} dans son propre terminal",
+  "newTask.surfaceChat": "Discuter avec {agent} ici",
+  "task.dividerHint": "Glisser pour redimensionner, double-clic pour partager à parts égales",
+  "sidebar.taskCount": "{count} tâches",
+  "command.nextWaiting": "Aller à la prochaine tâche qui vous attend",
+  "command.split": "Vue partagée : ouvrir une autre tâche à côté",
+  "command.unsplit": "Fermer la vue partagée"
 }

@@ -149,6 +149,8 @@ pub struct PluginView {
     pub color: Option<String>,
     /// 能不能用来审阅。
     pub reviews: bool,
+    /// 能不能在聊天模式下运行。
+    pub chat: bool,
 }
 
 impl From<&Plugin> for PluginView {
@@ -159,6 +161,7 @@ impl From<&Plugin> for PluginView {
             icon: plugin.icon().map(Into::into),
             color: plugin.icon_color().map(Into::into),
             reviews: plugin.review().is_some(),
+            chat: plugin.chat().is_some(),
         }
     }
 }

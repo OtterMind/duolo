@@ -72,6 +72,7 @@ pub async fn create_task(
     branch: Option<String>,
     writer: Option<String>,
     reviewer: Option<String>,
+    surface: Option<String>,
 ) -> Res<u64> {
     let opts = TaskOptions {
         repo: repo.map(PathBuf::from),
@@ -79,6 +80,7 @@ pub async fn create_task(
         branch,
         writer: writer.map(AgentKind),
         reviewer: reviewer.map(AgentKind),
+        surface: surface.map(|s| if s == "chat" { Surface::Chat } else { Surface::Terminal }),
     };
     blocking(app, move |state| ops::create_task(&state.engine, &ProjectId(project), &prompt, &opts))
         .await
@@ -108,13 +110,19 @@ pub fn agent_plugins(state: State<'_, AppState>) -> Vec<PluginView> {
 pub fn agent_defaults(state: State<'_, AppState>) -> AgentDefaults {
     let engine = state.engine();
     let config = engine.config();
-    AgentDefaults { writer: config.writer.0.clone(), reviewer: config.reviewer.0.clone() }
+    AgentDefaults {
+        writer: config.writer.0.clone(),
+        reviewer: config.reviewer.0.clone(),
+        surface: engine.default_surface(),
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
 pub struct AgentDefaults {
     writer: String,
     reviewer: String,
+    /// 新任务默认在终端里还是聊天模式下运行（上次选的）。
+    surface: Surface,
 }
 
 /// 根据需求让 AI 给新分支起名；没装、超时或结果不能用时返回空，界面用默认名字。

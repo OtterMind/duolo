@@ -47,12 +47,7 @@ impl Engine {
         if surface == Surface::Chat && !self.supports_chat(&kind) {
             return Err(UserError::ChatUnsupported.into());
         }
-        let file = self.paths.settings_file();
-        if let Ok(mut settings) = Settings::load(&file) {
-            settings.surface = Some(surface);
-            let _ = settings.save(&file);
-        }
-        self.last_surface = Some(surface);
+        self.remember_surface(surface);
         if self.surface_of(key) == surface {
             return self.start_agent(key);
         }
@@ -72,6 +67,21 @@ impl Engine {
             self.queue_message(key, text);
         }
         Ok(())
+    }
+
+    /// 记下用户选的运行方式，新任务照着用。
+    pub(crate) fn remember_surface(&mut self, surface: Surface) {
+        let file = self.paths.settings_file();
+        if let Ok(mut settings) = Settings::load(&file) {
+            settings.surface = Some(surface);
+            let _ = settings.save(&file);
+        }
+        self.last_surface = Some(surface);
+    }
+
+    /// 新任务默认用什么方式运行（上次选的）。
+    pub fn default_surface(&self) -> Surface {
+        self.last_surface.unwrap_or_default()
     }
 
     /// 在聊天模式下启动。`fresh` 为真时不接回会话。
@@ -327,6 +337,23 @@ mod tests {
         assert_eq!(err.downcast_ref(), Some(&UserError::ChatUnsupported));
         assert!(engine.supports_chat(&AgentKind("fake".into())));
         assert!(!engine.supports_chat(&AgentKind("pi".into())));
+    }
+
+    #[test]
+    fn new_task_runs_where_chosen_and_remembers_it() {
+        let (_dir, mut engine, project) = engine("permission.txt");
+        let fake = Some(AgentKind("fake".into()));
+        let chat = crate::TaskOptions { writer: fake.clone(), surface: Some(Surface::Chat), ..Default::default() };
+        let first = engine.create_task_with(&project, "x", &chat).unwrap();
+        assert_eq!(engine.surface_of(engine.writer_key(first).unwrap()), Surface::Chat);
+        assert_eq!(engine.default_surface(), Surface::Chat, "选了的下次照着用");
+        let again = crate::TaskOptions { writer: fake, ..Default::default() };
+        let second = engine.create_task_with(&project, "y", &again).unwrap();
+        assert_eq!(engine.surface_of(engine.writer_key(second).unwrap()), Surface::Chat);
+        // 不支持聊天的照旧在终端里运行。
+        let pi = crate::TaskOptions { writer: Some(AgentKind("pi".into())), ..Default::default() };
+        let third = engine.create_task_with(&project, "z", &pi).unwrap();
+        assert_eq!(engine.surface_of(engine.writer_key(third).unwrap()), Surface::Terminal);
     }
 
     #[test]

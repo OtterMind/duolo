@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Đang chạy",
   "sidebar.reviewFailed": "Thất bại",
   "sidebar.languageAuto": "Theo hệ thống",
-  "sidebar.search": "Tìm tác vụ",
+  "sidebar.search": "Tìm tác vụ và lệnh",
   "sidebar.waiting": "{count} tác vụ đang chờ bạn",
   "sidebar.rename": "Đổi tên",
   "sidebar.reviewTitle": "{agent} xem xét",
@@ -438,5 +438,12 @@
   "task.split": "Mở thêm một tác vụ bên cạnh",
   "task.unsplit": "Đóng khung này",
   "newTask.moreAgents": "Thêm agent",
-  "newTask.writerHint": "Ai viết mã (⇥ để đổi)"
+  "newTask.writerHint": "Ai viết mã (⇥ để đổi)",
+  "newTask.surfaceTerminal": "Chạy {agent} trong terminal của nó",
+  "newTask.surfaceChat": "Trò chuyện với {agent} tại đây",
+  "task.dividerHint": "Kéo để đổi độ rộng, nhấp đúp để chia đều",
+  "sidebar.taskCount": "{count} tác vụ",
+  "command.nextWaiting": "Đến tác vụ tiếp theo đang chờ bạn",
+  "command.split": "Chia đôi: mở tác vụ khác bên cạnh",
+  "command.unsplit": "Đóng chia đôi"
 }

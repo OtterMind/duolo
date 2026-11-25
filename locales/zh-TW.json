@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "進行中",
   "sidebar.reviewFailed": "失敗",
   "sidebar.languageAuto": "跟隨系統",
-  "sidebar.search": "搜尋任務",
+  "sidebar.search": "搜尋任務和指令",
   "sidebar.waiting": "{count} 個任務在等你確認",
   "sidebar.rename": "重新命名",
   "sidebar.reviewTitle": "{agent} 審閱",
@@ -438,5 +438,12 @@
   "task.split": "在旁邊再開一個任務",
   "task.unsplit": "關閉這一格",
   "newTask.moreAgents": "更多 Agent",
-  "newTask.writerHint": "誰來寫程式（⇥ 切換）"
+  "newTask.writerHint": "誰來寫程式（⇥ 切換）",
+  "newTask.surfaceTerminal": "在終端機裡執行 {agent} 自己的命令列",
+  "newTask.surfaceChat": "在這裡和 {agent} 對話",
+  "task.dividerHint": "拖曳調整寬度，按兩下恢復各半",
+  "sidebar.taskCount": "{count} 個任務",
+  "command.nextWaiting": "跳到下一個等你確認的任務",
+  "command.split": "分割畫面：在旁邊開啟另一個任務",
+  "command.unsplit": "關閉分割畫面"
 }

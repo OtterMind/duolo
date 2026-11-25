@@ -52,6 +52,7 @@ pub fn execute(engine: &Mutex<Engine>, command: Command) -> CommandResult {
                 branch,
                 writer: writer.map(AgentKind),
                 reviewer: reviewer.map(AgentKind),
+                surface: None,
             };
             create_task(engine, &ProjectId(project), &prompt, &opts).and_then(|id| {
                 // 手机上建的任务没人在电脑前点开，直接启动 Agent。

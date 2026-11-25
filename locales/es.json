@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "En curso",
   "sidebar.reviewFailed": "Falló",
   "sidebar.languageAuto": "Según el sistema",
-  "sidebar.search": "Buscar tareas",
+  "sidebar.search": "Buscar tareas y comandos",
   "sidebar.waiting": "{count} esperan tu respuesta",
   "sidebar.rename": "Renombrar",
   "sidebar.reviewTitle": "Revisión de {agent}",
@@ -438,5 +438,12 @@
   "task.split": "Abrir otra tarea al lado",
   "task.unsplit": "Cerrar este panel",
   "newTask.moreAgents": "Más agentes",
-  "newTask.writerHint": "Quién escribe el código (⇥ para cambiar)"
+  "newTask.writerHint": "Quién escribe el código (⇥ para cambiar)",
+  "newTask.surfaceTerminal": "Ejecutar {agent} en su propia terminal",
+  "newTask.surfaceChat": "Chatear con {agent} aquí",
+  "task.dividerHint": "Arrastra para ajustar, doble clic para dividir a partes iguales",
+  "sidebar.taskCount": "{count} tareas",
+  "command.nextWaiting": "Ir a la siguiente tarea que te espera",
+  "command.split": "Vista dividida: abrir otra tarea al lado",
+  "command.unsplit": "Cerrar vista dividida"
 }

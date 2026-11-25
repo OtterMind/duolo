@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Command as CommandIcon,
   Ellipsis,
   Folder,
   FolderOpen,
@@ -36,7 +37,17 @@ interface Props {
   onCloseTask(task: number): void;
   onAddProject(): void;
   onJumpToWaiting(): void;
+  /** ⌘K 搜索框里也能搜到的命令。 */
+  commands: SearchCommand[];
   onError(err: unknown): void;
+}
+
+/** 搜索框里能搜到的一条命令：名字、快捷键（macOS 写法）和执行。 */
+export interface SearchCommand {
+  id: string;
+  label: string;
+  keys?: string;
+  run(): void;
 }
 
 const MIN_WIDTH = 220;
@@ -63,6 +74,12 @@ export function Sidebar(props: Props) {
   const needle = query.trim().toLowerCase();
   const matches = (task: Task) =>
     !needle || task.title.toLowerCase().includes(needle) || task.branch.toLowerCase().includes(needle);
+  const commands = needle ? props.commands.filter((c) => c.label.toLowerCase().includes(needle)) : [];
+  const runCommand = (command: SearchCommand) => {
+    setQuery("");
+    search.current?.blur();
+    command.run();
+  };
 
   return (
     <aside className="sidebar" style={{ width }}>
@@ -80,6 +97,14 @@ export function Sidebar(props: Props) {
               if (e.key === "Escape") {
                 setQuery("");
                 e.currentTarget.blur();
+              } else if (e.key === "Enter" && !e.nativeEvent.isComposing && needle) {
+                // 回车：打开第一个找到的任务，没有任务时执行第一条命令。
+                const task = projects.flatMap((p) => p.tasks).find(matches);
+                if (task) {
+                  setQuery("");
+                  e.currentTarget.blur();
+                  props.onOpenTask(task.id);
+                } else if (commands[0]) runCommand(commands[0]);
               }
             }}
           />
@@ -98,6 +123,17 @@ export function Sidebar(props: Props) {
             <kbd>{kbd("⌥↓")}</kbd>
           </button>
         )}
+        {commands.length > 0 && (
+          <section className="side-commands">
+            {commands.map((command) => (
+              <button key={command.id} className="side-command" onClick={() => runCommand(command)}>
+                <CommandIcon size={13} strokeWidth={1.75} className="dim" />
+                <span className="grow ellipsis">{command.label}</span>
+                {command.keys && <kbd>{kbd(command.keys)}</kbd>}
+              </button>
+            ))}
+          </section>
+        )}
         {projects.map((project) => {
           const tasks = project.tasks.filter(matches);
           if (needle && tasks.length === 0) return null;
@@ -110,7 +146,7 @@ export function Sidebar(props: Props) {
                   {folded ? <Folder {...ICON} className="project-icon" /> : <FolderOpen {...ICON} className="project-icon" />}
                   <span className="ellipsis">{project.name}</span>
                 </button>
-                {folded && project.tasks.length > 0 && <span className="meta">{project.tasks.length}</span>}
+                {folded && project.tasks.length > 0 && <FoldedCounts tasks={project.tasks} />}
                 <button
                   className="icon-btn project-add"
                   title={t("sidebar.newTaskIn", { project: project.name })}
@@ -402,4 +438,30 @@ function useResizableWidth(): [number, (e: React.MouseEvent | null) => void] {
     window.addEventListener("mouseup", up);
   };
   return [width, start];
+}
+
+/** 收起的项目：里面有几个在等你、几个在干活，再加任务总数。 */
+function FoldedCounts({ tasks }: { tasks: Task[] }) {
+  const t = useT();
+  const waiting = tasks.filter((task) => task.state === "needs_you").length;
+  const running = tasks.filter((task) => task.state === "writing" || task.state === "reviewing").length;
+  return (
+    <span className="folded-counts">
+      {waiting > 0 && (
+        <span className="is-waiting" title={t("sidebar.waiting", { count: waiting })}>
+          <span className="attention-dot" />
+          {waiting}
+        </span>
+      )}
+      {running > 0 && (
+        <span title={t("sidebar.running", { count: running })}>
+          <span className="status status-running" />
+          {running}
+        </span>
+      )}
+      <span className="meta" title={t("sidebar.taskCount", { count: tasks.length })}>
+        {tasks.length}
+      </span>
+    </span>
+  );
 }

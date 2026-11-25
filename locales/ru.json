@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "Идёт",
   "sidebar.reviewFailed": "Ошибка",
   "sidebar.languageAuto": "Как в системе",
-  "sidebar.search": "Поиск задач",
+  "sidebar.search": "Поиск задач и команд",
   "sidebar.waiting": "Ждут вас: {count}",
   "sidebar.rename": "Переименовать",
   "sidebar.reviewTitle": "Ревью {agent}",
@@ -438,5 +438,12 @@
   "task.split": "Открыть рядом ещё одну задачу",
   "task.unsplit": "Закрыть эту панель",
   "newTask.moreAgents": "Другие агенты",
-  "newTask.writerHint": "Кто пишет код (⇥ — переключить)"
+  "newTask.writerHint": "Кто пишет код (⇥ — переключить)",
+  "newTask.surfaceTerminal": "Запустить {agent} в его собственном терминале",
+  "newTask.surfaceChat": "Общаться с {agent} здесь",
+  "task.dividerHint": "Перетащите, чтобы изменить ширину; двойной щелчок — поровну",
+  "sidebar.taskCount": "Задач: {count}",
+  "command.nextWaiting": "К следующей задаче, ожидающей вас",
+  "command.split": "Разделить: открыть другую задачу рядом",
+  "command.unsplit": "Закрыть разделение"
 }

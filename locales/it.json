@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "In corso",
   "sidebar.reviewFailed": "Non riuscita",
   "sidebar.languageAuto": "Lingua di sistema",
-  "sidebar.search": "Cerca attività",
+  "sidebar.search": "Cerca attività e comandi",
   "sidebar.waiting": "{count} ti aspettano",
   "sidebar.rename": "Rinomina",
   "sidebar.reviewTitle": "Revisione {agent}",
@@ -438,5 +438,12 @@
   "task.split": "Apri un'altra attività accanto",
   "task.unsplit": "Chiudi questo riquadro",
   "newTask.moreAgents": "Altri agenti",
-  "newTask.writerHint": "Chi scrive il codice (⇥ per cambiare)"
+  "newTask.writerHint": "Chi scrive il codice (⇥ per cambiare)",
+  "newTask.surfaceTerminal": "Esegui {agent} nel suo terminale",
+  "newTask.surfaceChat": "Chatta con {agent} qui",
+  "task.dividerHint": "Trascina per ridimensionare, doppio clic per dividere a metà",
+  "sidebar.taskCount": "{count} attività",
+  "command.nextWaiting": "Vai alla prossima attività che ti aspetta",
+  "command.split": "Vista divisa: apri un'altra attività accanto",
+  "command.unsplit": "Chiudi vista divisa"
 }

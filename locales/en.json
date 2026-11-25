@@ -33,7 +33,7 @@
   "sidebar.reviewRunning": "In progress",
   "sidebar.reviewFailed": "Failed",
   "sidebar.languageAuto": "System default",
-  "sidebar.search": "Search tasks",
+  "sidebar.search": "Search tasks and commands",
   "sidebar.waiting": "{count} waiting for you",
   "sidebar.rename": "Rename",
   "sidebar.reviewTitle": "{agent} review",
@@ -438,5 +438,12 @@
   "task.split": "Open another task beside this one",
   "task.unsplit": "Close this pane",
   "newTask.moreAgents": "More agents",
-  "newTask.writerHint": "Who writes the code (⇥ to switch)"
+  "newTask.writerHint": "Who writes the code (⇥ to switch)",
+  "newTask.surfaceTerminal": "Run {agent} in its own terminal",
+  "newTask.surfaceChat": "Chat with {agent} here",
+  "task.dividerHint": "Drag to resize, double-click to split evenly",
+  "sidebar.taskCount": "{count} tasks",
+  "command.nextWaiting": "Go to the next task waiting for you",
+  "command.split": "Split view: open another task beside this one",
+  "command.unsplit": "Close split view"
 }

@@ -8,18 +8,20 @@ import {
   FolderGit2,
   FolderPlus,
   GitBranch,
+  MessagesSquare,
   Mic,
   Paperclip,
   Pencil,
   Plus,
   Search,
   Sparkles,
+  SquareTerminal,
   TriangleAlert,
 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { useT } from "../i18n";
-import { api, type Check as EnvCheck, type NewTaskOptions, type Repo, type Snapshot } from "../lib/api";
+import { api, type Check as EnvCheck, type NewTaskOptions, type Repo, type Snapshot, type Surface } from "../lib/api";
 import {
   agentOptions,
   defaultChoice,
@@ -30,7 +32,7 @@ import {
 } from "../lib/agents";
 import type { Voice, VoiceTarget } from "../lib/voice";
 import { useModalFocus } from "../lib/modal";
-import { pluginName } from "../lib/plugins";
+import { pluginName, pluginOf } from "../lib/plugins";
 import { AgentIcon } from "./AgentIcon";
 import { AgentMenu, CopyCommand, Popover } from "./AgentMenu";
 import { Waveform } from "./VoiceBar";
@@ -105,6 +107,14 @@ export function NewTaskPanel(props: Props) {
     pickWriter(installed[(at + delta + installed.length) % installed.length].id);
   };
 
+  // 在终端里还是聊天模式下运行：默认和上次一样（任务里切换过也算）。
+  const [surface, setSurface] = useState<Surface>("terminal");
+  const pickedSurface = useRef(false);
+  useEffect(() => {
+    void api.agentDefaults().then((d) => pickedSurface.current || setSurface(d.surface), () => {});
+  }, []);
+  const chatCapable = pluginOf(choice.writer)?.chat === true;
+
   useModalFocus(input);
   const refocus = () => {
     setOpen(null);
@@ -145,7 +155,9 @@ export function NewTaskPanel(props: Props) {
     setCreating(true);
     try {
       rememberChoice(choice);
-      await onCreate(project, prompt.trim(), { repo, base, branch: branch.value, ...choice });
+      // 没动过就交给后端按上次的定；动过的记下来，下次照着用。
+      const chosen = pickedSurface.current && chatCapable ? surface : undefined;
+      await onCreate(project, prompt.trim(), { repo, base, branch: branch.value, ...choice, surface: chosen });
     } finally {
       setCreating(false);
     }
@@ -314,6 +326,32 @@ export function NewTaskPanel(props: Props) {
               refocus();
             }}
           />
+          {chatCapable && (
+            <div className="segmented" role="group">
+              <button
+                className={`icon-btn ${surface === "terminal" ? "is-on" : ""}`}
+                title={t("newTask.surfaceTerminal", { agent: pluginName(choice.writer) })}
+                onClick={() => {
+                  pickedSurface.current = true;
+                  setSurface("terminal");
+                  refocus();
+                }}
+              >
+                <SquareTerminal {...ICON} />
+              </button>
+              <button
+                className={`icon-btn ${surface === "chat" ? "is-on" : ""}`}
+                title={t("newTask.surfaceChat", { agent: pluginName(choice.writer) })}
+                onClick={() => {
+                  pickedSurface.current = true;
+                  setSurface("chat");
+                  refocus();
+                }}
+              >
+                <MessagesSquare {...ICON} />
+              </button>
+            </div>
+          )}
           <span className="grow" />
           <button className="icon-btn" title={t("newTask.attach")} onClick={() => void attach()}>
             <Paperclip {...ICON} />

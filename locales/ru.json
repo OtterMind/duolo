@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Этот агент не поддерживает режим чата.",
   "task.surfaceTerminal": "Терминал: собственная командная строка {agent}",
   "task.surfaceChat": "Чат: общайтесь с {agent} здесь, тот же сеанс",
+  "task.surfaceChatTitle": "Переключиться на чат?",
+  "task.surfaceTerminalTitle": "Переключиться на терминал?",
+  "task.surfaceBusyBody": "{agent} сейчас работает. Переключение перезапустит его в другом режиме и прервёт текущую работу; разговор продолжится.",
   "chat.placeholder": "Сообщение для {agent}…",
   "chat.send": "Отправить",
   "chat.stop": "Остановить",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Всегда разрешать",
   "chat.allowSession": "Разрешить в этом сеансе",
   "chat.deny": "Запретить",
+  "chat.agentError": "{agent} сообщил об ошибке",
   "tui.chatMode": "{agent} работает в режиме чата · откройте задачу в приложении Duolo или переключите там на терминал"
 }

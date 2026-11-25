@@ -1790,6 +1790,12 @@ body.is-resizing * {
   white-space: pre-wrap;
   font: 12px/1.6 var(--mono);
 }
+.chat-error-title {
+  font: 600 13px/1.5 var(--sans, inherit);
+}
+.chat-error-detail {
+  margin-top: 2px;
+}
 .chat-composer {
   flex: none;
   max-width: 760px;

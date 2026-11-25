@@ -418,6 +418,9 @@
   "error.chatUnsupported": "이 Agent는 채팅 모드를 지원하지 않습니다.",
   "task.surfaceTerminal": "터미널: {agent} 자체 명령줄",
   "task.surfaceChat": "채팅: 여기서 {agent}와 대화 (같은 세션 이어서)",
+  "task.surfaceChatTitle": "채팅으로 전환할까요?",
+  "task.surfaceTerminalTitle": "터미널로 전환할까요?",
+  "task.surfaceBusyBody": "{agent}이(가) 작업 중입니다. 전환하면 다른 화면에서 다시 시작하며 지금 하던 작업은 중단됩니다. 대화는 이어집니다.",
   "chat.placeholder": "{agent}에게 메시지…",
   "chat.send": "보내기",
   "chat.stop": "중지",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "항상 허용",
   "chat.allowSession": "이 세션 동안 허용",
   "chat.deny": "거부",
+  "chat.agentError": "{agent}이(가) 오류를 보고했습니다",
   "tui.chatMode": "{agent}가 채팅 모드로 실행 중 · Duolo 앱에서 이 작업을 열거나 터미널로 전환하세요"
 }

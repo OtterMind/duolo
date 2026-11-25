@@ -54,16 +54,18 @@ export function ChatView({ task, agent, voice, setVoiceTarget, onError }: Props)
     if (agent.status === "not_started" && !starting) void start();
   }, [agent.status, task.id, agent.id]);
 
-  // 语音文字插到光标处。
+  // 语音文字插到光标处；"插入并发送"时连同输入框里已有的一起发出去。
   useEffect(() => {
     setVoiceTarget({
       kind: "text",
-      insert: (said) => {
+      insert: (said, submit) => {
         const el = input.current;
         const at = el?.selectionStart ?? textRef.current.length;
         const before = textRef.current.slice(0, at);
         const glue = before && !/\s$/.test(before) ? " " : "";
-        setText(before + glue + said + textRef.current.slice(at));
+        const next = before + glue + said + textRef.current.slice(at);
+        if (submit) void sendText(next);
+        else setText(next);
         el?.focus();
       },
       replace: (old, next) => {
@@ -105,13 +107,14 @@ export function ChatView({ task, agent, voice, setVoiceTarget, onError }: Props)
     }
   };
 
-  const send = async () => {
-    const said = text.trim();
+  const sendText = async (value: string) => {
+    const said = value.trim();
     if (!said) return;
     stick.current = true;
     setText("");
     if (!(await run({ type: "send_message", task: task.id, text: said }))) setText(said);
   };
+  const send = () => sendText(text);
   const stop = () => void run({ type: "interrupt", task: task.id });
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -183,7 +186,12 @@ export function ChatView({ task, agent, voice, setVoiceTarget, onError }: Props)
               )}
             </div>
           )}
-          {agent.error && <div className="chat-error">{agent.error}</div>}
+          {agent.error && (
+            <div className="chat-error">
+              <div className="chat-error-title">{t("chat.agentError", { agent: agent.name })}</div>
+              <div className="chat-error-detail">{agent.error}</div>
+            </div>
+          )}
         </div>
       </div>
 

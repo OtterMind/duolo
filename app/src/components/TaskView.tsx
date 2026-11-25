@@ -96,7 +96,7 @@ export function TaskView(props: Props) {
           )}
         </span>
         <span className="grow" data-tauri-drag-region />
-        {agent.chat && <SurfaceSwitch task={task} agent={agent} onError={onError} />}
+        {agent.chat && <SurfaceSwitch task={task} agent={agent} onConfirm={props.onConfirm} onError={onError} />}
         <ReviewButton
           task={task}
           open={reviewOpen}
@@ -160,10 +160,31 @@ export function TaskView(props: Props) {
 }
 
 /** 终端 / 聊天：同一个会话换个方式继续，Agent 会重新启动。 */
-function SurfaceSwitch({ task, agent, onError }: { task: Task; agent: Agent; onError(err: unknown): void }) {
+/** 在终端和聊天之间切换：换个方式重新启动，接着同一个会话。它正在干活时先确认（这一轮会被打断）。 */
+function SurfaceSwitch({
+  task,
+  agent,
+  onConfirm,
+  onError,
+}: {
+  task: Task;
+  agent: Agent;
+  onConfirm(spec: ConfirmSpec): void;
+  onError(err: unknown): void;
+}) {
   const t = useT();
   const pick = (surface: Surface) => {
-    if (surface !== agent.surface) api.setSurface(task.id, surface).catch(onError);
+    if (surface === agent.surface) return;
+    const busy = agent.status === "running" || agent.status === "needs_input";
+    if (!busy) return void api.setSurface(task.id, surface).catch(onError);
+    onConfirm({
+      title: t(surface === "chat" ? "task.surfaceChatTitle" : "task.surfaceTerminalTitle"),
+      body: t("task.surfaceBusyBody", { agent: agent.name }),
+      action: t("task.switchWriterAction"),
+      run: async () => {
+        await api.setSurface(task.id, surface);
+      },
+    });
   };
   return (
     <div className="segmented" role="group">

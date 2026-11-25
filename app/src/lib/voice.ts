@@ -17,8 +17,8 @@ import { isMac, modKey } from "./platform";
 /** 文字插到哪里。 */
 export type VoiceTarget =
   | { kind: "agent"; ref: AgentRef }
-  /** 普通输入框（新建任务面板）：插入，以及把刚插入的文字换成另一段。 */
-  | { kind: "text"; insert(text: string): void; replace(old: string, next: string): void };
+  /** 普通输入框（新建任务面板、聊天页）：插入（`submit` 时顺便发出去），以及把刚插入的文字换成另一段。 */
+  | { kind: "text"; insert(text: string, submit: boolean): void; replace(old: string, next: string): void };
 
 export type VoicePhase =
   | { kind: "idle" }
@@ -149,7 +149,7 @@ export function useVoice(opts: Options): Voice {
           await api.sendText(to.ref, text, submit);
           onInserted(to.ref, text);
         } else {
-          to.insert(text);
+          to.insert(text, submit);
         }
         if (!submit) setInserted({ target: to, text, raw: raw.trim(), organized: organized != null });
       })

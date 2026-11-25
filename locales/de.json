@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Dieser Agent unterstützt den Chatmodus nicht.",
   "task.surfaceTerminal": "Terminal: die eigene Befehlszeile von {agent}",
   "task.surfaceChat": "Chat: hier mit {agent} sprechen, gleiche Sitzung",
+  "task.surfaceChatTitle": "Zum Chat wechseln?",
+  "task.surfaceTerminalTitle": "Zum Terminal wechseln?",
+  "task.surfaceBusyBody": "{agent} arbeitet gerade. Beim Wechseln wird es in der anderen Ansicht neu gestartet und die laufende Arbeit unterbrochen; das Gespräch geht weiter.",
   "chat.placeholder": "Nachricht an {agent}…",
   "chat.send": "Senden",
   "chat.stop": "Stoppen",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Immer erlauben",
   "chat.allowSession": "Für diese Sitzung erlauben",
   "chat.deny": "Ablehnen",
+  "chat.agentError": "{agent} hat einen Fehler gemeldet",
   "tui.chatMode": "{agent} läuft im Chatmodus · öffne diese Aufgabe in der Duolo-App oder wechsle dort zum Terminal"
 }

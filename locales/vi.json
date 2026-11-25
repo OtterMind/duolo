@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Agent này không hỗ trợ chế độ trò chuyện.",
   "task.surfaceTerminal": "Terminal: dòng lệnh riêng của {agent}",
   "task.surfaceChat": "Trò chuyện: nói chuyện với {agent} tại đây, cùng phiên",
+  "task.surfaceChatTitle": "Chuyển sang trò chuyện?",
+  "task.surfaceTerminalTitle": "Chuyển sang terminal?",
+  "task.surfaceBusyBody": "{agent} đang làm việc. Chuyển chế độ sẽ khởi động lại nó ở chế độ kia và ngắt việc đang làm; cuộc trò chuyện vẫn tiếp tục.",
   "chat.placeholder": "Nhắn cho {agent}…",
   "chat.send": "Gửi",
   "chat.stop": "Dừng",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Luôn cho phép",
   "chat.allowSession": "Cho phép trong phiên này",
   "chat.deny": "Từ chối",
+  "chat.agentError": "{agent} đã báo lỗi",
   "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó"
 }

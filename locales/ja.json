@@ -418,6 +418,9 @@
   "error.chatUnsupported": "この Agent はチャットモードに対応していません。",
   "task.surfaceTerminal": "ターミナル：{agent} 自身のコマンドライン",
   "task.surfaceChat": "チャット：ここで {agent} と会話（同じセッションを継続）",
+  "task.surfaceChatTitle": "チャットに切り替えますか？",
+  "task.surfaceTerminalTitle": "ターミナルに切り替えますか？",
+  "task.surfaceBusyBody": "{agent} は作業中です。切り替えると別の表示で起動し直し、今の作業は中断されます。会話はそのまま続きます。",
   "chat.placeholder": "{agent} にメッセージ…",
   "chat.send": "送信",
   "chat.stop": "停止",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "常に許可",
   "chat.allowSession": "このセッション中は許可",
   "chat.deny": "拒否",
+  "chat.agentError": "{agent} がエラーを報告しました",
   "tui.chatMode": "{agent} はチャットモードで実行中 · Duolo アプリでこのタスクを開くか、そこでターミナルに切り替えてください"
 }

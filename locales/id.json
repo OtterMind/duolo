@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Agen ini tidak mendukung mode obrolan.",
   "task.surfaceTerminal": "Terminal: baris perintah {agent} sendiri",
   "task.surfaceChat": "Obrolan: bicara dengan {agent} di sini, sesi yang sama",
+  "task.surfaceChatTitle": "Beralih ke obrolan?",
+  "task.surfaceTerminalTitle": "Beralih ke terminal?",
+  "task.surfaceBusyBody": "{agent} sedang bekerja. Beralih akan memulai ulang di tampilan lain dan menghentikan pekerjaan saat ini; percakapan tetap berlanjut.",
   "chat.placeholder": "Pesan untuk {agent}…",
   "chat.send": "Kirim",
   "chat.stop": "Hentikan",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Selalu izinkan",
   "chat.allowSession": "Izinkan untuk sesi ini",
   "chat.deny": "Tolak",
+  "chat.agentError": "{agent} melaporkan kesalahan",
   "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana"
 }

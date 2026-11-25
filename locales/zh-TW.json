@@ -418,6 +418,9 @@
   "error.chatUnsupported": "這個 Agent 不支援聊天模式。",
   "task.surfaceTerminal": "終端機：使用 {agent} 自己的命令列",
   "task.surfaceChat": "聊天：在這裡和 {agent} 對話，接續同一個工作階段",
+  "task.surfaceChatTitle": "切換到聊天？",
+  "task.surfaceTerminalTitle": "切換到終端機？",
+  "task.surfaceBusyBody": "{agent} 正在工作。切換會換種方式重新啟動它，打斷目前這一輪；對話會接著進行。",
   "chat.placeholder": "傳訊息給 {agent}…",
   "chat.send": "傳送",
   "chat.stop": "停止",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "一律允許",
   "chat.allowSession": "本次對話內允許",
   "chat.deny": "拒絕",
+  "chat.agentError": "{agent} 回報了錯誤",
   "tui.chatMode": "{agent} 在聊天模式下執行 · 在 Duolo 應用程式中開啟這個任務，或在那裡切回終端機"
 }

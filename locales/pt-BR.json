@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Este agente não oferece suporte ao modo de chat.",
   "task.surfaceTerminal": "Terminal: a linha de comando do {agent}",
   "task.surfaceChat": "Chat: converse com o {agent} aqui, mesma sessão",
+  "task.surfaceChatTitle": "Mudar para o chat?",
+  "task.surfaceTerminalTitle": "Mudar para o terminal?",
+  "task.surfaceBusyBody": "{agent} está trabalhando. Ao mudar, ele reinicia na outra visualização e o que está fazendo é interrompido; a conversa continua.",
   "chat.placeholder": "Mensagem para {agent}…",
   "chat.send": "Enviar",
   "chat.stop": "Parar",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Sempre permitir",
   "chat.allowSession": "Permitir nesta sessão",
   "chat.deny": "Negar",
+  "chat.agentError": "{agent} relatou um erro",
   "tui.chatMode": "O {agent} está no modo de chat · abra esta tarefa no app Duolo ou mude para o terminal lá"
 }

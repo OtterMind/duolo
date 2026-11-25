@@ -418,6 +418,9 @@
   "error.chatUnsupported": "Bu ajan sohbet modunu desteklemiyor.",
   "task.surfaceTerminal": "Terminal: {agent} kendi komut satırı",
   "task.surfaceChat": "Sohbet: {agent} ile burada konuşun, aynı oturum",
+  "task.surfaceChatTitle": "Sohbete geçilsin mi?",
+  "task.surfaceTerminalTitle": "Terminale geçilsin mi?",
+  "task.surfaceBusyBody": "{agent} şu anda çalışıyor. Geçiş yapmak onu diğer görünümde yeniden başlatır ve yaptığı işi yarıda keser; konuşma devam eder.",
   "chat.placeholder": "{agent} için mesaj…",
   "chat.send": "Gönder",
   "chat.stop": "Durdur",
@@ -429,5 +432,6 @@
   "chat.allowAlways": "Her zaman izin ver",
   "chat.allowSession": "Bu oturum için izin ver",
   "chat.deny": "Reddet",
+  "chat.agentError": "{agent} bir hata bildirdi",
   "tui.chatMode": "{agent} sohbet modunda çalışıyor · bu görevi Duolo uygulamasında açın veya orada terminale geçin"
 }

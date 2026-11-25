@@ -20,7 +20,7 @@ macro_rules! builtin {
         )),*];
     };
 }
-builtin!("claude", "codex", "opencode", "pi");
+builtin!("claude", "codex", "opencode", "pi", "grok");
 
 /// 复制很便宜，可以带到别的线程用。
 #[derive(Debug, Clone, Default)]
@@ -155,7 +155,7 @@ mod tests {
     }
 
     /// 内置插件，按登记的顺序。
-    const BUILTIN: [&str; 4] = ["claude", "codex", "opencode", "pi"];
+    const BUILTIN: [&str; 5] = ["claude", "codex", "opencode", "pi", "grok"];
 
     const AIDER: &str = "schema = 1\nid = \"aider\"\nname = \"Aider\"\ncommand = \"aider\"\n";
 

@@ -141,6 +141,21 @@ fn codex_turn_and_resumed_thread() {
 }
 
 #[test]
+fn grok_turn_with_permission() {
+    let mut c = chat("grok-1.0.92.txt", Spec { prompt: Some("Create a file".into()), ..Spec::default() });
+    let mut updates = until(&mut c, "the question", |c, _| c.status() == Status::Asking);
+    let ask = c.ask().unwrap();
+    assert!(ask.tool == "Edit" && ask.target.ends_with("hello.txt"), "{ask:?}");
+    assert_eq!(ask.options.len(), 3);
+    assert!(c.answer(ask.id, 0));
+    updates.extend(until(&mut c, "the reply", |c, u| {
+        c.status() == Status::Idle && u.iter().any(|u| matches!(u, Update::Entry(Entry::Agent(_))))
+    }));
+    assert_eq!(updates[0], Update::Session("01a21310-839f-7a13-b0ab-d4c5e3e5af96".into()));
+    assert!(updates.contains(&Update::Entry(Entry::Tool { tool: "Bash".into(), target: "ls".into() })), "{updates:#?}");
+}
+
+#[test]
 fn failed_start_reports_why() {
     assert!(Chat::spawn(Spec { program: "duolo-no-such-agent".into(), ..Spec::default() }).is_err());
     // 录下来的只有握手，开会话时假 Agent 回 "not recorded"，就像没登录时 Agent 拒绝一样。
@@ -223,4 +238,16 @@ fn real_claude() {
 #[ignore = "needs a logged-in codex"]
 fn real_codex() {
     real_agent("codex");
+}
+
+#[test]
+#[ignore = "needs a logged-in grok"]
+fn real_grok() {
+    real_agent("grok");
+}
+
+#[test]
+#[ignore = "needs a logged-in agy"]
+fn real_antigravity() {
+    real_agent("antigravity");
 }

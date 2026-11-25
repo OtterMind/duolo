@@ -1,0 +1,55 @@
+# Grok Build（xAI 的 `grok`）。字段说明见 docs/agents.md，升级后还能用的做法见 docs/agent-compat.md。
+# 参数按 1.0.92 的 `grok --help` 和随它安装的文档（~/.grok/docs/user-guide/）核对过。
+schema = 1
+id = "grok"
+name = "Grok"
+command = "grok"
+minimum_version = "1.0.92"
+
+[install]
+default = "curl -fsSL https://x.ai/cli/install.sh | bash"
+windows = "winget install --id xAI.GrokBuild -e"
+
+[start]
+prompt = "argument"
+separator = "--"
+resume_args = ["--continue"]
+resume_session_args = ["--resume", "{session}"]
+session_id_args = ["--session-id", "{session}"]
+review_args = ["--permission-mode", "plan"]
+
+# 后台审阅：只给读文件的工具（`--tools` 是"只给这些"，不是在用户设置上追加），要批准的一律拒绝（dontAsk），
+# 关掉 MCP 工具、子代理、联网搜索和跨会话记忆。
+# 不用 `--sandbox read-only`：装了 Docker Desktop 的 Mac 上它因为 /var/run/docker.sock 是链接而拒绝启动（1.0.92）。
+[review]
+args = [
+  "-p", "--tools", "read_file,grep,list_dir", "--permission-mode", "dontAsk",
+  "--deny", "MCPTool", "--no-subagents", "--disable-web-search", "--no-memory",
+]
+separator = "--"
+
+# 起分支名这样的小事：不给任何工具。
+[quick]
+args = [
+  "-p", "--tools", "todo_write", "--permission-mode", "dontAsk",
+  "--deny", "MCPTool", "--no-subagents", "--disable-web-search", "--no-memory",
+]
+separator = "--"
+
+[screen]
+# 状态靠它自己报告（OSC 7501，1.0.92 实测：idle / working / done / blocked）。画面上的字只是兜底。
+# 确认框的选项写成 "1 (○) Always allow"，不是 "1. Yes"：手机上回答不了，只在终端里答。
+approval = ["yes, proceed", "no, reject"]
+busy = ["[stop]"]
+choosing = ["tab:next option"]
+
+[keys]
+# Esc 打断不了，要 Ctrl+C（空闲时按一下什么也不做）。
+interrupt = "\u0003"
+# ctrl+j
+newline = "\n"
+
+# 聊天模式：`grok agent stdio` 用 ACP 对话，会话和终端里是同一套（--resume 用的编号）。
+[chat]
+protocol = "acp"
+args = ["agent", "stdio"]

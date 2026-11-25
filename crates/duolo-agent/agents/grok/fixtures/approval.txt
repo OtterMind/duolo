@@ -1,0 +1,39 @@
+                                                                                                                        
+  main ~/.duolo/wt/shop/1-export [Click here to Upgrade]                                     21k / 256k │ [Dashboard]  
+                                                                                                                        
+                                                                                                                        
+     ❯ Run exactly this shell command: `curl -sI https://example.com | head -1` and tell me the status       6:14 AM    
+       line.                                                                                                            
+                                                                                                                        
+                                                                                                                        
+     ◆ Thought for 0.8s                                                                                                 
+     ◆ Running fetch HTTP status line from example.com                                                                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+    ◆ Fetch HTTP status line from example.com… 7.6s                                               11s ⇣22.0k [↓][stop]  
+                                                                                                                        
+  Help improve Grok                                                                                 [Opt out] [Opt in]  
+  Off by default. Opt-in to allow SpaceXSI to retain coding data, e.g., prompts, traces, & metrics,                     
+  for training and debugging purposes. Change anytime via settings.                                                     
+  Read Terms and Privacy Policy.                                                                                        
+                                                                                                                        
+  ┃                                                                                                                     
+  ┃  ›  Fetch HTTP status line from example.com                                                                         
+  ┃  │ curl -sI https://example.com | head -1                                                                           
+  ┃  ←/→ widen/narrow scope · e edit pattern                                                                            
+  ┃                                                                                                                     
+  ┃  1 (○) Always allow: curl -sI                                                                                       
+  ┃  3 (●) Yes, proceed                                                                                                 
+  ┃  4 (○) No, reject (type to add feedback)                                                                            
+  ┃  5 (○) Never allow: curl -sI                                                                                        
+  ┃    (○) Yes, and don't ask again for anything (always-approve mode)                                                  
+  ┃                                                                                                                     
+                                                                                                                        
+  1/5:select  │  Tab:next option  │  ←/→:scope  │  e:edit pattern  │  Ctrl+c:cancel  │  Esc:scrollback

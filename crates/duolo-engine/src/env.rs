@@ -161,7 +161,7 @@ mod tests {
         let config: Config = toml::from_str(
             "writer = \"gone\"\nreviewer = \"codex\"\n[agents.claude]\ncommand = \"duolo-no-such-command\"\n\
              [agents.codex]\ncommand = \"git\"\n[agents.opencode]\ncommand = \"duolo-no-such-command\"\n\
-             [agents.pi]\ncommand = \"duolo-no-such-command\"\n",
+             [agents.pi]\ncommand = \"duolo-no-such-command\"\n[agents.grok]\ncommand = \"duolo-no-such-command\"\n",
         )
         .unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -177,6 +177,7 @@ mod tests {
                 ("claude", false),
                 ("opencode", false),
                 ("pi", false),
+                ("grok", false),
                 ("", false)
             ]
         );

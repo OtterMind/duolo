@@ -1438,7 +1438,8 @@ mod tests {
         };
         // 别的内置 Agent 本机装没装都不影响结果。
         let fake = "[agents.claude]\ncommand = \"git\"\n[agents.codex]\ncommand = \"duolo-no-such-command\"\n\
-                    [agents.opencode]\ncommand = \"duolo-no-such-command\"\n[agents.pi]\ncommand = \"duolo-no-such-command\"\n";
+                    [agents.opencode]\ncommand = \"duolo-no-such-command\"\n[agents.pi]\ncommand = \"duolo-no-such-command\"\n\
+                    [agents.grok]\ncommand = \"duolo-no-such-command\"\n";
         assert_eq!(open(fake).unwrap()[0], "git", "没写时用装了的 Agent");
         assert_eq!(open(&format!("namer = [\"x\", \"y\"]\n{fake}")).unwrap(), ["x", "y"]);
         assert_eq!(open(&format!("namer = []\n{fake}")), None, "写成空的就是不用");

@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Вход не выполнен",
   "setup.notSignedInHint": "В {agent} ещё не выполнен вход.",
   "setup.appFound": "У вас есть {app}: {agent} работает с тем же аккаунтом без доплаты.",
-  "setup.dismiss": "Больше не показывать"
+  "setup.dismiss": "Больше не показывать",
+  "setup.update": "Обновить",
+  "setup.updateTitle": "Обновление {agent}",
+  "setup.updateHint": "{agent} обновляется собственным средством обновления — тем же способом, каким был установлен."
 }

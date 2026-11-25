@@ -10,6 +10,10 @@ minimum_version = "0.136.0"
 [install]
 default = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
 windows = "irm https://chatgpt.com/codex/install.ps1 | iex"
+bin_dirs = ["~/.local/bin"]
+# `codex update` 照原来的安装方式升级；0.126.0 起才有（Orca 的资料）。
+update_args = ["update"]
+update_since = "0.126.0"
 
 # ChatGPT 的账号（Plus、Pro、Team）直接登录 Codex，用的是同一份额度。
 # 装了 ChatGPT 或 Codex 的桌面客户端，就说明用户有这个账号。

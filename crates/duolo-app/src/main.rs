@@ -214,6 +214,7 @@ fn main() {
             setup::setup_write,
             setup::setup_resize,
             setup::setup_stop,
+            setup::setup_signed_in,
             commands::diff_stat,
             commands::reveal,
             commands::open_terminal,

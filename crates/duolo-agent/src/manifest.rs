@@ -107,9 +107,25 @@ pub struct Install {
     pub macos: Option<String>,
     pub windows: Option<String>,
     pub linux: Option<String>,
+    /// 官方安装脚本把命令放在哪些目录（`~` 是家目录）。脚本不一定把它们加进 shell 的 PATH，Duolo 自己也去找。
+    pub bin_dirs: Vec<String>,
+    /// 太旧时一键升级的参数（例如 `update`）：它自己的升级会照原来的安装方式（npm、Homebrew、安装脚本）来，
+    /// 不会再装一份。没写时只能复制安装命令手动升级。
+    pub update_args: Vec<String>,
+    /// 从哪个版本起才有 `update_args`；更旧的只能手动升级。
+    pub update_since: Option<String>,
 }
 
 impl Install {
+    /// 一键运行的安装命令：Windows 上只用专门写的（默认的一般是 `curl … | sh` 这样的 shell 写法，PowerShell 跑不了），
+    /// 除非默认的本来就不分系统（例如 `npm install -g …`）。没有时为 None，只能复制。
+    pub fn runnable(&self) -> Option<&str> {
+        let command = self.command();
+        let posix_only = command.contains("| sh") || command.contains("| bash") || command.contains("|sh");
+        let shell_only_here = cfg!(windows) && self.windows.is_none() && posix_only;
+        (!command.is_empty() && !shell_only_here).then_some(command)
+    }
+
     /// 当前系统的安装命令。
     pub fn command(&self) -> &str {
         let own = if cfg!(target_os = "macos") {
@@ -384,6 +400,9 @@ impl Manifest {
         }
         if let Some(minimum) = &self.minimum_version {
             ensure!(duolo_core::text::parse_version(minimum).is_some(), "minimum_version must look like 1.2.3");
+        }
+        if let Some(since) = &self.install.update_since {
+            ensure!(duolo_core::text::parse_version(since).is_some(), "install.update_since must look like 1.2.3");
         }
         if let Some(hooks) = &self.hooks {
             ensure!(crate::hooks::format(&hooks.format).is_some(), "unknown hooks format {:?}", hooks.format);

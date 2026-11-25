@@ -5,26 +5,41 @@ import { FitAddon } from "@xterm/addon-fit";
 import { CircleCheck, TriangleAlert } from "lucide-react";
 
 import { useT } from "../i18n";
-import { api, type SetupStep } from "../lib/api";
-import { agentOptions, type AgentOption } from "../lib/agents";
+import { api, type Check, type SetupStep } from "../lib/api";
+import { agentOptions, firstSetupStep, type AgentOption } from "../lib/agents";
 import { notifySetupReady } from "../lib/setup";
 import { FONT_FAMILY, THEME } from "../lib/terminals";
 import { AgentIcon } from "./AgentIcon";
 
 type Phase = { kind: "running" } | { kind: "done" } | { kind: "failed"; why: string };
 
+/** 登录时隔多久查一次登录了没有。 */
+const SIGN_IN_POLL_MS = 3000;
+
+const TITLE = {
+  install: "setup.installTitle",
+  update: "setup.updateTitle",
+  login: "setup.signInTitle",
+} as const satisfies Record<SetupStep, string>;
+
 /**
- * 一键安装 Agent、登录账号：在窗口里的终端运行插件声明的命令（参考 T3 Code）。
- * 没装的先装，装好后查一遍，没登录的接着登录；登录会打开浏览器，要粘贴授权码时直接在终端里粘贴。
- * 失败时终端里的输出留着，看得到原因。
+ * 一键安装、升级 Agent，登录账号：在窗口里的终端运行插件声明的命令（参考 T3 Code、Orca）。
+ * 没装的先装（太旧的用它自己的升级命令），装好后查一遍，没登录的接着登录；登录会打开浏览器，
+ * 要粘贴授权码时直接在终端里粘贴。失败时终端里的输出留着，看得到原因。
  */
-export function SetupDialog({ agent, onClose }: { agent: AgentOption; onClose(): void }) {
+export function SetupDialog({
+  agent,
+  onEnv,
+  onClose,
+}: {
+  agent: AgentOption;
+  /** 每步结束后重新检查的环境，交给 App 更新。 */
+  onEnv(env: Check[]): void;
+  onClose(): void;
+}) {
   const t = useT();
   /** 第几次运行哪一步：换一步、重试都是新的一次，开一个新终端。 */
-  const [run, setRun] = useState<{ step: SetupStep; n: number }>({
-    step: agent.installed ? "login" : "install",
-    n: 0,
-  });
+  const [run, setRun] = useState<{ step: SetupStep; n: number }>({ step: firstSetupStep(agent), n: 0 });
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   const host = useRef<HTMLDivElement>(null);
   const done = useRef<HTMLButtonElement>(null);
@@ -53,14 +68,35 @@ export function SetupDialog({ agent, onClose }: { agent: AgentOption; onClose():
     });
     resize.observe(host.current);
     let current = true;
-    const exited = listen<{ success: boolean }>("setup-exit", (e) => {
-      if (current) void next(step, e.payload.success);
+    let finished = false;
+    const finish = (success: boolean) => {
+      if (!current || finished) return;
+      finished = true;
+      void next(step, success);
+    };
+    // 先订阅再开始：命令出错时可能马上就结束了。只认这次开始的那个（事件带着第几次）。
+    let runId: number | null = null;
+    const exited = listen<{ run: number; success: boolean }>("setup-exit", (e) => {
+      if (e.payload.run === runId) finish(e.payload.success);
     });
-    api
-      .setupStart(agent.id, step, term.rows, term.cols, (bytes) => term.write(bytes))
+    void exited
+      .then(() => api.setupStart(agent.id, step, term.rows, term.cols, (bytes) => term.write(bytes)))
+      .then((id) => (runId = id))
       .catch((err: unknown) => current && setPhase({ kind: "failed", why: String(err) }));
+    // 登录：浏览器授权完，有的 CLI 不会自己退出（Windows 上的 Codex，Orca 也是这么处理的）。查到登录了就算完成。
+    const poll =
+      step === "login" && agent.canSignIn
+        ? window.setInterval(() => {
+            void api.setupSignedIn(agent.id).then((ok) => {
+              if (ok !== true || !current || finished) return;
+              void api.setupStop().catch(() => {});
+              finish(true);
+            }, () => {});
+          }, SIGN_IN_POLL_MS)
+        : undefined;
     return () => {
       current = false;
+      window.clearInterval(poll);
       input.dispose();
       resize.disconnect();
       void exited.then((f) => f());
@@ -71,14 +107,20 @@ export function SetupDialog({ agent, onClose }: { agent: AgentOption; onClose():
 
   /** 一步结束：重新检查环境，决定下一步。 */
   const next = async (finished: SetupStep, success: boolean) => {
-    const fresh = agentOptions(await api.environment().catch(() => [])).find((a) => a.id === agent.id);
+    const env = await api.environment().catch(() => null);
+    if (env) onEnv(env);
+    const fresh = env && agentOptions(env).find((a) => a.id === agent.id);
     if (!success) return setPhase({ kind: "failed", why: t("setup.failed") });
-    if (!fresh?.installed) return setPhase({ kind: "failed", why: t("setup.notFound", { agent: agent.name }) });
-    if (fresh.signedIn === false) {
-      // 刚装好，接着登录；登录完了还是没登录上，就是没完成。
-      if (finished === "install") return setRun((r) => ({ step: "login", n: r.n + 1 }));
-      return setPhase({ kind: "failed", why: t("setup.failed") });
+    if (!fresh?.installed) {
+      const why = fresh?.tooOld ? t("newTask.tooOld", fresh.tooOld) : t("setup.notFound", { agent: agent.name });
+      return setPhase({ kind: "failed", why });
     }
+    // 刚装好的接着登录（查不出登录状态的也登录一次：刚装的不可能登录过）；升级完只有确实没登录的才登录。
+    const needsSignIn =
+      fresh.canSignIn &&
+      (finished === "install" ? fresh.signedIn !== true : finished === "update" && fresh.signedIn === false);
+    if (needsSignIn) return setRun((r) => ({ step: "login", n: r.n + 1 }));
+    if (finished === "login" && fresh.signedIn === false) return setPhase({ kind: "failed", why: t("setup.failed") });
     setPhase({ kind: "done" });
     notifySetupReady(agent.id);
   };
@@ -87,14 +129,12 @@ export function SetupDialog({ agent, onClose }: { agent: AgentOption; onClose():
     if (phase.kind === "done") done.current?.focus();
   }, [phase.kind]);
 
-  const title =
-    phase.kind === "done"
-      ? t("setup.ready", { agent: agent.name })
-      : t(run.step === "install" ? "setup.installTitle" : "setup.signInTitle", { agent: agent.name });
-  const hint =
-    run.step === "install"
-      ? t("setup.installHint", { command: agent.install })
-      : t("setup.signInHint", { agent: agent.name });
+  const title = phase.kind === "done" ? t("setup.ready", { agent: agent.name }) : t(TITLE[run.step], { agent: agent.name });
+  const hint = {
+    install: t("setup.installHint", { command: agent.install }),
+    update: t("setup.updateHint", { agent: agent.name }),
+    login: t("setup.signInHint", { agent: agent.name }),
+  }[run.step];
 
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && phase.kind !== "running" && onClose()}>

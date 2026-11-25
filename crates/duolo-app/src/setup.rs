@@ -1,5 +1,5 @@
-//! 一键安装 Agent、登录账号（见 `duolo_engine::start_setup`）：画面推给界面显示，用户可以在里面输入（粘贴授权码）。
-//! 同一时间只运行一个，结束时发 `setup-exit` 事件，界面重新检查环境。
+//! 一键安装、升级 Agent，登录账号（见 `duolo_engine::start_setup`）：画面推给界面显示，用户可以在里面输入（粘贴授权码）。
+//! 同一时间只运行一个，结束时发 `setup-exit` 事件（带着是第几次，界面只认自己开始的那次），界面重新检查环境。
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{AppState, Res};
 
-/// 结束时通知界面的事件：`{ "success": bool }`。
+/// 结束时通知界面的事件：`{ "run": 第几次, "success": bool }`。
 const EXIT_EVENT: &str = "setup-exit";
 
 type Running = Arc<Mutex<Option<(u64, Session)>>>;
@@ -28,7 +28,7 @@ fn lock(running: &Running) -> MutexGuard<'_, Option<(u64, Session)>> {
     running.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// 开始安装（`step` 为 `install`）或登录（`login`）`agent`。上一次没结束的先结束。
+/// 开始安装（`step` 为 `install`）、升级（`update`）或登录（`login`）`agent`，返回这是第几次。上一次没结束的先结束。
 #[tauri::command]
 pub fn setup_start(
     app: AppHandle,
@@ -38,8 +38,12 @@ pub fn setup_start(
     rows: u16,
     cols: u16,
     on_data: Channel<InvokeResponseBody>,
-) -> Res<()> {
-    let step = if step == "install" { SetupStep::Install } else { SetupStep::Login };
+) -> Res<u64> {
+    let step = match step.as_str() {
+        "install" => SetupStep::Install,
+        "update" => SetupStep::Update,
+        _ => SetupStep::Login,
+    };
     let sink = Box::new(move |bytes: &[u8]| {
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
@@ -61,15 +65,22 @@ pub fn setup_start(
         let Some(exit) = session.poll_exit() else { continue };
         guard.take();
         drop(guard);
-        // 装好后重新读一遍登录 shell 的 PATH，新装的命令才找得到。
+        // 装好后重新读一遍登录 shell 的 PATH：安装脚本可能把自己的目录加进了 shell 配置。
         #[cfg(unix)]
-        if step == SetupStep::Install && exit.success {
+        if step != SetupStep::Login && exit.success {
             crate::shell_env::refresh_path();
         }
-        let _ = app.emit(EXIT_EVENT, serde_json::json!({ "success": exit.success }));
+        let _ = app.emit(EXIT_EVENT, serde_json::json!({ "run": id, "success": exit.success }));
         return;
     });
-    Ok(())
+    Ok(id)
+}
+
+/// 现在登录了没有（登录过程中界面隔一会儿问一次）。不知道时为 null。
+#[tauri::command]
+pub async fn setup_signed_in(state: State<'_, AppState>, agent: String) -> Res<Option<bool>> {
+    let agents = state.engine().agents().clone();
+    Ok(tauri::async_runtime::spawn_blocking(move || duolo_engine::signed_in(&agents, &AgentKind(agent))).await?)
 }
 
 /// 用户在终端里输入的（粘贴授权码、按回车）。

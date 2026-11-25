@@ -462,5 +462,8 @@
   "setup.notSignedIn": "로그인 안 됨",
   "setup.notSignedInHint": "{agent}에 아직 로그인하지 않았습니다.",
   "setup.appFound": "{app}이(가) 설치되어 있습니다: {agent}은(는) 같은 계정으로 추가 비용 없이 사용할 수 있습니다.",
-  "setup.dismiss": "다시 표시 안 함"
+  "setup.dismiss": "다시 표시 안 함",
+  "setup.update": "업데이트",
+  "setup.updateTitle": "{agent} 업데이트",
+  "setup.updateHint": "{agent} 자체 업데이트 명령으로, 설치했던 방식 그대로 업데이트합니다."
 }

@@ -462,5 +462,8 @@
   "setup.notSignedIn": "未サインイン",
   "setup.notSignedInHint": "{agent} はまだサインインしていません。",
   "setup.appFound": "{app} をお使いです：{agent} は同じアカウントで、追加料金なしで使えます。",
-  "setup.dismiss": "今後表示しない"
+  "setup.dismiss": "今後表示しない",
+  "setup.update": "アップデート",
+  "setup.updateTitle": "{agent} をアップデート",
+  "setup.updateHint": "{agent} 自身のアップデーターで、インストールしたときと同じ方法で更新します。"
 }

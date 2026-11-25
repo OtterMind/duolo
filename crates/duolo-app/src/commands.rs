@@ -354,10 +354,10 @@ pub fn send_text(state: State<'_, AppState>, task: u64, agent: u32, text: String
     Ok(if submit { engine.submit(key, &text) } else { engine.paste(key, &text, false) }?)
 }
 
-/// 所有 Agent 共用一个窗格尺寸。
+/// 一个 Agent 终端的尺寸：分屏时两格各是各的。
 #[tauri::command]
-pub fn resize(state: State<'_, AppState>, rows: u16, cols: u16) {
-    state.engine().set_pane_size(Size::new(rows, cols));
+pub fn resize(state: State<'_, AppState>, task: u64, agent: u32, rows: u16, cols: u16) {
+    state.engine().set_agent_size(key(task, agent), Size::new(rows, cols));
 }
 
 #[tauri::command]

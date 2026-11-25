@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Giriş yapılmadı",
   "setup.notSignedInHint": "{agent} için henüz giriş yapılmadı.",
   "setup.appFound": "{app} yüklü: {agent} aynı hesapla, ek ücret olmadan çalışır.",
-  "setup.dismiss": "Bir daha gösterme"
+  "setup.dismiss": "Bir daha gösterme",
+  "setup.update": "Güncelle",
+  "setup.updateTitle": "{agent} güncelleniyor",
+  "setup.updateHint": "{agent} kendi güncelleyicisiyle, kurulduğu yöntemle güncelleniyor."
 }

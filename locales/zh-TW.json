@@ -462,5 +462,8 @@
   "setup.notSignedIn": "未登入",
   "setup.notSignedInHint": "{agent} 還沒登入。",
   "setup.appFound": "你裝了 {app}：{agent} 用同一個帳號，不另外收費。",
-  "setup.dismiss": "不再提示"
+  "setup.dismiss": "不再提示",
+  "setup.update": "升級",
+  "setup.updateTitle": "升級 {agent}",
+  "setup.updateHint": "用 {agent} 自己的升級指令，照原本的安裝方式升級。"
 }

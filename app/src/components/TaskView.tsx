@@ -449,7 +449,7 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
       const key = `${size.rows}x${size.cols}`;
       if (key !== last) {
         last = key;
-        void api.resize(size.rows, size.cols);
+        void api.resize(ref, size.rows, size.cols);
       }
     };
     resize();

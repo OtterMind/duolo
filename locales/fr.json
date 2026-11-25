@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Non connecté",
   "setup.notSignedInHint": "{agent} n'est pas encore connecté.",
   "setup.appFound": "Vous avez {app} : {agent} utilise le même compte, sans frais supplémentaires.",
-  "setup.dismiss": "Ne plus afficher"
+  "setup.dismiss": "Ne plus afficher",
+  "setup.update": "Mettre à jour",
+  "setup.updateTitle": "Mettre à jour {agent}",
+  "setup.updateHint": "Mise à jour de {agent} avec son propre outil, de la même façon qu'il a été installé."
 }

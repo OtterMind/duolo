@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Não conectado",
   "setup.notSignedInHint": "{agent} ainda não está conectado.",
   "setup.appFound": "Você tem o {app}: o {agent} usa a mesma conta, sem custo extra.",
-  "setup.dismiss": "Não mostrar novamente"
+  "setup.dismiss": "Não mostrar novamente",
+  "setup.update": "Atualizar",
+  "setup.updateTitle": "Atualizar {agent}",
+  "setup.updateHint": "Atualizando o {agent} com o próprio atualizador, do mesmo jeito que foi instalado."
 }

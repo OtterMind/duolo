@@ -25,6 +25,7 @@ import { useT } from "../i18n";
 import { api, type Check as EnvCheck, type NewTaskOptions, type Repo, type Snapshot, type Surface } from "../lib/api";
 import {
   agentOptions,
+  canSetUp,
   defaultChoice,
   noAgentInstalled,
   rememberChoice,
@@ -743,9 +744,11 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
               <code>{a.install}</code>
             </div>
             <CopyCommand command={a.install} />
-            <button className="btn small primary" onClick={() => requestSetup(a.id)}>
-              {t(a.signedIn === null ? "setup.install" : "setup.installAndSignIn")}
-            </button>
+            {canSetUp(a) && (
+              <button className="btn small primary" onClick={() => requestSetup(a.id)}>
+                {t(a.tooOld ? "setup.update" : a.canSignIn ? "setup.installAndSignIn" : "setup.install")}
+              </button>
+            )}
           </div>
         ))}
     </div>
@@ -755,14 +758,18 @@ function NoAgentNotice({ agents, onRecheck }: { agents: AgentOption[]; onRecheck
 /**
  * 有 Agent 可用时的提示（最多一条）：选中的 Agent 还没登录；或者装了某个桌面客户端（ChatGPT、Claude），
  * 对应的 CLI 却没装——用户已经有这个账号，一键装上、登录就能用，不另外收费。
+ * 两种都能关掉：查登录的命令也会误报（例如 Codex 配了别家的模型服务，不用 OpenAI 账号，T3 Code 也提到这一点）。
  */
 function SetupHint({ agents, writer }: { agents: AgentOption[]; writer: string }) {
   const t = useT();
   const [dismissed, setDismissed] = useState(readDismissed);
-  const selected = agents.find((a) => a.id === writer && a.installed && a.signedIn === false);
-  const fromApp = agents.find((a) => !a.installed && a.app && a.install && !dismissed.includes(a.id));
+  const selected = agents.find(
+    (a) => a.id === writer && a.installed && a.signedIn === false && a.canSignIn && !dismissed.includes(`login:${a.id}`),
+  );
+  const fromApp = agents.find((a) => !a.installed && !a.tooOld && a.app && a.canInstall && !dismissed.includes(a.id));
   const agent = selected ?? fromApp;
   if (!agent) return null;
+  const key = selected ? `login:${agent.id}` : agent.id;
   return (
     <div className="panel-notice setup-hint" role="status">
       <AgentIcon kind={agent.id} size={14} />
@@ -774,19 +781,17 @@ function SetupHint({ agents, writer }: { agents: AgentOption[]; writer: string }
       <button className="btn small primary" onClick={() => requestSetup(agent.id)}>
         {t(selected ? "setup.signIn" : "setup.installAndSignIn")}
       </button>
-      {!selected && (
-        <button
-          className="icon-btn"
-          title={t("setup.dismiss")}
-          onClick={() => {
-            const next = [...dismissed, agent.id];
-            setDismissed(next);
-            writeDismissed(next);
-          }}
-        >
-          <X size={13} strokeWidth={1.75} />
-        </button>
-      )}
+      <button
+        className="icon-btn"
+        title={t("setup.dismiss")}
+        onClick={() => {
+          const next = [...dismissed, key];
+          setDismissed(next);
+          writeDismissed(next);
+        }}
+      >
+        <X size={13} strokeWidth={1.75} />
+      </button>
     </div>
   );
 }

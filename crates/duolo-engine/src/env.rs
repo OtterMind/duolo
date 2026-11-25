@@ -43,6 +43,12 @@ pub struct Check {
     pub app: String,
     /// 有没有登录；没装、插件不知道怎么查或者查不出来时为 None。
     pub signed_in: Option<bool>,
+    /// 能一键安装（这个系统上有能直接运行的安装命令）。
+    pub can_install: bool,
+    /// 太旧时能一键升级（用它自己的升级命令）。
+    pub can_update: bool,
+    /// 能一键登录。
+    pub can_sign_in: bool,
 }
 
 /// 检查 git、每一种 Agent（默认的写代码和审阅 Agent 排在前面）、语音。
@@ -70,6 +76,9 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
         detail: if config.server.is_empty() { t("env.notConfigured") } else { t("env.configured") },
         app: String::new(),
         signed_in: None,
+        can_install: false,
+        can_update: false,
+        can_sign_in: false,
     });
     checks
 }
@@ -89,7 +98,13 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
                 },
                 minimum: too_old.unwrap_or_default().to_string(),
                 app: plugin.installed_app().unwrap_or_default().to_string(),
-                signed_in: plugin.account_status().filter(|_| check.ok).and_then(signed_in),
+                signed_in: plugin
+                    .account_status()
+                    .filter(|_| check.ok)
+                    .and_then(|status| signed_in(OneShot { env_remove: agents.env_remove(), ..status })),
+                can_install: plugin.install_runnable().is_some(),
+                can_update: too_old.is_some() && plugin.update_command(Some(&check.version)).is_some(),
+                can_sign_in: plugin.login_args().is_some(),
                 ..check
             }
         }
@@ -105,13 +120,16 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
             minimum: String::new(),
             app: String::new(),
             signed_in: None,
+            can_install: false,
+            can_update: false,
+            can_sign_in: false,
         },
     }
 }
 
 /// 运行查登录的命令：退出码为 0 是登录了。超时或者运行不了时不知道。
-fn signed_in(argv: Vec<String>) -> Option<bool> {
-    let prompted = Prompted::new(&OneShot::from(argv), None)?;
+pub(crate) fn signed_in(status: OneShot) -> Option<bool> {
+    let prompted = Prompted::new(&status, None)?;
     output_within(prompted, VERSION_TIMEOUT).ok().map(|(status, _)| status.success())
 }
 
@@ -132,6 +150,9 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
         minimum: String::new(),
         app: String::new(),
         signed_in: None,
+        can_install: false,
+        can_update: false,
+        can_sign_in: false,
     };
     let Some(prompted) = Prompted::new(&command, None) else { return base };
     match output_within(prompted, timeout) {

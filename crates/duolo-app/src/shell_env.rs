@@ -44,10 +44,11 @@ pub fn load() {
     }
 }
 
-/// 重新读一遍登录 shell 的 PATH（刚装好的 Agent 可能把自己的目录加进了 shell 的配置）。
+/// 重新读一遍登录 shell 的 PATH（刚装好的 Agent 可能把自己的目录加进了 shell 的配置），新出现的目录之后也去找。
+/// 不改进程的 PATH：这时已经有别的线程在跑，改环境变量不安全（见 `duolo_core::process::add_search_dirs`）。
 pub fn refresh_path() {
     if let Some(path) = login_env().and_then(|mut env| env.remove(std::ffi::OsStr::new("PATH"))) {
-        std::env::set_var("PATH", path);
+        duolo_core::process::add_search_dirs(std::env::split_paths(&path));
     }
 }
 

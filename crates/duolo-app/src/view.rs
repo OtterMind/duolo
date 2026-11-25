@@ -186,6 +186,10 @@ pub struct CheckView {
     pub app: String,
     /// 有没有登录；不知道时为 null。
     pub signed_in: Option<bool>,
+    /// 能一键安装、太旧时能一键升级、能一键登录。
+    pub can_install: bool,
+    pub can_update: bool,
+    pub can_sign_in: bool,
 }
 
 impl From<Check> for CheckView {
@@ -206,6 +210,9 @@ impl From<Check> for CheckView {
             minimum: check.minimum,
             app: check.app,
             signed_in: check.signed_in,
+            can_install: check.can_install,
+            can_update: check.can_update,
+            can_sign_in: check.can_sign_in,
         }
     }
 }

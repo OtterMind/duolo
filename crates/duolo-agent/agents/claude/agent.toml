@@ -9,6 +9,10 @@ icon_color = "#d97757"
 [install]
 default = "curl -fsSL https://claude.ai/install.sh | bash"
 windows = "irm https://claude.ai/install.ps1 | iex"
+# 安装脚本把命令放在这里，但不一定加进 shell 的 PATH。
+bin_dirs = ["~/.local/bin"]
+# `claude update` 照原来的安装方式升级（Homebrew、npm 装的会告诉用户用哪条命令）。
+update_args = ["update"]
 
 # Claude 的订阅（Pro、Max）直接登录 Claude Code，额度和客户端共用。装了 Claude 桌面版就说明用户有这个账号。
 [account]

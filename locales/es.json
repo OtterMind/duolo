@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Sin iniciar sesión",
   "setup.notSignedInHint": "{agent} aún no tiene la sesión iniciada.",
   "setup.appFound": "Tienes {app}: {agent} usa la misma cuenta, sin coste adicional.",
-  "setup.dismiss": "No volver a mostrar"
+  "setup.dismiss": "No volver a mostrar",
+  "setup.update": "Actualizar",
+  "setup.updateTitle": "Actualizar {agent}",
+  "setup.updateHint": "Actualizando {agent} con su propio actualizador, igual que se instaló."
 }

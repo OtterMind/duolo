@@ -111,10 +111,14 @@ export interface Check {
   app: string;
   /** 有没有登录；不知道时为 null。 */
   signedIn: boolean | null;
+  /** 能一键安装、太旧时能一键升级、能一键登录。 */
+  canInstall: boolean;
+  canUpdate: boolean;
+  canSignIn: boolean;
 }
 
-/** 一键安装 Agent，或者登录它的账号。 */
-export type SetupStep = "install" | "login";
+/** 一键安装、升级 Agent，或者登录它的账号。 */
+export type SetupStep = "install" | "update" | "login";
 
 /** 一种 Agent 的名字和图标。 */
 export interface AgentPlugin {
@@ -276,7 +280,7 @@ export const api = {
   write: (r: AgentRef, data: string) => invoke<void>("write", { ...r, data }),
   newline: (r: AgentRef) => invoke<void>("newline", { ...r }),
   sendText: (r: AgentRef, text: string, submit: boolean) => invoke<void>("send_text", { ...r, text, submit }),
-  resize: (rows: number, cols: number) => invoke<void>("resize", { rows, cols }),
+  resize: (r: AgentRef, rows: number, cols: number) => invoke<void>("resize", { ...r, rows, cols }),
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   openTerminal: (path: string) => invoke<void>("open_terminal", { path }),
@@ -299,12 +303,14 @@ export const api = {
     return invoke<void>("attach", { ...r, onData: channel });
   },
 
-  /** 在单独的终端里安装 Agent 或登录账号，结束时发 `setup-exit` 事件。 */
+  /** 在单独的终端里安装、升级 Agent 或登录账号，返回这是第几次；结束时发带着这个编号的 `setup-exit` 事件。 */
   setupStart(agent: string, step: SetupStep, rows: number, cols: number, onData: (bytes: Uint8Array) => void) {
     const channel = new Channel<ArrayBuffer | number[]>();
     channel.onmessage = (data) => onData(data instanceof ArrayBuffer ? new Uint8Array(data) : Uint8Array.from(data));
-    return invoke<void>("setup_start", { agent, step, rows, cols, onData: channel });
+    return invoke<number>("setup_start", { agent, step, rows, cols, onData: channel });
   },
+  /** 现在登录了没有，不知道时为 null。 */
+  setupSignedIn: (agent: string) => invoke<boolean | null>("setup_signed_in", { agent }),
   setupWrite: (data: string) => invoke<void>("setup_write", { data }),
   setupResize: (rows: number, cols: number) => invoke<void>("setup_resize", { rows, cols }),
   setupStop: () => invoke<void>("setup_stop"),

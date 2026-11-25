@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Download, LogIn } from "lucide-react";
 
 import { useT } from "../i18n";
-import type { AgentOption } from "../lib/agents";
+import { canSetUp, type AgentOption } from "../lib/agents";
 import { requestSetup } from "../lib/setup";
 import { AgentIcon } from "./AgentIcon";
 
@@ -48,7 +48,7 @@ export function AgentList({
               <span>{a.name}</span>
               {a.signedIn === false && <span className="meta">{t("setup.notSignedIn")}</span>}
               <span className="grow" />
-              {a.signedIn === false && <SetupButton agent={a} />}
+              {a.signedIn === false && a.canSignIn && <SetupButton agent={a} />}
               {a.id === selected && <Check size={13} strokeWidth={2} />}
             </button>
           ) : (
@@ -58,7 +58,7 @@ export function AgentList({
               <span className="meta">{a.tooOld ? t("newTask.tooOld", a.tooOld) : t("newTask.notInstalled")}</span>
               <span className="grow" />
               {a.install && <CopyCommand command={a.install} />}
-              {a.install && <SetupButton agent={a} />}
+              {canSetUp(a) && <SetupButton agent={a} />}
             </div>
           ),
         )}
@@ -67,18 +67,20 @@ export function AgentList({
   );
 }
 
-/** 一键安装（没装、太旧时）或登录（没登录时）。 */
+/** 一键安装（没装时）、升级（太旧时）或登录（没登录时）。 */
 export function SetupButton({ agent }: { agent: AgentOption }) {
   const t = useT();
   const signIn = agent.installed;
-  const label = signIn ? t("setup.signIn") : t("setup.install");
+  const title = t(signIn ? "setup.signInTitle" : agent.tooOld ? "setup.updateTitle" : "setup.installTitle", {
+    agent: agent.name,
+  });
   return (
     <span
       role="button"
       tabIndex={-1}
       className="icon-btn"
-      title={signIn ? t("setup.signInTitle", { agent: agent.name }) : t("setup.installTitle", { agent: agent.name })}
-      aria-label={label}
+      title={title}
+      aria-label={title}
       onClick={(e) => {
         e.stopPropagation();
         requestSetup(agent.id);

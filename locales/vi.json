@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Chưa đăng nhập",
   "setup.notSignedInHint": "{agent} chưa đăng nhập.",
   "setup.appFound": "Bạn có {app}: {agent} dùng cùng tài khoản, không tốn thêm phí.",
-  "setup.dismiss": "Không hiện lại"
+  "setup.dismiss": "Không hiện lại",
+  "setup.update": "Cập nhật",
+  "setup.updateTitle": "Cập nhật {agent}",
+  "setup.updateHint": "Cập nhật {agent} bằng công cụ cập nhật của chính nó, theo cách đã cài đặt."
 }

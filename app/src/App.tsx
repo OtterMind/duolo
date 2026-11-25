@@ -565,6 +565,7 @@ export function App() {
       {setupOption && (
         <SetupDialog
           agent={setupOption}
+          onEnv={setEnv}
           onClose={() => {
             setSetupAgent(null);
             refreshEnv();

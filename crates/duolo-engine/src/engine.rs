@@ -195,6 +195,8 @@ pub struct Engine {
     /// 上次选的运行方式（`settings.json` 的 `surface`），新任务照着用。
     pub(crate) last_surface: Option<Surface>,
     pane: Size,
+    /// 每个 Agent 终端自己的尺寸：分屏时两格宽度不同，不能共用一个。没有时用 `pane`。
+    sizes: HashMap<AgentKey, Size>,
     on_output: Option<OutputHook>,
     diffs: Diffs,
     /// 正在关闭的任务：不再启动它的 Agent。
@@ -275,6 +277,7 @@ impl Engine {
             last_reviewer,
             last_surface,
             pane: Size::new(24, 80),
+            sizes: HashMap::new(),
             on_output: None,
             diffs: Diffs::default(),
             closing: HashSet::new(),
@@ -350,6 +353,7 @@ impl Engine {
         for id in old.tasks.iter().map(|t| t.id).filter(|id| self.state.task(*id).is_none()).collect::<Vec<_>>() {
             self.sessions.retain(|key, _| key.task != id);
             self.chats.retain(|key, _| key.task != id);
+            self.sizes.retain(|key, _| key.task != id);
             self.reviews.remove(&id);
             self.diffs.remove(id);
             self.forget_task(id);
@@ -381,10 +385,20 @@ impl Engine {
         self.on_output = Some(hook);
     }
 
-    /// 设置 Agent 窗格的尺寸，并同步给所有运行中的会话。
+    /// 设置 Agent 窗格的尺寸，并同步给所有运行中的会话（只有一个窗格的终端界面用）。
     pub fn set_pane_size(&mut self, size: Size) {
         self.pane = size;
+        self.sizes.clear();
         for session in self.sessions.values_mut() {
+            let _ = session.resize(size);
+        }
+    }
+
+    /// 设置一个 Agent 终端的尺寸（桌面端每格各自调整，分屏时两格宽度不同）。也是之后新开的终端的默认尺寸。
+    pub fn set_agent_size(&mut self, key: AgentKey, size: Size) {
+        self.pane = size;
+        self.sizes.insert(key, size);
+        if let Some(session) = self.sessions.get_mut(&key) {
             let _ = session.resize(size);
         }
     }
@@ -1094,7 +1108,7 @@ impl Engine {
                 .chain(launch.env)
                 .collect(),
             env_remove: self.agents.env_remove(),
-            size: self.pane,
+            size: self.sizes.get(&key).copied().unwrap_or(self.pane),
             rules: Rules { approval: screen.approval.clone(), busy: screen.busy.clone() },
             on_output: self.on_output.clone(),
         };

@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Belum masuk",
   "setup.notSignedInHint": "{agent} belum masuk.",
   "setup.appFound": "Anda punya {app}: {agent} memakai akun yang sama, tanpa biaya tambahan.",
-  "setup.dismiss": "Jangan tampilkan lagi"
+  "setup.dismiss": "Jangan tampilkan lagi",
+  "setup.update": "Perbarui",
+  "setup.updateTitle": "Perbarui {agent}",
+  "setup.updateHint": "Memperbarui {agent} dengan pembaruannya sendiri, sama seperti cara memasangnya."
 }

@@ -52,6 +52,8 @@ impl Registry {
             };
             found.put(base.with(changes));
         }
+        // 官方安装脚本放命令的目录不一定在 PATH 里（脚本不一定改 shell 配置），也去那里找。
+        duolo_core::process::add_search_dirs(found.iter().flat_map(|p| p.bin_dirs()));
         (found, problems)
     }
 

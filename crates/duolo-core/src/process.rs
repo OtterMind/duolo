@@ -7,6 +7,7 @@ use std::ffi::OsStr;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use crate::proctree::ProcessTree;
@@ -14,9 +15,29 @@ use crate::proctree::ProcessTree;
 /// 结束命令时，最长等它的进程消失多久。
 const KILL_WAIT: Duration = Duration::from_secs(2);
 
+/// PATH 之外也找的目录：Agent 官方安装脚本放命令的地方（`~/.local/bin` 这类，脚本不一定改 shell 配置），
+/// 和装好之后从登录 shell 新读到的 PATH。排在 PATH 后面，不会盖过用户自己 PATH 里的同名命令（Orca 吃过这个亏）。
+/// 不改进程的环境变量：别的线程可能同时在读，改了不安全。
+static EXTRA_DIRS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
+
+/// 再多找这些目录，见 [`EXTRA_DIRS`]。
+pub fn add_search_dirs(dirs: impl IntoIterator<Item = PathBuf>) {
+    let mut extra = EXTRA_DIRS.write().unwrap_or_else(|p| p.into_inner());
+    for dir in dirs {
+        if !dir.as_os_str().is_empty() && !extra.contains(&dir) {
+            extra.push(dir);
+        }
+    }
+}
+
 /// 可执行文件的完整路径；找不到时为 None。
 pub fn find(program: impl AsRef<OsStr>) -> Option<PathBuf> {
-    which::which(program).ok()
+    let program = program.as_ref();
+    which::which(program).ok().or_else(|| {
+        let extra = EXTRA_DIRS.read().unwrap_or_else(|p| p.into_inner());
+        let paths = (!extra.is_empty()).then(|| std::env::join_paths(extra.iter()).ok()).flatten()?;
+        which::which_in(program, Some(paths), std::env::current_dir().ok()?).ok()
+    })
 }
 
 /// 可执行文件的完整路径；找不到时返回原来的名字。
@@ -305,6 +326,19 @@ pub fn home_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn finds_commands_in_extra_dirs() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let tool = dir.path().join("duolo-test-extra-tool");
+        std::fs::write(&tool, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(find("duolo-test-extra-tool").is_none());
+        add_search_dirs([dir.path().to_path_buf()]);
+        assert_eq!(find("duolo-test-extra-tool"), Some(tool));
+    }
 
     #[test]
     fn quotes_batch_command_lines() {

@@ -6,6 +6,13 @@ command = "opencode"
 
 [install]
 default = "npm install -g opencode-ai"
+# 官方安装脚本（curl https://opencode.ai/install）装在这里。
+bin_dirs = ["~/.opencode/bin"]
+update_args = ["upgrade"]
+
+# 登录是选一家模型服务、填它的账号或密钥；没有查登录状态的命令，装好后直接接着登录。
+[account]
+login_args = ["auth", "login"]
 
 [start]
 # 第一句话用 --prompt 交给它，它自己会提交。

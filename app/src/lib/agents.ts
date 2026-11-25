@@ -3,7 +3,7 @@
 // 选项来自环境检查：每一种 Agent 插件都列出来，本机没装的标成"未安装"并给出安装命令。
 // 默认值：上次的选择 → config.toml 的默认 → 任意一个装了的；审阅优先选和写代码不同的 Agent。
 
-import type { Check } from "./api";
+import type { Check, SetupStep } from "./api";
 import { pluginOf } from "./plugins";
 
 export interface AgentOption {
@@ -20,6 +20,10 @@ export interface AgentOption {
   app: string;
   /** 有没有登录；不知道时为 null。 */
   signedIn: boolean | null;
+  /** 能一键安装、太旧时能一键升级、能一键登录。 */
+  canInstall: boolean;
+  canUpdate: boolean;
+  canSignIn: boolean;
 }
 
 /** 新建任务时选的：谁来写。审阅不在这里选，要的时候在任务里随时叫（见 TaskView 的审阅按钮）。 */
@@ -41,8 +45,17 @@ export function agentOptions(env: Check[] | null): AgentOption[] {
       tooOld: c.minimum ? { version: c.version, minimum: c.minimum } : null,
       app: c.app,
       signedIn: c.signedIn,
+      canInstall: c.canInstall,
+      canUpdate: c.canUpdate,
+      canSignIn: c.canSignIn,
     }));
 }
+
+/** 能一键装好（没装时安装，太旧时升级）。 */
+export const canSetUp = (a: AgentOption) => (a.tooOld ? a.canUpdate : !a.installed && a.canInstall);
+
+/** 一键装好时先做哪一步：太旧的升级，没装的安装，装了的登录。 */
+export const firstSetupStep = (a: AgentOption): SetupStep => (a.tooOld ? "update" : a.installed ? "login" : "install");
 
 /** 本机一个 Agent 都没装（环境检查还没结束时不算）。 */
 export const noAgentInstalled = (env: Check[] | null) =>

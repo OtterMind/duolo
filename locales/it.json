@@ -462,5 +462,8 @@
   "setup.notSignedIn": "Accesso non effettuato",
   "setup.notSignedInHint": "{agent} non ha ancora effettuato l'accesso.",
   "setup.appFound": "Hai {app}: {agent} usa lo stesso account, senza costi aggiuntivi.",
-  "setup.dismiss": "Non mostrare più"
+  "setup.dismiss": "Non mostrare più",
+  "setup.update": "Aggiorna",
+  "setup.updateTitle": "Aggiorna {agent}",
+  "setup.updateHint": "Aggiornamento di {agent} con il suo aggiornatore, nello stesso modo in cui è stato installato."
 }

@@ -29,10 +29,14 @@ minimum_version = "1.2.0"  # 最低能用的版本（`--version` 打印的）。
 [install]                  # 没安装时的安装命令：可以复制，也可以一键运行（用户的 shell 里，Windows 上是 PowerShell）
 default = "curl -fsSL https://toy.dev/install.sh | sh"   # 最好用官方的安装脚本，不要求先装 Node
 windows = "irm https://toy.dev/install.ps1 | iex"        # 还可以有 macos、linux
+                           # Windows 上一键运行只用 windows 这条；没写、默认的又是 `| sh` 写法时只能复制
+bin_dirs = ["~/.local/bin"]      # 安装脚本把命令放在哪里：脚本不一定改 shell 的 PATH，Duolo 自己也去找（排在 PATH 后面）
+update_args = ["update"]   # 太旧时一键升级：用它自己的升级命令，照原来的安装方式（npm、Homebrew、脚本）来，不会再装一份
+update_since = "0.126.0"   # 从这个版本起才有 update_args；更旧的只能手动升级
 
 [account]                  # 账号：一键登录，以及认出用同一个账号的桌面客户端
-status_args = ["auth", "status"] # 查有没有登录：已登录时退出码为 0
-login_args = ["auth", "login"]   # 登录：在终端窗口里运行，会打开浏览器，授权码可以粘贴回来
+status_args = ["auth", "status"] # 查有没有登录：已登录时退出码为 0。没有这种命令就不写，装好后直接接着登录
+login_args = ["auth", "login"]   # 登录：在终端窗口里运行，带着 [start].env；会打开浏览器，授权码可以粘贴回来
 apps = [                   # 装了这些客户端，说明用户有这个账号：没装 CLI 时提示一键装上、用同一个账号登录
   { name = "Toy", macos = ["/Applications/Toy.app", "~/Applications/Toy.app"], windows = ["{LOCALAPPDATA}/Toy/toy.exe"] },
 ]                          # 路径里 ~ 是家目录，{变量名} 换成环境变量

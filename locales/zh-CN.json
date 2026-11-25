@@ -462,5 +462,8 @@
   "setup.notSignedIn": "未登录",
   "setup.notSignedInHint": "{agent} 还没登录。",
   "setup.appFound": "你装了 {app}：{agent} 用同一个账号，不另外收费。",
-  "setup.dismiss": "不再提示"
+  "setup.dismiss": "不再提示",
+  "setup.update": "升级",
+  "setup.updateTitle": "升级 {agent}",
+  "setup.updateHint": "用 {agent} 自己的升级命令，照原来的安装方式升级。"
 }

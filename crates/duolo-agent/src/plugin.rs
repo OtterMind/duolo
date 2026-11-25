@@ -81,7 +81,10 @@ impl Plugin {
         set(&mut self.manifest.start.session_id_args, &changes.session_id_args);
         set(&mut self.manifest.start.review_args, &changes.review_args);
         if let Some(install) = &changes.install {
-            self.manifest.install = crate::manifest::Install { default: install.clone(), ..Default::default() };
+            // 自己写的安装命令不分系统；装到哪、怎么升级还是插件说的。
+            let own = &mut self.manifest.install;
+            own.default.clone_from(install);
+            (own.macos, own.windows, own.linux) = (None, None, None);
         }
         self.review_command = changes.review_command.clone().filter(|argv| !argv.is_empty());
         self
@@ -133,10 +136,43 @@ impl Plugin {
         self.manifest.install.command()
     }
 
-    /// 查有没有登录的命令；插件没写时为 None。
-    pub fn account_status(&self) -> Option<Vec<String>> {
+    /// 能一键运行的安装命令，见 [`crate::manifest::Install::runnable`]。
+    pub fn install_runnable(&self) -> Option<&str> {
+        self.manifest.install.runnable()
+    }
+
+    /// 官方安装脚本放命令的目录。
+    pub fn bin_dirs(&self) -> Vec<std::path::PathBuf> {
+        self.manifest.install.bin_dirs.iter().map(|d| expand(d)).collect()
+    }
+
+    /// 太旧时一键升级的命令：`version` 是装的版本，比 `update_since` 还旧（或读不出来）时为 None。
+    pub fn update_command(&self, version: Option<&str>) -> Option<Vec<String>> {
+        let install = &self.manifest.install;
+        if install.update_args.is_empty() {
+            return None;
+        }
+        if let Some(since) = &install.update_since {
+            if version.is_none_or(|v| is_older(v, since)) {
+                return None;
+            }
+        }
+        Some(std::iter::once(self.command().to_string()).chain(install.update_args.iter().cloned()).collect())
+    }
+
+    /// 查有没有登录的命令；插件没写时为 None。带着启动时的环境变量（例如关掉自动升级），和真正运行时查的是同一处。
+    pub fn account_status(&self) -> Option<OneShot> {
         let args = &self.manifest.account.as_ref()?.status_args;
-        (!args.is_empty()).then(|| std::iter::once(self.command().to_string()).chain(args.iter().cloned()).collect())
+        (!args.is_empty()).then(|| OneShot {
+            argv: std::iter::once(self.command().to_string()).chain(args.iter().cloned()).collect(),
+            env: self.start_env(),
+            ..Default::default()
+        })
+    }
+
+    /// 启动时设置的环境变量（插件的 `[start].env`）。登录时也带上，免得它趁登录自动升级。
+    pub fn start_env(&self) -> Vec<(String, String)> {
+        self.manifest.start.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     /// 登录的参数；插件没写时为 None。
@@ -484,11 +520,28 @@ mod tests {
         );
         let p = Plugin::new(Manifest::parse(&text).unwrap(), None);
         assert_eq!(p.installed_app(), Some("Toy"));
-        assert_eq!(p.account_status().unwrap(), ["x", "auth", "status"]);
+        assert_eq!(p.account_status().unwrap().argv, ["x", "auth", "status"]);
         assert_eq!(p.login_args().unwrap(), ["login"]);
         assert_eq!(expand("{DUOLO_NO_SUCH_VAR}/a"), std::path::PathBuf::new(), "没有这个变量时整个路径不算");
         assert!(expand("~/Apps/Toy.app").starts_with(process::home_dir()));
         // 没写 [account] 的：不查登录，也不认客户端。
         assert!(plugin("").installed_app().is_none() && plugin("").account_status().is_none());
+    }
+
+    #[test]
+    fn update_follows_its_own_updater() {
+        let text = "schema = 1\nid = \"x\"\nname = \"X\"\ncommand = \"x\"\n[install]\ndefault = \"curl -fsSL https://x.dev/i.sh | sh\"\n\
+                    bin_dirs = [\"~/.x/bin\"]\nupdate_args = [\"update\"]\nupdate_since = \"1.2.0\"\n";
+        let p = Plugin::new(Manifest::parse(text).unwrap(), None);
+        assert_eq!(p.update_command(Some("1.3.0")).unwrap(), ["x", "update"]);
+        assert!(p.update_command(Some("1.1.9")).is_none(), "更旧的还没有这个命令");
+        assert!(p.update_command(None).is_none(), "读不出版本时不冒险");
+        assert_eq!(p.bin_dirs(), [process::home_dir().join(".x/bin")]);
+        // `| sh` 写法在 Windows 上不能一键运行。
+        assert_eq!(p.install_runnable().is_some(), !cfg!(windows));
+        // 自己在 config.toml 里写的安装命令：装到哪、怎么升级还是插件说的。
+        let changed = p.with(&AgentOverride { install: Some("npm i -g x".into()), ..Default::default() });
+        assert_eq!(changed.install_runnable(), Some("npm i -g x"));
+        assert_eq!(changed.update_command(Some("1.3.0")).unwrap(), ["x", "update"]);
     }
 }

@@ -9,6 +9,12 @@ minimum_version = "1.0.92"
 [install]
 default = "curl -fsSL https://x.ai/cli/install.sh | bash"
 windows = "winget install --id xAI.GrokBuild -e"
+bin_dirs = ["~/.grok/bin"]
+update_args = ["update"]
+
+# 它没有查登录状态的命令：装好后直接接着登录。
+[account]
+login_args = ["login"]
 
 [start]
 prompt = "argument"

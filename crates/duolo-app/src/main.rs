@@ -222,6 +222,7 @@ fn main() {
             commands::reveal,
             commands::open_terminal,
             commands::open_url,
+            commands::clipboard_paths,
             commands::voice_start,
             commands::voice_cancel,
             commands::voice_status,

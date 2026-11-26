@@ -147,6 +147,22 @@ function pcClipboard(term: Terminal, e: KeyboardEvent) {
   return e.code === "KeyV";
 }
 
+/**
+ * 剪贴板里是文件或图片时，把路径粘贴进终端（复制的图片先存成临时 PNG），返回粘贴了没有。
+ * 路径里的空格等字符照访达拖文件进终端的写法转义，Agent 能认出这是一个路径。
+ */
+async function pasteFiles(term: Terminal): Promise<boolean> {
+  const paths = await api.clipboardPaths().catch(() => [] as string[]);
+  if (paths.length === 0) return false;
+  term.paste(paths.map(quotePath).join(" ") + " ");
+  return true;
+}
+
+function quotePath(path: string): string {
+  if (!isMac && path.includes("\\")) return /\s/.test(path) ? `"${path}"` : path;
+  return path.replace(/([\s'"()&;|<>$`!*?[\]{}#~\\])/g, "\\$1");
+}
+
 function create(ref: AgentRef): Entry {
   const term = new Terminal({
     // 和 Warp 一样默认用 Hack；中文等字形回退到系统字体。
@@ -191,7 +207,32 @@ function create(ref: AgentRef): Entry {
   block.className = "input-block";
   el.appendChild(block);
 
+  // 粘贴（⌘V，Windows / Linux 上 Ctrl+V）：剪贴板里是文件或图片时，粘贴它们的路径，Agent 会当成附件；
+  // 只有文字时照常粘贴。见 `pasteFiles`。
+  el.addEventListener(
+    "paste",
+    (e) => {
+      // 不看网页给的类型：从访达复制文件时 WebKit 可能只给出文件名文字。问系统的剪贴板（不到 0.1 秒）。
+      e.preventDefault();
+      e.stopPropagation();
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      void pasteFiles(term).then((pasted) => {
+        if (!pasted && text) term.paste(text);
+      });
+    },
+    true,
+  );
   term.attachCustomKeyEventHandler((e) => {
+    // macOS 上 ⌃V 是 Claude Code 这些 Agent 自己读剪贴板里的图片。复制的是文件时它读到的是文件图标，
+    // 所以先看剪贴板：有文件或图片就粘贴路径，没有再把 ⌃V 交给 Agent。
+    if (isMac && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === "KeyV") {
+      if (e.type === "keydown") {
+        void pasteFiles(term).then((pasted) => {
+          if (!pasted) void api.write(ref, "\x16").catch(() => {});
+        });
+      }
+      return false;
+    }
     if (pcClipboard(term, e) || isAppShortcut(e)) return false;
     // ⇧↵ 换行：各个 Agent 的按键不同，由插件决定。
     if (e.type === "keydown" && e.key === "Enter" && e.shiftKey) {

@@ -412,6 +412,12 @@ pub fn open_terminal(path: String) -> Res<()> {
     Ok(crate::platform::open_terminal(&PathBuf::from(path))?)
 }
 
+/// 剪贴板里的文件或图片对应的路径（粘贴给 Agent），只有文字时为空。见 `platform::clipboard_paths`。
+#[tauri::command]
+pub async fn clipboard_paths() -> Res<Vec<String>> {
+    Ok(crate::platform::clipboard_paths()?)
+}
+
 /// 用默认浏览器打开网址（终端里按住 ⌘ / Ctrl 点链接）。
 #[tauri::command]
 pub fn open_url(url: String) -> Res<()> {

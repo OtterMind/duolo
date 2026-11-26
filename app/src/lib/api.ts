@@ -292,6 +292,8 @@ export const api = {
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   openTerminal: (path: string) => invoke<void>("open_terminal", { path }),
+  /** 剪贴板里的文件或图片对应的路径（复制的图片先存成临时 PNG）；只有文字时为空。 */
+  clipboardPaths: () => invoke<string[]>("clipboard_paths"),
   /** 用默认浏览器打开网址（只打开 http / https）。 */
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   /** 连上服务器开始录音；`task` 用来带上热词和最近的对话。 */

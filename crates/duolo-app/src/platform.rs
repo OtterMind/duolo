@@ -34,6 +34,41 @@ pub fn open_url(url: &str) -> io::Result<()> {
     Command::new("xdg-open").arg(url).spawn().map(drop)
 }
 
+/// 剪贴板里的文件或图片，变成要粘贴给 Agent 的路径：复制的文件给它的路径，复制的图片先存成临时 PNG。
+/// 都没有（只是文字）时为空，照常粘贴文字。Agent（Claude Code、Codex）认得出图片路径，会当成附件。
+///
+/// 不让 Agent 自己读剪贴板：在访达里复制文件时，剪贴板里附带的图像是文件图标，它读到的就是图标。
+pub fn clipboard_paths() -> io::Result<Vec<String>> {
+    let dir = std::env::temp_dir().join("duolo-paste");
+    std::fs::create_dir_all(&dir)?;
+    let millis = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let image = dir.join(format!("{millis}.png"));
+    let image = image.to_string_lossy().to_string();
+    let output = if cfg!(target_os = "macos") {
+        Command::new("osascript").args(["-l", "JavaScript", "-e", CLIPBOARD_SCRIPT, &image]).output()?
+    } else if cfg!(windows) {
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms, System.Drawing; \
+             $f = [Windows.Forms.Clipboard]::GetFileDropList(); \
+             if ($f.Count -gt 0) {{ $f }} elseif ([Windows.Forms.Clipboard]::ContainsImage()) {{ \
+             [Windows.Forms.Clipboard]::GetImage().Save('{}', [Drawing.Imaging.ImageFormat]::Png); '{}' }}",
+            image.replace('\'', "''"),
+            image.replace('\'', "''"),
+        );
+        duolo_core::process::command("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-STA", "-Command", &script])
+            .output()?
+    } else {
+        // Linux 先只粘贴文字。
+        return Ok(Vec::new());
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    Ok(text.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
+}
+
+/// 见 clipboard.js。osascript 用 `-e` 运行时，后面的参数就是 `run(argv)` 的 argv。
+const CLIPBOARD_SCRIPT: &str = include_str!("clipboard.js");
+
 /// 在终端里打开目录：macOS 用"终端"，Windows 优先 Windows Terminal，Linux 依次试常见的终端。
 pub fn open_terminal(path: &Path) -> io::Result<()> {
     if cfg!(target_os = "macos") {

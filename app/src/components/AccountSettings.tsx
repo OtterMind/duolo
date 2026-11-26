@@ -23,9 +23,11 @@ export function AccountSettings({ onError }: { onError(err: unknown): void }) {
   if (agents.length === 0) return null;
   return (
     <>
-      <div className="settings-head">{t("account.title")}</div>
-      <label className="settings-row">
-        <span className="grow">{t("account.autoSwitch")}</span>
+      <label className="settings-card settings-row">
+        <span className="grow">
+          {t("account.autoSwitch")}
+          <span className="settings-hint">{t("account.addedBody")}</span>
+        </span>
         <input
           type="checkbox"
           className="switch"
@@ -59,17 +61,13 @@ function AgentAccounts({ agent, name, onError }: { agent: string; name: string; 
     a.source === "default" ? t("account.default") : a.source === "duolo" ? "Duolo" : a.source;
 
   return (
-    <div className="account-group">
-      <div className="settings-row">
+    <div className="settings-card account-group">
+      <div className="account-head">
         <AgentIcon kind={agent} size={14} />
         <span className="grow">{name}</span>
-        <button
-          className="icon-btn"
-          title={t("account.addTitle", { agent: name })}
-          aria-label={t("account.addTitle", { agent: name })}
-          onClick={() => requestSetup(agent, "new")}
-        >
-          <Plus size={14} strokeWidth={1.75} />
+        <button className="btn small" onClick={() => requestSetup(agent, "new")}>
+          <Plus size={12} strokeWidth={2} />
+          {t("account.add")}
         </button>
       </div>
       {accounts === null && <div className="account-row meta">{t("common.pleaseWait")}</div>}

@@ -534,5 +534,6 @@
   "account.addedBody": "Bir hesap kullanım sınırına ulaşınca Duolo sonraki hesaba geçer ve sohbete devam eder.",
   "account.remove": "Hesabı kaldır",
   "account.continue": "Önceki hesap kullanım sınırına ulaştı, bu yüzden başka bir hesaba geçtim. Kaldığın yerden devam et.",
-  "error.accountNotFound": "Bu hesap artık yok. Hesap listesini yeniden açıp tekrar deneyin."
+  "error.accountNotFound": "Bu hesap artık yok. Hesap listesini yeniden açıp tekrar deneyin.",
+  "account.add": "Hesap ekle"
 }

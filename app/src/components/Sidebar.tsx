@@ -20,12 +20,13 @@ import type { View } from "../App";
 import { AgentIcon } from "./AgentIcon";
 import { StateIcon, StatusIcon, useStateLabel } from "./StatusIcon";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
-import { SettingsPopover } from "./SettingsPopover";
 import { isMac, kbd, modKey } from "../lib/platform";
 import { beginPaneDrag } from "../lib/paneDrag";
 
 interface Props {
   snap: Snapshot | null;
+  /** 打开设置。 */
+  onOpenSettings(): void;
   view: View;
   /** 每次变化时把焦点放到搜索框（⌘K）。 */
   focusSearch: number;
@@ -74,7 +75,6 @@ export function Sidebar(props: Props) {
   const [width, startResize] = useResizableWidth();
   const [query, setQuery] = useState("");
   const [collapsed, toggleCollapsed] = useCollapsed();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   const projects = snap?.projects ?? [];
   const waiting = projects.flatMap((p) => p.tasks).filter((task) => writerOf(task)?.status === "needs_input").length;
@@ -200,12 +200,9 @@ export function Sidebar(props: Props) {
             </span>
           )}
         </span>
-        <div className="settings-anchor">
-          <button className="icon-btn" title={t("settings.title")} onClick={() => setSettingsOpen((o) => !o)}>
-            <Settings {...ICON} />
-          </button>
-          {settingsOpen && <SettingsPopover onClose={() => setSettingsOpen(false)} onError={props.onError} />}
-        </div>
+        <button className="icon-btn" title={`${t("settings.title")} (⌘,)`} onClick={props.onOpenSettings}>
+          <Settings {...ICON} />
+        </button>
       </footer>
       <div className="sidebar-resizer" onMouseDown={startResize} onDoubleClick={() => startResize(null)} />
     </aside>

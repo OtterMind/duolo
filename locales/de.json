@@ -534,5 +534,6 @@
   "account.addedBody": "Erreicht ein Konto sein Nutzungslimit, wechselt Duolo zum nächsten Konto und führt das Gespräch fort.",
   "account.remove": "Konto entfernen",
   "account.continue": "Das vorherige Konto hat sein Nutzungslimit erreicht, daher habe ich zu einem anderen Konto gewechselt. Bitte mach dort weiter, wo du aufgehört hast.",
-  "error.accountNotFound": "Dieses Konto gibt es nicht mehr. Öffne die Kontoliste erneut und versuche es noch einmal."
+  "error.accountNotFound": "Dieses Konto gibt es nicht mehr. Öffne die Kontoliste erneut und versuche es noch einmal.",
+  "account.add": "Konto hinzufügen"
 }

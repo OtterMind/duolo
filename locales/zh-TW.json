@@ -534,5 +534,6 @@
   "account.addedBody": "一個帳號的額度用完時，Duolo 會換到下一個帳號，接著原本的對話繼續做。",
   "account.remove": "刪除帳號",
   "account.continue": "上一個帳號的額度用完了，已經換了一個帳號。請接著剛才的進度繼續。",
-  "error.accountNotFound": "這個帳號已經不在了。重新打開帳號列表再試。"
+  "error.accountNotFound": "這個帳號已經不在了。重新打開帳號列表再試。",
+  "account.add": "新增帳號"
 }

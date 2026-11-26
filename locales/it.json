@@ -534,5 +534,6 @@
   "account.addedBody": "Quando un account raggiunge il limite di utilizzo, Duolo passa al successivo e continua la conversazione.",
   "account.remove": "Rimuovi account",
   "account.continue": "L'account precedente ha raggiunto il limite di utilizzo, quindi sono passato a un altro account. Riprendi da dove avevi lasciato.",
-  "error.accountNotFound": "Questo account non esiste più. Riapri l'elenco degli account e riprova."
+  "error.accountNotFound": "Questo account non esiste più. Riapri l'elenco degli account e riprova.",
+  "account.add": "Aggiungi account"
 }

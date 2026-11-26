@@ -534,5 +534,6 @@
   "account.addedBody": "Cuando una cuenta llega a su límite de uso, Duolo cambia a la siguiente y continúa la conversación.",
   "account.remove": "Quitar cuenta",
   "account.continue": "La cuenta anterior llegó a su límite de uso, así que cambié a otra cuenta. Continúa donde lo dejaste.",
-  "error.accountNotFound": "Esta cuenta ya no existe. Vuelve a abrir la lista de cuentas e inténtalo de nuevo."
+  "error.accountNotFound": "Esta cuenta ya no existe. Vuelve a abrir la lista de cuentas e inténtalo de nuevo.",
+  "account.add": "Añadir cuenta"
 }

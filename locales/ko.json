@@ -534,5 +534,6 @@
   "account.addedBody": "계정이 사용 한도에 도달하면 Duolo가 다음 계정으로 바꿔 대화를 이어갑니다.",
   "account.remove": "계정 삭제",
   "account.continue": "이전 계정이 사용 한도에 도달해 다른 계정으로 바꿨습니다. 하던 곳부터 이어서 진행해 주세요.",
-  "error.accountNotFound": "이 계정은 더 이상 없습니다. 계정 목록을 다시 열고 시도해 주세요."
+  "error.accountNotFound": "이 계정은 더 이상 없습니다. 계정 목록을 다시 열고 시도해 주세요.",
+  "account.add": "계정 추가"
 }

@@ -534,5 +534,6 @@
   "account.addedBody": "Saat satu akun mencapai batas penggunaan, Duolo beralih ke akun berikutnya dan melanjutkan percakapan.",
   "account.remove": "Hapus akun",
   "account.continue": "Akun sebelumnya mencapai batas penggunaan, jadi saya beralih ke akun lain. Silakan lanjutkan dari bagian terakhir.",
-  "error.accountNotFound": "Akun ini sudah tidak ada. Buka lagi daftar akun lalu coba lagi."
+  "error.accountNotFound": "Akun ini sudah tidak ada. Buka lagi daftar akun lalu coba lagi.",
+  "account.add": "Tambah akun"
 }

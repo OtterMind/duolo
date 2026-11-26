@@ -534,5 +534,6 @@
   "account.addedBody": "一个账号的额度用完时，Duolo 会换到下一个账号，接着原来的对话继续做。",
   "account.remove": "删除账号",
   "account.continue": "上一个账号的额度用完了，已经换了一个账号。请接着刚才的进度继续。",
-  "error.accountNotFound": "这个账号已经不在了。重新打开账号列表再试。"
+  "error.accountNotFound": "这个账号已经不在了。重新打开账号列表再试。",
+  "account.add": "添加账号"
 }

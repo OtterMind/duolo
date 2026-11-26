@@ -21,6 +21,7 @@ import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneGrid } from "./components/PaneGrid";
 import { PaneDragGhost } from "./components/PaneDragGhost";
 import { SetupDialog } from "./components/SetupDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { onSetupRequest, type SetupRequest } from "./lib/setup";
 import { loadLayout, MAX_PANES, saveLayout, type PaneSizes } from "./lib/layout";
 import { setDropHandler, type DropZone } from "./lib/paneDrag";
@@ -40,7 +41,7 @@ const MENU_SHORTCUTS: [string, string][] = [
   ["close-task", "⌘⇧W"],
 ];
 
-/** 菜单里不列的快捷键：⌘1…⌘9 跳到第 n 个任务，⌘K 搜索任务，⌥↓ 跳到下一个等你确认的任务，⌘\ 开关分屏。 */
+/** 菜单里不列的快捷键：⌘1…⌘9 跳到第 n 个任务，⌘K 搜索任务，⌥↓ 跳到下一个等你确认的任务，⌘\ 开关分屏，⌘, 设置。 */
 const EXTRA_SHORTCUTS: [string, string][] = [
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n): [string, string] => [`task-${n}`, `⌘${n}`]),
   ["search", "⌘K"],
@@ -49,6 +50,7 @@ const EXTRA_SHORTCUTS: [string, string][] = [
   ["zoom-pane", "⌘⇧↵"],
   ["prev-pane", "⌘⌥←"],
   ["next-pane", "⌘⌥→"],
+  ["settings", "⌘,"],
 ];
 
 export type View = { kind: "empty" } | { kind: "task"; task: number };
@@ -327,6 +329,7 @@ export function App() {
 
   /** 正在一键安装或登录的 Agent（和账号）。 */
   const [setup, setSetup] = useState<SetupRequest | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => onSetupRequest(setSetup), []);
   const setupOption = setup ? agentOptions(env).find((a) => a.id === setup.agent) : undefined;
 
@@ -553,6 +556,7 @@ export function App() {
   handlers.current["zoom-pane"] = toggleZoom;
   handlers.current["prev-pane"] = () => cyclePane(-1);
   handlers.current["next-pane"] = () => cyclePane(1);
+  handlers.current["settings"] = () => setSettingsOpen(true);
 
   /** ⌘K 搜索框里能搜到的命令，和菜单、快捷键做的事一样。 */
   const run = (id: string) => () => handlers.current[id]?.();
@@ -561,6 +565,7 @@ export function App() {
     { id: "add-project", label: t("menu.addProject"), keys: "⌘O", run: run("add-project") },
     { id: "next-waiting", label: t("command.nextWaiting"), keys: "⌥↓", run: run("next-waiting") },
     { id: "prev-task", label: t("menu.prevTask"), keys: "⌘⌥↑", run: run("prev-task") },
+    { id: "settings", label: t("settings.title"), keys: "⌘,", run: run("settings") },
     { id: "next-task", label: t("menu.nextTask"), keys: "⌘⌥↓", run: run("next-task") },
     ...(current
       ? [
@@ -641,6 +646,7 @@ export function App() {
     <div className="app">
       <Sidebar
         snap={snap}
+        onOpenSettings={() => setSettingsOpen(true)}
         view={view}
         focusSearch={focusSearch}
         onNewTask={newTask}
@@ -724,6 +730,7 @@ export function App() {
           />
         )}
       </main>
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} onError={fail} />}
       {setupOption && (
         <SetupDialog
           agent={setupOption}

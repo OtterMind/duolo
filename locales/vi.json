@@ -534,5 +534,6 @@
   "account.addedBody": "Khi một tài khoản hết hạn mức sử dụng, Duolo chuyển sang tài khoản tiếp theo và tiếp tục cuộc trò chuyện.",
   "account.remove": "Xóa tài khoản",
   "account.continue": "Tài khoản trước đã hết hạn mức sử dụng nên tôi đã chuyển sang tài khoản khác. Hãy tiếp tục từ chỗ đang dở.",
-  "error.accountNotFound": "Tài khoản này không còn nữa. Mở lại danh sách tài khoản rồi thử lại."
+  "error.accountNotFound": "Tài khoản này không còn nữa. Mở lại danh sách tài khoản rồi thử lại.",
+  "account.add": "Thêm tài khoản"
 }

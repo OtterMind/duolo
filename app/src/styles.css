@@ -2277,3 +2277,11 @@ body.is-dragging-pane * {
   background: var(--active);
   color: var(--text);
 }
+.shell-row {
+  padding-left: 30px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.shell-row .task-line {
+  gap: 6px;
+}

@@ -3,8 +3,8 @@
 
 import { useEffect } from "react";
 
-/** `toggle`：开关面板（没有终端时开一个）；`new`：打开面板并新开一个终端。 */
-export type ShellRequest = "toggle" | "new";
+/** `toggle`：开关面板（没有终端时开一个）；`new`：打开面板并新开一个终端；`{ show }`：打开面板，选中这个终端。 */
+export type ShellRequest = "toggle" | "new" | { show: number };
 
 const EVENT = "duolo:shell";
 const pending = new Map<number, ShellRequest>();

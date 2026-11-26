@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Settings,
+  SquareTerminal,
   X,
 } from "lucide-react";
 
@@ -17,7 +18,7 @@ import { api, type Diff, type Snapshot, type Task } from "../lib/api";
 import { elapsed, writerOf } from "../lib/format";
 import type { View } from "../App";
 import { AgentIcon } from "./AgentIcon";
-import { StateIcon, useStateLabel } from "./StatusIcon";
+import { StateIcon, StatusIcon, useStateLabel } from "./StatusIcon";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
 import { SettingsPopover } from "./SettingsPopover";
 import { isMac, kbd, modKey } from "../lib/platform";
@@ -38,6 +39,8 @@ interface Props {
   onClosePane(task: number): void;
   /** 打开任务，在它下方开一个终端。 */
   onOpenShell(task: number): void;
+  /** 打开任务，选中它下方的某个终端。 */
+  onOpenShellTab(task: number, agent: number): void;
   /** 放在旁边一格（⌘ 点任务）。 */
   onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
@@ -220,6 +223,7 @@ function TaskRow({
   onHandoff,
   onClosePane,
   onOpenShell,
+  onOpenShellTab,
   onCloseTask,
   onError,
 }: Props & { task: Task; current: boolean }) {
@@ -248,7 +252,9 @@ function TaskRow({
     { label: t("task.close"), kbd: "⌘⇧W", danger: true, run: () => onCloseTask(task.id) },
   ];
 
+  const shells = task.agents.filter((a) => a.role === "shell");
   return (
+    <>
     <div
       className={`task-row ${current ? "is-current" : ""} ${panes.includes(task.id) && !current ? "is-beside" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
       role="button"
@@ -327,6 +333,37 @@ function TaskRow({
       )}
       {menu && <ContextMenu at={menu} entries={entries} onDismiss={() => setMenu(null)} />}
     </div>
+    {/* 任务里另开的终端：挂在任务下面，点了打开任务并选中它。 */}
+    {shells.map((shell, i) => (
+      <div
+        key={shell.id}
+        className="task-row shell-row"
+        role="button"
+        tabIndex={0}
+        title={t("shell.tab", { n: i + 1 })}
+        onClick={() => onOpenShellTab(task.id, shell.id)}
+        onKeyDown={(e) => e.key === "Enter" && onOpenShellTab(task.id, shell.id)}
+      >
+        <div className="task-line">
+          <StatusIcon status={shell.status} />
+          <SquareTerminal {...ICON} className="dim" />
+          <span className="grow ellipsis">{t("shell.tab", { n: i + 1 })}</span>
+          <span className="row-actions">
+            <button
+              className="icon-btn"
+              title={t("shell.close")}
+              onClick={(e) => {
+                e.stopPropagation();
+                api.closeShell(task.id, shell.id).catch(onError);
+              }}
+            >
+              <X {...ICON} />
+            </button>
+          </span>
+        </div>
+      </div>
+    ))}
+    </>
   );
 }
 

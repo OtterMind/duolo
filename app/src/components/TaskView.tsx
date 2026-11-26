@@ -74,7 +74,10 @@ export function TaskView(props: Props) {
     api.openShell(task.id).then(setShellPicked, onError);
   };
   useShellRequests(task.id, (what) => {
-    if (what === "new" || (what === "toggle" && !shellOpen && shells.length === 0)) newShell();
+    if (typeof what === "object") {
+      setShellOpen(true);
+      setShellPicked(what.show);
+    } else if (what === "new" || (what === "toggle" && !shellOpen && shells.length === 0)) newShell();
     else setShellOpen((o) => !o);
   });
   const focusTerminal = () => {

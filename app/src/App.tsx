@@ -658,6 +658,10 @@ export function App() {
           openTask(task);
           requestShell(task, "new");
         }}
+        onOpenShellTab={(task, agent) => {
+          openTask(task);
+          requestShell(task, { show: agent });
+        }}
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}

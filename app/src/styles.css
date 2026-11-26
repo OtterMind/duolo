@@ -671,6 +671,9 @@ body.is-resizing * {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.account-intro {
+  margin: 0 2px;
+}
 .account-group {
   gap: 2px;
   padding: 6px 6px 8px;

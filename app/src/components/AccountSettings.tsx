@@ -8,7 +8,7 @@ import { onSetupReady, requestSetup } from "../lib/setup";
 import { AgentIcon } from "./AgentIcon";
 
 /**
- * 设置里的"账号"：每种能用多个账号的 Agent 列出它的账号（默认的、在 Duolo 里添加的、别的软件里登录好的，例如 Orca），
+ * 设置里的"AI 账号"（Agent 登录 AI 服务商用的账号，不是 Duolo 的账号）：每种能用多个账号的 Agent 列出它的账号（默认的、在 Duolo 里添加的、别的软件里登录好的，例如 Orca），
  * 选一个用；额度用完时自动换下一个（见 `crates/duolo-engine/src/accounts.rs`）。
  */
 export function AccountSettings({ onError }: { onError(err: unknown): void }) {
@@ -23,6 +23,7 @@ export function AccountSettings({ onError }: { onError(err: unknown): void }) {
   if (agents.length === 0) return null;
   return (
     <>
+      <p className="settings-hint account-intro">{t("account.intro")}</p>
       <label className="settings-card settings-row">
         <span className="grow">
           {t("account.autoSwitch")}
@@ -58,7 +59,11 @@ function AgentAccounts({ agent, name, onError }: { agent: string; name: string; 
   const label = (a: AgentAccount, i: number) =>
     a.email || (a.source === "default" ? t("account.default") : t("account.unnamed", { n: i }));
   const source = (a: AgentAccount) =>
-    a.source === "default" ? t("account.default") : a.source === "duolo" ? "Duolo" : a.source;
+    a.source === "default"
+      ? t("account.default")
+      : a.source === "duolo"
+        ? t("account.sourceDuolo")
+        : t("account.sourceApp", { app: a.source });
 
   return (
     <div className="settings-card account-group">

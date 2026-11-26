@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent} berjalan dalam mode obrolan · buka tugas ini di aplikasi Duolo, atau beralih ke terminal di sana",
   "sidebar.openBeside": "Buka di samping",
   "task.split": "Buka tugas lain di samping",
-  "task.unsplit": "Tutup panel ini",
+  "task.unsplit": "Tutup panel ini (tugas tetap berjalan)",
   "newTask.moreAgents": "Agen lainnya",
   "newTask.writerHint": "Siapa yang menulis kode (⇥ untuk ganti)",
   "newTask.surfaceTerminal": "Jalankan {agent} di terminalnya sendiri",

@@ -22,7 +22,7 @@ import { PaneGrid } from "./components/PaneGrid";
 import { PaneDragGhost } from "./components/PaneDragGhost";
 import { SetupDialog } from "./components/SetupDialog";
 import { onSetupRequest } from "./lib/setup";
-import { loadLayout, MAX_PANES, saveLayout } from "./lib/layout";
+import { loadLayout, MAX_PANES, saveLayout, type PaneSizes } from "./lib/layout";
 import { setDropHandler, type DropZone } from "./lib/paneDrag";
 import { isMac, matches } from "./lib/platform";
 
@@ -68,8 +68,8 @@ export function App() {
   const [zoom, setZoom] = useState<number | null>(null);
   /** 上次关掉应用时的样子，启动时还原。 */
   const saved = useRef(loadLayout());
-  /** 两格时左边一格占的比例（拖中间的线调整）。 */
-  const [ratio, setRatio] = useState(saved.current.ratio);
+  /** 格子的大小（拖格子之间的线调整）。 */
+  const [sizes, setSizes] = useState<PaneSizes | null>(saved.current.sizes);
   const viewRef = useRef(view);
   viewRef.current = view;
   const gridRef = useRef(grid);
@@ -351,8 +351,8 @@ export function App() {
   }, [refresh, addProject, openTask, createTask]);
 
   useEffect(() => {
-    if (view.kind === "task") saveLayout({ task: view.task, grid, ratio });
-  }, [view, grid, ratio]);
+    if (view.kind === "task") saveLayout({ task: view.task, grid, ratio: 0.5, sizes });
+  }, [view, grid, sizes]);
 
   // 格子里的任务关掉了：去掉那一格，只剩一格时不再并排。
   useEffect(() => {
@@ -575,6 +575,7 @@ export function App() {
             ? [
                 { id: "zoom-pane", label: t(zoom != null ? "command.unzoomPane" : "command.zoomPane"), keys: "⌘⇧↵", run: run("zoom-pane") },
                 { id: "next-pane", label: t("command.nextPane"), keys: "⌘⌥→", run: run("next-pane") },
+                { id: "close-pane", label: t("task.unsplit"), run: () => closePane(current.task.id) },
                 { id: "prev-pane", label: t("command.prevPane"), keys: "⌘⌥←", run: run("prev-pane") },
               ]
             : []),
@@ -642,6 +643,7 @@ export function App() {
         panes={split ? grid : []}
         onOpenBeside={(task) => addPane(task)}
         onShowProject={showProject}
+        onClosePane={closePane}
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}
@@ -653,8 +655,8 @@ export function App() {
           <PaneGrid
             tasks={panes.map((p) => p.task.id)}
             active={current.task.id}
-            ratio={ratio}
-            onRatio={setRatio}
+            sizes={sizes}
+            onSizes={setSizes}
             onActivate={openTask}
             render={(id) => {
               const task = panes.find((p) => p.task.id === id)!.task;

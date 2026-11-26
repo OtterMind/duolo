@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent} tourne en mode chat · ouvrez cette tâche dans l'app Duolo, ou repassez-y au terminal",
   "sidebar.openBeside": "Ouvrir à côté",
   "task.split": "Ouvrir une autre tâche à côté",
-  "task.unsplit": "Fermer ce volet",
+  "task.unsplit": "Fermer ce volet (la tâche continue)",
   "newTask.moreAgents": "Plus d'agents",
   "newTask.writerHint": "Qui écrit le code (⇥ pour changer)",
   "newTask.surfaceTerminal": "Exécuter {agent} dans son propre terminal",

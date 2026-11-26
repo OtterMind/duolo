@@ -34,6 +34,8 @@ interface Props {
   panes: number[];
   /** 并排看这个项目的全部任务。 */
   onShowProject(project: string): void;
+  /** 把任务从并排的格子里拿掉（任务不关）。 */
+  onClosePane(task: number): void;
   /** 放在旁边一格（⌘ 点任务）。 */
   onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
@@ -214,6 +216,7 @@ function TaskRow({
   onOpenBeside,
   onOpenReview,
   onHandoff,
+  onClosePane,
   onCloseTask,
   onError,
 }: Props & { task: Task; current: boolean }) {
@@ -228,7 +231,9 @@ function TaskRow({
   const diff = useDiff(current ? task.id : null);
 
   const entries: MenuEntry[] = [
-    { label: t("sidebar.openBeside"), kbd: "⌘\\", run: () => onOpenBeside(task.id) },
+    panes.includes(task.id)
+      ? { label: t("task.unsplit"), run: () => onClosePane(task.id) }
+      : { label: t("sidebar.openBeside"), kbd: "⌘\\", run: () => onOpenBeside(task.id) },
     { label: t("sidebar.rename"), run: () => setRenaming(true) },
     { label: t("sidebar.handoff"), run: () => onHandoff(task.id) },
     { sep: true },

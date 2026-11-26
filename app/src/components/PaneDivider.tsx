@@ -1,25 +1,41 @@
 import { useT } from "../i18n";
-import { clampRatio } from "../lib/layout";
 
-/** 分屏中间的线：拖动调整左右两格的宽度，双击回到一半一半。 */
-export function PaneDivider({ ratio, onChange }: { ratio: number; onChange(ratio: number): void }) {
+/**
+ * 格子之间的线：竖线拖左右宽度，横线拖上下高度，双击让两边一样大。
+ * `onDrag` 收到的是指针移动了多少，占线所在那一行（或整个右侧）的比例。
+ */
+export function PaneDivider({
+  vertical,
+  onDrag,
+  onEven,
+}: {
+  /** 竖线（左右两格之间）；否则是横线（上下两行之间）。 */
+  vertical: boolean;
+  onDrag(delta: number): void;
+  onEven(): void;
+}) {
   const t = useT();
   return (
     <div
-      className="pane-divider"
+      className={`pane-divider ${vertical ? "" : "is-row"}`}
       role="separator"
-      aria-orientation="vertical"
-      aria-valuenow={Math.round(ratio * 100)}
+      aria-orientation={vertical ? "vertical" : "horizontal"}
       title={t("task.dividerHint")}
-      onDoubleClick={() => onChange(0.5)}
+      onDoubleClick={onEven}
       onPointerDown={(e) => {
-        const panes = e.currentTarget.parentElement?.getBoundingClientRect();
-        if (!panes || e.button !== 0) return;
+        const box = e.currentTarget.parentElement?.getBoundingClientRect();
+        if (!box || e.button !== 0) return;
         e.preventDefault();
         const el = e.currentTarget;
+        const total = vertical ? box.width : box.height;
+        let last = vertical ? e.clientX : e.clientY;
         el.setPointerCapture(e.pointerId);
         el.classList.add("is-dragging");
-        const move = (ev: PointerEvent) => onChange(clampRatio((ev.clientX - panes.left) / panes.width));
+        const move = (ev: PointerEvent) => {
+          const at = vertical ? ev.clientX : ev.clientY;
+          if (total > 0 && at !== last) onDrag((at - last) / total);
+          last = at;
+        };
         const up = () => {
           el.classList.remove("is-dragging");
           el.removeEventListener("pointermove", move);

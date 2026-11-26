@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent}가 채팅 모드로 실행 중 · Duolo 앱에서 이 작업을 열거나 터미널로 전환하세요",
   "sidebar.openBeside": "옆에 열기",
   "task.split": "옆에 다른 작업 열기",
-  "task.unsplit": "이 창 닫기",
+  "task.unsplit": "이 창 닫기(작업은 계속)",
   "newTask.moreAgents": "다른 에이전트",
   "newTask.writerHint": "코드를 작성할 에이전트 (⇥로 전환)",
   "newTask.surfaceTerminal": "{agent}을(를) 자체 터미널에서 실행",

@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent} sohbet modunda çalışıyor · bu görevi Duolo uygulamasında açın veya orada terminale geçin",
   "sidebar.openBeside": "Yanında aç",
   "task.split": "Yanında başka bir görev aç",
-  "task.unsplit": "Bu bölmeyi kapat",
+  "task.unsplit": "Bu bölmeyi kapat (görev sürer)",
   "newTask.moreAgents": "Diğer ajanlar",
   "newTask.writerHint": "Kodu kim yazacak (değiştirmek için ⇥)",
   "newTask.surfaceTerminal": "{agent} kendi terminalinde çalıştır",

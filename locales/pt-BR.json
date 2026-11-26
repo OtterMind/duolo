@@ -430,7 +430,7 @@
   "tui.chatMode": "O {agent} está no modo de chat · abra esta tarefa no app Duolo ou mude para o terminal lá",
   "sidebar.openBeside": "Abrir ao lado",
   "task.split": "Abrir outra tarefa ao lado",
-  "task.unsplit": "Fechar este painel",
+  "task.unsplit": "Fechar este painel (a tarefa continua)",
   "newTask.moreAgents": "Mais agentes",
   "newTask.writerHint": "Quem escreve o código (⇥ para trocar)",
   "newTask.surfaceTerminal": "Executar {agent} no próprio terminal",

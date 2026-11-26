@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent} đang chạy ở chế độ trò chuyện · mở tác vụ này trong ứng dụng Duolo, hoặc chuyển sang terminal ở đó",
   "sidebar.openBeside": "Mở bên cạnh",
   "task.split": "Mở thêm một tác vụ bên cạnh",
-  "task.unsplit": "Đóng khung này",
+  "task.unsplit": "Đóng khung này (nhiệm vụ vẫn chạy)",
   "newTask.moreAgents": "Thêm agent",
   "newTask.writerHint": "Ai viết mã (⇥ để đổi)",
   "newTask.surfaceTerminal": "Chạy {agent} trong terminal của nó",

@@ -8,7 +8,6 @@ import {
   Maximize2,
   MessagesSquare,
   Minimize2,
-  PanelRightClose,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -134,7 +133,7 @@ export function TaskView(props: Props) {
         )}
         {props.pane && (
           <button className="icon-btn" title={t("task.unsplit")} onClick={props.pane.onClose}>
-            <PanelRightClose size={15} strokeWidth={1.75} />
+            <X size={15} strokeWidth={1.75} />
           </button>
         )}
         <div className="more" onMouseDown={(e) => e.stopPropagation()}>
@@ -149,6 +148,7 @@ export function TaskView(props: Props) {
                 { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },
                 { label: t("task.copyPath"), run: () => void navigator.clipboard.writeText(task.worktree) },
                 { sep: true },
+                ...(props.pane ? [{ label: t("task.unsplit"), run: props.pane.onClose }] : []),
                 { label: t("task.close"), kbd: "⌘⇧W", run: onClose, danger: true },
               ]}
             />

@@ -430,7 +430,7 @@
   "tui.chatMode": "{agent} はチャットモードで実行中 · Duolo アプリでこのタスクを開くか、そこでターミナルに切り替えてください",
   "sidebar.openBeside": "横に開く",
   "task.split": "横にもう一つタスクを開く",
-  "task.unsplit": "このペインを閉じる",
+  "task.unsplit": "このペインを閉じる（タスクは続行）",
   "newTask.moreAgents": "その他のエージェント",
   "newTask.writerHint": "コードを書くエージェント（⇥ で切り替え）",
   "newTask.surfaceTerminal": "{agent} を自身のターミナルで実行",

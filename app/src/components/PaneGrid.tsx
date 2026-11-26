@@ -1,80 +1,100 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { gridColumns } from "../lib/layout";
+import { gridColumns, paneRows, resizePair, sizesFor, type PaneSizes } from "../lib/layout";
 import { usePaneDrag, type DropZone } from "../lib/paneDrag";
 import { PaneDivider } from "./PaneDivider";
 
+/** 拖线时一格最窄、最矮多少像素。 */
+const MIN_WIDTH = 240;
+const MIN_HEIGHT = 140;
+
 /**
- * 右侧的格子。一格占满；两格左右排，中间的线可以拖；三格以上排成等大的网格，列数按宽度算，
- * 最后一行不满时最后一格拉宽补齐。拖任务经过时，指针下面那一格标出会落在哪里。
+ * 右侧的格子，按行排：每行几格由窗口宽度定（四格是两行两列）。格子之间、行与行之间的线都能拖，
+ * 每行的宽度各自调；排法变了（多了一格、窗口变窄）就回到等大。拖任务经过时，指针下面那一格标出会落在哪里。
  */
 export function PaneGrid({
   tasks,
   active,
-  ratio,
-  onRatio,
+  sizes: saved,
+  onSizes,
   onActivate,
   render,
 }: {
   tasks: number[];
   active: number;
-  ratio: number;
-  onRatio(ratio: number): void;
+  sizes: PaneSizes | null;
+  onSizes(sizes: PaneSizes): void;
   onActivate(task: number): void;
   render(task: number): ReactNode;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const width = useWidth(host);
+  const [width, height] = useSize(host);
   const drag = usePaneDrag();
-  const count = tasks.length;
-  const twoUp = count === 2 && gridColumns(2, width) === 2;
-  const cols = count >= 3 ? gridColumns(count, width) : 1;
-  const rows = Math.ceil(count / cols);
-  const rest = count % cols;
-
-  const pane = (task: number, i: number) => {
-    const isActive = count > 1 && task === active;
-    const span = count >= 3 && rest !== 0 && i === count - 1 ? cols - rest + 1 : 1;
-    return (
-      <div
-        className={`pane ${isActive ? "is-active" : ""}`}
-        data-pane-task={task}
-        style={
-          twoUp
-            ? { flex: `${i === 0 ? ratio : 1 - ratio} 1 0` }
-            : span > 1
-              ? { gridColumn: `span ${span}` }
-              : undefined
-        }
-        // 点旁边那一格（包括里面的按钮、终端）就换成操作它。
-        onMouseDownCapture={() => task !== active && onActivate(task)}
-      >
-        {render(task)}
-        {drag?.target === task && drag.task !== task && <DropMark zone={drag.zone} />}
-      </div>
-    );
+  const rows = paneRows(tasks, gridColumns(tasks.length, width));
+  const sizes = sizesFor(
+    rows.map((r) => r.length),
+    saved,
+  );
+  // 拖线时用最新的大小（一次拖动里会连着调用很多次）。
+  const latest = useRef(sizes);
+  latest.current = sizes;
+  const update = (next: PaneSizes) => {
+    latest.current = next;
+    onSizes(next);
   };
 
-  if (count <= 2) {
-    return (
-      <div ref={host} className={`panes ${count === 2 && !twoUp ? "is-stacked" : ""}`}>
-        {tasks.map((task, i) => (
-          <Fragment key={task}>
-            {twoUp && i > 0 && <PaneDivider ratio={ratio} onChange={onRatio} />}
-            {pane(task, i)}
-          </Fragment>
-        ))}
-      </div>
-    );
-  }
   return (
-    <div
-      ref={host}
-      className="panes is-grid"
-      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
-    >
-      {tasks.map((task, i) => (
-        <Fragment key={task}>{pane(task, i)}</Fragment>
+    <div ref={host} className={`panes ${tasks.length > 1 ? "is-split" : ""}`}>
+      {rows.map((row, r) => (
+        <Fragment key={r}>
+          {r > 0 && (
+            <PaneDivider
+              vertical={false}
+              onDrag={(d) => {
+                const s = latest.current;
+                update({ ...s, rows: resizePair(s.rows, r - 1, d, MIN_HEIGHT / Math.max(height, 1)) });
+              }}
+              onEven={() => {
+                const s = latest.current;
+                update({ ...s, rows: resizePair(s.rows, r - 1, (s.rows[r] - s.rows[r - 1]) / 2, 0) });
+              }}
+            />
+          )}
+          <div className="pane-row" style={{ flex: `${sizes.rows[r]} 1 0` }}>
+            {row.map((task, c) => (
+              <Fragment key={task}>
+                {c > 0 && (
+                  <PaneDivider
+                    vertical
+                    onDrag={(d) => {
+                      const s = latest.current;
+                      const cols = s.cols.map((line, i) =>
+                        i === r ? resizePair(line, c - 1, d, MIN_WIDTH / Math.max(width, 1)) : line,
+                      );
+                      update({ ...s, cols });
+                    }}
+                    onEven={() => {
+                      const s = latest.current;
+                      const line = s.cols[r];
+                      const cols = s.cols.map((l, i) => (i === r ? resizePair(line, c - 1, (line[c] - line[c - 1]) / 2, 0) : l));
+                      update({ ...s, cols });
+                    }}
+                  />
+                )}
+                <div
+                  className={`pane ${tasks.length > 1 && task === active ? "is-active" : ""}`}
+                  data-pane-task={task}
+                  style={{ flex: `${sizes.cols[r][c]} 1 0` }}
+                  // 点旁边那一格（包括里面的按钮、终端）就换成操作它。
+                  onMouseDownCapture={() => task !== active && onActivate(task)}
+                >
+                  {render(task)}
+                  {drag?.target === task && drag.task !== task && <DropMark zone={drag.zone} />}
+                </div>
+              </Fragment>
+            ))}
+          </div>
+        </Fragment>
       ))}
     </div>
   );
@@ -85,16 +105,17 @@ function DropMark({ zone }: { zone: DropZone }) {
   return <div className={`pane-drop is-${zone}`} aria-hidden="true" />;
 }
 
-/** 元素的宽度，跟着窗口变。 */
-function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [width, setWidth] = useState(() => window.innerWidth);
+/** 元素的宽和高，跟着窗口变。 */
+function useSize(ref: React.RefObject<HTMLElement | null>): [number, number] {
+  const [size, setSize] = useState<[number, number]>(() => [window.innerWidth, window.innerHeight]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => setSize([el.clientWidth, el.clientHeight]);
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    setWidth(el.clientWidth);
+    measure();
     return () => observer.disconnect();
   }, [ref]);
-  return width;
+  return size;
 }

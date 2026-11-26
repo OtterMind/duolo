@@ -716,33 +716,29 @@ body.is-resizing * {
 .pane.is-active .topbar {
   box-shadow: inset 0 -2px 0 var(--focus);
 }
-.panes:has(.pane-divider) .pane:not(.is-active) .topbar-title,
-.panes.is-grid .pane:not(.is-active) .topbar-title,
-.panes.is-stacked .pane:not(.is-active) .topbar-title {
+.panes.is-split .pane:not(.is-active) .topbar-title {
   color: var(--dim);
 }
 
-/* 三格以上并排：等大的网格，格子之间一条细线。两格但太窄时上下排。 */
+/* 格子按行排：每行一个横向的 flex，行与行之间、格子之间都有能拖的线。 */
+.panes {
+  flex-direction: column;
+}
 .pane {
   position: relative;
-}
-.panes.is-grid {
-  display: grid;
-  gap: 1px;
-  background: var(--line-strong);
-}
-.panes.is-grid > .pane {
   min-height: 0;
-  background: var(--bg);
 }
-.panes.is-stacked {
-  flex-direction: column;
-  gap: 1px;
-  background: var(--line-strong);
-}
-.panes.is-stacked > .pane {
+.pane-row {
+  display: flex;
   min-height: 0;
-  background: var(--bg);
+}
+.pane-divider.is-row {
+  width: auto;
+  height: 1px;
+  cursor: row-resize;
+}
+.pane-divider.is-row::after {
+  inset: -4px 0;
 }
 .topbar.is-compact .topbar-meta {
   display: none;

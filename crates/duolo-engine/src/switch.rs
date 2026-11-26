@@ -427,8 +427,10 @@ mod tests {
         assert_eq!((task.base.as_str(), task.prompt.as_str()), (parent.base.as_str(), "Export orders as CSV"));
         assert_eq!(task.title, "Use cursor paging");
         assert_ne!(task.worktree, parent.worktree);
-        assert_eq!(std::fs::read_to_string(task.worktree.join("tracked.txt")).unwrap(), "v2\n");
-        assert_eq!(std::fs::read_to_string(task.worktree.join("new.txt")).unwrap(), "new\n");
+        // Windows 上 git 签出时可能把换行换成 CRLF（core.autocrlf），只比内容。
+        let read = |name: &str| std::fs::read_to_string(task.worktree.join(name)).unwrap().replace("\r\n", "\n");
+        assert_eq!(read("tracked.txt"), "v2\n");
+        assert_eq!(read("new.txt"), "new\n");
         let status = std::process::Command::new("git")
             .arg("-C")
             .arg(&task.worktree)

@@ -25,7 +25,8 @@ for (const code of CODES) {
   const dir = join(repo, "mobile/ios/Duolo", `${LPROJ[code] ?? code}.lproj`);
   const file = join(dir, "InfoPlist.strings");
   if (check) {
-    if (!existsSync(file) || readFileSync(file, "utf8") !== text) {
+    // Windows 上 git 签出时可能把换行换成 CRLF，只比内容。
+    if (!existsSync(file) || readFileSync(file, "utf8").replaceAll("\r\n", "\n") !== text) {
       console.error(`${file.slice(repo.length)} is stale: run node mobile/scripts/gen-ios-strings.mjs`);
       stale++;
     }

@@ -25,6 +25,10 @@ pnpm dev                  # http://localhost:8787, creates tables on startup
 pnpm test                 # end-to-end tests, each run uses a temporary database
 ```
 
+## Deploy
+
+Production runs in Docker behind APISIX and the host Nginx. The deploy script and its configuration are in [deploy/](../deploy/README.md) (in Chinese); server addresses and keys stay in local files that are not committed.
+
 ## Environment variables
 
 | Variable | Description | Default |

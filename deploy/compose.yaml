@@ -1,0 +1,34 @@
+# 生产环境：两个 Duolo 服务端实例（主备，见 apisix/apisix.yaml.tmpl）和 APISIX。
+# 由 deploy/remote/release.sh 在服务器上运行，项目名 duolo。对外只有 APISIX 监听本机端口，
+# 宿主机的 Nginx 负责 80/443、证书和域名跳转，再转给它（见 remote/setup.sh）。
+
+name: duolo
+
+x-server: &server
+  image: duolo-server:${DUOLO_RELEASE:?set DUOLO_RELEASE}
+  env_file: ${DUOLO_ROOT:-/opt/duolo}/shared/.env.production
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 20s
+  mem_limit: 512m
+  logging:
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # 主：平时所有请求都给它。
+  server-1:
+    <<: *server
+  # 备：主重启或不健康时接手。
+  server-2:
+    <<: *server
+  apisix:
+    image: apache/apisix:3.11.0-debian
+    restart: unless-stopped
+    ports: ["127.0.0.1:${DUOLO_APISIX_PORT:-9480}:9080"]
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      # 部署脚本原地改写这个文件（不换 inode），APISIX 自己重新加载。
+      - ${DUOLO_ROOT:-/opt/duolo}/shared/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    mem_limit: 256m
+    logging:
+      options: { max-size: "10m", max-file: "3" }

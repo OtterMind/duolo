@@ -1,0 +1,7 @@
+# 镜像只用到 server/ 的源码和根目录的 locales/。
+*
+!server/package.json
+!server/pnpm-lock.yaml
+!server/tsconfig.json
+!server/src
+!locales

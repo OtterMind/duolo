@@ -26,6 +26,10 @@ pnpm dev                  # http://localhost:8787，启动时自动建表
 pnpm test                 # 端到端测试（每次建一个临时数据库，跑完删掉）
 ```
 
+## 部署
+
+生产环境跑在 Docker 里，前面是 APISIX 和宿主机的 Nginx。部署脚本和配置见 [deploy/](../deploy/README.md)；服务器地址、密钥只放在本机不提交的文件里。
+
 ## 环境变量
 
 | 变量 | 说明 | 默认 |

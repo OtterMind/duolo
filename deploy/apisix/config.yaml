@@ -1,0 +1,21 @@
+# APISIX 的运行配置：standalone 模式，路由写在 apisix.yaml（部署时从 apisix.yaml.tmpl 生成），不用 etcd。
+# 它只在服务器本机监听，对外的 80/443 和证书由宿主机的 Nginx 管，见 deploy/remote/setup.sh。
+apisix:
+  node_listen:
+    - 9080
+  enable_admin: false
+  enable_ipv6: false
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+nginx_config:
+  error_log_level: warn
+  http:
+    # 手机和电脑的长连接（WebSocket）一直开着。
+    keepalive_timeout: 75s
+    # 请求来自本机的 Nginx（经过 Docker 的网关）：信任它给的客户端地址。
+    real_ip_header: X-Forwarded-For
+    real_ip_from:
+      - 127.0.0.1
+      - 172.16.0.0/12

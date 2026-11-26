@@ -183,19 +183,17 @@ function create(ref: AgentRef): Entry {
   term.loadAddon(fit);
   term.loadAddon(new Unicode11Addon());
   // 输出里的网址：按住 ⌘（Windows / Linux 是 Ctrl）点击用默认浏览器打开。不按住时照常点终端、选文字。
-  term.loadAddon(
-    new WebLinksAddon(
-      (event, uri) => {
-        if (modKey(event)) void api.openUrl(uri).catch(() => {});
-      },
-      {
-        hover: () => {
-          if (linkHint) el.title = linkHint;
-        },
-        leave: () => el.removeAttribute("title"),
-      },
-    ),
-  );
+  // 两种链接：文字里看起来像网址的（WebLinksAddon），和程序用终端超链接（OSC 8）标出来的（Claude Code
+  // 就这样输出链接）。后一种 xterm 默认先弹浏览器的确认框再 window.open，在桌面应用里打不开，换成一样的处理。
+  const follow = (event: MouseEvent, uri: string) => {
+    if (modKey(event)) void api.openUrl(uri).catch(() => {});
+  };
+  const hover = () => {
+    if (linkHint) el.title = linkHint;
+  };
+  const leave = () => el.removeAttribute("title");
+  term.loadAddon(new WebLinksAddon(follow, { hover, leave }));
+  term.options.linkHandler = { activate: follow, hover, leave };
   term.unicode.activeVersion = "11";
 
   const el = document.createElement("div");

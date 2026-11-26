@@ -315,6 +315,18 @@ pub async fn fork_task(app: AppHandle, task: u64, kind: String, request: String)
         .map(|id| id.0)
 }
 
+/// 在任务里开一个终端（用户自己的 shell，在任务的工作目录里）。返回它的编号。
+#[tauri::command]
+pub async fn open_shell(state: State<'_, AppState>, task: u64) -> Res<u32> {
+    Ok(state.engine().open_shell(TaskId(task))?.agent)
+}
+
+/// 关掉任务里另开的终端。
+#[tauri::command]
+pub async fn close_shell(state: State<'_, AppState>, task: u64, agent: u32) -> Res<()> {
+    Ok(state.engine().close_shell(key(task, agent))?)
+}
+
 /// 换审阅的 Agent，下一次审阅起生效。
 #[tauri::command]
 pub async fn set_reviewer(state: State<'_, AppState>, task: u64, kind: String) -> Res<()> {

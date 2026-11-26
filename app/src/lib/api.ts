@@ -17,7 +17,7 @@ export type TaskState =
   | "written"
   | "ended"
   | "not_started";
-export type Role = "writer" | "reviewer";
+export type Role = "writer" | "reviewer" | "shell";
 
 export interface Agent {
   id: number;
@@ -274,6 +274,9 @@ export const api = {
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
   switchWriter: (task: number, kind: string, request?: string) =>
     invoke<number>("switch_writer", { task, kind, request }),
+  /** 在任务里开一个终端（用户自己的 shell，在任务的工作目录里）。返回它的编号。 */
+  openShell: (task: number) => invoke<number>("open_shell", { task }),
+  closeShell: (task: number, agent: number) => invoke<void>("close_shell", { task, agent }),
   /** 分出新任务：照着现在的代码新建工作区，`kind` 带着交接说明接着做，原来的任务不停。返回新任务。 */
   forkTask: (task: number, kind: string, request: string) => invoke<number>("fork_task", { task, kind, request }),
   /** 换个方式运行写代码的 Agent，接着同一个会话。 */

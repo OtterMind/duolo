@@ -1095,6 +1095,7 @@ impl Engine {
             _ if resume => None,
             _ if agent.prompt.is_some() => agent.prompt.clone(),
             AgentRole::Writer => Some(task.prompt.clone()).filter(|p| !p.is_empty()),
+            AgentRole::Shell => None,
             AgentRole::Reviewer => Some(self.config.review_prompt_for(
                 &task.base,
                 &self.fork_of(task),

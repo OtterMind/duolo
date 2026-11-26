@@ -16,6 +16,7 @@ pub mod ops;
 mod prompt;
 mod review;
 mod setup;
+mod shells;
 mod status;
 mod switch;
 

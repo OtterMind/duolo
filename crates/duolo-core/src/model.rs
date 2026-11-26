@@ -51,6 +51,17 @@ pub struct Project {
 pub struct AgentKind(pub String);
 
 impl AgentKind {
+    /// 内置的终端：不是 AI，就是用户自己的 shell（见 `duolo_agent::Registry`）。
+    pub const SHELL: &'static str = "shell";
+
+    pub fn shell() -> Self {
+        Self(Self::SHELL.into())
+    }
+
+    pub fn is_shell(&self) -> bool {
+        self.0 == Self::SHELL
+    }
+
     /// 找不到对应的插件时显示的名字：首字母大写。
     pub fn fallback_name(&self) -> String {
         let mut chars = self.0.chars();
@@ -69,6 +80,8 @@ pub enum AgentRole {
     Writer,
     /// 只读审阅。
     Reviewer,
+    /// 任务里另开的终端（用户自己的 shell），不是 AI。
+    Shell,
 }
 
 impl AgentRole {
@@ -77,6 +90,7 @@ impl AgentRole {
         match self {
             Self::Writer => crate::tf("agentRole.writer", &[("agent", &agent)]),
             Self::Reviewer => crate::tf("agentRole.reviewer", &[("agent", &agent)]),
+            Self::Shell => crate::t("agentRole.shell"),
         }
     }
 }

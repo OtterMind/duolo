@@ -26,6 +26,9 @@ builtin!("claude", "codex", "opencode", "pi", "grok");
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
     plugins: Vec<Arc<Plugin>>,
+    /// 内置的终端（用户自己的 shell）。能按 `shell` 找到、启动，但不是 AI，不在 [`Registry::iter`] 里：
+    /// 不出现在选 Agent、环境检查、审阅这些地方。
+    shell: Option<Arc<Plugin>>,
 }
 
 impl Registry {
@@ -58,7 +61,7 @@ impl Registry {
     }
 
     pub(crate) fn builtin() -> Self {
-        let mut registry = Self::default();
+        let mut registry = Self { shell: Some(Arc::new(Plugin::new(Manifest::shell(), None))), ..Self::default() };
         for (id, manifest, icon) in BUILTIN {
             match Manifest::parse(manifest) {
                 Ok(manifest) => registry.put(Plugin::new(manifest, Some((*icon).to_string()))),
@@ -71,6 +74,11 @@ impl Registry {
 
     fn put(&mut self, plugin: Plugin) {
         let plugin = Arc::new(plugin);
+        // config.toml 里的 `[agents.shell]` 改的是内置的终端（例如换一个 shell），它照旧不算 Agent。
+        if plugin.id() == AgentKind::SHELL {
+            self.shell = Some(plugin);
+            return;
+        }
         match self.plugins.iter_mut().find(|p| p.id() == plugin.id()) {
             Some(slot) => *slot = plugin,
             None => self.plugins.push(plugin),
@@ -78,6 +86,9 @@ impl Registry {
     }
 
     fn find(&self, id: &str) -> Option<&Arc<Plugin>> {
+        if id == AgentKind::SHELL {
+            return self.shell.as_ref();
+        }
         self.plugins.iter().find(|p| p.id() == id)
     }
 
@@ -91,6 +102,9 @@ impl Registry {
 
     /// 界面上显示的名字；插件已经不在了（任务是以前建的）时用它的 id。
     pub fn name(&self, kind: &AgentKind) -> String {
+        if kind.is_shell() {
+            return duolo_core::t("agent.shell");
+        }
         self.find(&kind.0).map_or_else(|| kind.fallback_name(), |p| p.name().to_string())
     }
 
@@ -160,6 +174,30 @@ mod tests {
     const BUILTIN: [&str; 5] = ["claude", "codex", "opencode", "pi", "grok"];
 
     const AIDER: &str = "schema = 1\nid = \"aider\"\nname = \"Aider\"\ncommand = \"aider\"\n";
+
+    /// 内置的终端能按 `shell` 找到、启动，但不算 Agent；config.toml 能换它的命令。
+    #[cfg(unix)]
+    #[test]
+    fn the_shell_is_found_but_not_listed() {
+        let dir = tempfile::tempdir().unwrap();
+        let (registry, _) = Registry::load(&Config::default(), &dir.path().join("none"));
+        assert!(!ids(&registry).contains(&"shell"));
+        let shell = registry.get(&AgentKind::shell()).unwrap();
+        let start = |prompt| crate::Start {
+            role: duolo_core::AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: None,
+            prompt,
+        };
+        assert_eq!(shell.launch(start(Some("pnpm dev"))).args, ["-l", "-c", "pnpm dev"]);
+        assert_eq!(shell.launch(start(None)).args, ["-l"]);
+
+        let (registry, _) =
+            Registry::load(&config("[agents.shell]\ncommand = \"/bin/bash\"\n"), &dir.path().join("none"));
+        assert!(!ids(&registry).contains(&"shell"));
+        assert_eq!(registry.get(&AgentKind::shell()).unwrap().command(), "/bin/bash");
+    }
 
     #[test]
     fn builtin_plugins_come_first() {

@@ -8,6 +8,7 @@ import {
   Maximize2,
   MessagesSquare,
   Minimize2,
+  Plus,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -28,6 +29,8 @@ import { Markdown } from "./Markdown";
 import { VoiceBar } from "./VoiceBar";
 import { isMac, kbd } from "../lib/platform";
 import { beginPaneDrag } from "../lib/paneDrag";
+import { requestShell, useShellRequests } from "../lib/shellPanel";
+import { PaneDivider } from "./PaneDivider";
 
 interface Props {
   task: Task;
@@ -61,6 +64,19 @@ export function TaskView(props: Props) {
   const ref = { task: task.id, agent: agent.id };
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
+  // 下方的终端面板：开着的话占多高（比例）、选的是哪个终端。有终端在跑时默认打开。
+  const shells = task.agents.filter((a) => a.role === "shell");
+  const [shellOpen, setShellOpen] = useState(() => shells.some((s) => isLive(s.status)));
+  const [shellHeight, setShellHeight] = useState(0.4);
+  const [shellPicked, setShellPicked] = useState<number | null>(null);
+  const newShell = () => {
+    setShellOpen(true);
+    api.openShell(task.id).then(setShellPicked, onError);
+  };
+  useShellRequests(task.id, (what) => {
+    if (what === "new" || (what === "toggle" && !shellOpen && shells.length === 0)) newShell();
+    else setShellOpen((o) => !o);
+  });
   const focusTerminal = () => {
     if (!chat) terminals.terminalFor(ref).term.focus();
   };
@@ -122,6 +138,13 @@ export function TaskView(props: Props) {
             <Columns2 size={15} strokeWidth={1.75} />
           </button>
         )}
+        <button
+          className={`icon-btn ${shellOpen ? "is-on" : ""}`}
+          title={`${t("shell.toggle")} (${kbd("⌃`")})`}
+          onClick={() => requestShell(task.id, "toggle")}
+        >
+          <SquareTerminal size={15} strokeWidth={1.75} />
+        </button>
         {props.pane && (
           <button
             className="icon-btn"
@@ -145,6 +168,7 @@ export function TaskView(props: Props) {
               onDismiss={() => setMenu(false)}
               items={[
                 { label: t(isMac ? "task.reveal" : "task.openFolder"), kbd: "⌘⇧F", run: () => void api.reveal(task.worktree) },
+                { label: t("shell.openHere"), kbd: "⌃`", run: () => requestShell(task.id, "new") },
                 { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },
                 { label: t("task.copyPath"), run: () => void navigator.clipboard.writeText(task.worktree) },
                 { sep: true },
@@ -158,6 +182,7 @@ export function TaskView(props: Props) {
 
       <div className="task-body">
         <div className="task-main">
+          <div className="task-top" style={{ flex: `${shellOpen ? 1 - shellHeight : 1} 1 0` }}>
           {chat ? (
             <ChatView
               key={`${task.id}:${agent.id}`}
@@ -171,6 +196,26 @@ export function TaskView(props: Props) {
             <>
               <AgentTerminal key={`${task.id}:${agent.id}`} task={task} agent={agent} onError={onError} />
               <VoiceBar agent={ref} voice={voice} />
+            </>
+          )}
+          </div>
+          {shellOpen && (
+            <>
+              <PaneDivider
+                vertical={false}
+                onDrag={(d) => setShellHeight((h) => Math.min(0.85, Math.max(0.15, h - d)))}
+                onEven={() => setShellHeight(0.5)}
+              />
+              <ShellPanel
+                task={task}
+                shells={shells}
+                picked={shellPicked}
+                height={shellHeight}
+                onPick={setShellPicked}
+                onNew={newShell}
+                onHide={() => setShellOpen(false)}
+                onError={onError}
+              />
             </>
           )}
         </div>
@@ -393,6 +438,83 @@ function ReviewerPicker({
   );
 }
 
+/**
+ * 任务下方的终端面板：一排标签（每个是任务里另开的一个终端），下面是选中的那个。
+ * 关掉最后一个就收起面板。终端在任务的工作目录里，用的是用户自己的 shell。
+ */
+function ShellPanel({
+  task,
+  shells,
+  picked,
+  height,
+  onPick,
+  onNew,
+  onHide,
+  onError,
+}: {
+  task: Task;
+  shells: Agent[];
+  picked: number | null;
+  height: number;
+  onPick(agent: number): void;
+  onNew(): void;
+  onHide(): void;
+  onError(err: unknown): void;
+}) {
+  const t = useT();
+  const current = shells.find((s) => s.id === picked) ?? shells[shells.length - 1];
+  const close = (shell: Agent) => {
+    if (shells.length === 1) onHide();
+    api.closeShell(task.id, shell.id).catch(onError);
+  };
+  return (
+    <div className="shell-panel" style={{ flex: `${height} 1 0` }}>
+      <div className="shell-tabs" role="tablist">
+        {shells.map((shell, i) => (
+          <div
+            key={shell.id}
+            role="tab"
+            tabIndex={0}
+            aria-selected={shell === current}
+            className={`shell-tab ${shell === current ? "is-on" : ""}`}
+            onClick={() => onPick(shell.id)}
+            onKeyDown={(e) => e.key === "Enter" && onPick(shell.id)}
+          >
+            <StatusIcon status={shell.status} />
+            <span>{t("shell.tab", { n: i + 1 })}</span>
+            <button
+              className="icon-btn shell-close"
+              title={t("shell.close")}
+              onClick={(e) => {
+                e.stopPropagation();
+                close(shell);
+              }}
+            >
+              <X size={12} strokeWidth={1.75} />
+            </button>
+          </div>
+        ))}
+        <button className="icon-btn" title={t("shell.new")} onClick={onNew}>
+          <Plus size={14} strokeWidth={1.75} />
+        </button>
+        <span className="grow" />
+        <button className="icon-btn" title={t("shell.hide")} onClick={onHide}>
+          <ChevronDown size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+      {current ? (
+        <AgentTerminal key={`${task.id}:${current.id}`} task={task} agent={current} onError={onError} />
+      ) : (
+        <div className="shell-empty">
+          <button className="btn" onClick={onNew}>
+            {t("shell.new")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Agent 的 CLI。没有运行时自动启动（第一次带需求，之后接着上次的会话）。 */
 function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onError(err: unknown): void }) {
   const t = useT();
@@ -457,10 +579,12 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
       {ended && (
         <div className="terminal-ended">
           <span>
-            {t(agent.status === "failed" ? "task.agentFailed" : "task.agentExited", { agent: agent.name })}
+            {agent.kind === "shell"
+              ? t(agent.status === "failed" ? "shell.failed" : "shell.exited")
+              : t(agent.status === "failed" ? "task.agentFailed" : "task.agentExited", { agent: agent.name })}
           </span>
           <button className="btn" onClick={() => void start()} disabled={starting}>
-            {t("task.resume")}
+            {t(agent.kind !== "shell" ? "task.resume" : agent.role === "writer" && task.prompt ? "shell.rerun" : "shell.reopen")}
           </button>
         </div>
       )}

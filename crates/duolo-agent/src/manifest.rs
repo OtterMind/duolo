@@ -375,6 +375,25 @@ impl Manifest {
         }
     }
 
+    /// 内置的终端：用户自己的 shell（macOS / Linux 是 `$SHELL`，Windows 是 PowerShell）。
+    /// 带着一条命令启动时运行完就结束（退出码就是它的结果），不带命令时是一个能打字的 shell。
+    pub fn shell() -> Self {
+        let mut manifest = Self::plain(duolo_core::AgentKind::SHELL);
+        let (command, args, separator) = if cfg!(windows) {
+            ("powershell".to_string(), vec!["-NoLogo".to_string()], "-Command")
+        } else {
+            let fallback = if cfg!(target_os = "macos") { "/bin/zsh" } else { "/bin/sh" };
+            // 登录 shell：读用户的配置，PATH 里有 nvm、Homebrew 装的命令。
+            (std::env::var("SHELL").unwrap_or_else(|_| fallback.into()), vec!["-l".to_string()], "-c")
+        };
+        manifest.command = command;
+        manifest.start.args = args;
+        manifest.start.prompt = PromptVia::Argument;
+        manifest.start.separator = Some(separator.into());
+        manifest.keys = Keys { interrupt: "\u{3}".into(), newline: "\r".into() };
+        manifest
+    }
+
     fn validate(&self) -> Result<()> {
         let id_ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_';
         ensure!(!self.id.is_empty() && self.id.chars().all(id_ok), "invalid id {:?}: use a-z, 0-9, - and _", self.id);

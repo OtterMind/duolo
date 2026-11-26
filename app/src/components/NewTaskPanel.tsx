@@ -154,7 +154,9 @@ export function NewTaskPanel(props: Props) {
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [prompt]);
 
-  const canStart = !!project && !!repo && !noAgent && !creating;
+  // 选「终端」不需要装任何 Agent。
+  const shell = choice.writer === "shell";
+  const canStart = !!project && !!repo && (!noAgent || shell) && !creating;
   const submit = async () => {
     if (!canStart || !project) return;
     setCreating(true);
@@ -197,7 +199,7 @@ export function NewTaskPanel(props: Props) {
           className="new-task-input"
           rows={2}
           value={prompt}
-          placeholder={t("newTask.placeholder", { agent: pluginName(choice.writer) })}
+          placeholder={shell ? t("newTask.shellPlaceholder") : t("newTask.placeholder", { agent: pluginName(choice.writer) })}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return;
@@ -849,6 +851,17 @@ function AgentPicker({
           {a.id === selected && <span>{a.name}</span>}
         </button>
       ))}
+      {/* 不用 AI：在任务的工作目录里运行一条命令，或者只开一个终端。 */}
+      <button
+        role="radio"
+        aria-checked={selected === "shell"}
+        className={`agent-pill ${selected === "shell" ? "is-on" : ""}`}
+        title={t("newTask.shell")}
+        onClick={() => onPick("shell")}
+      >
+        <AgentIcon kind="shell" size={14} />
+        {selected === "shell" && <span>{t("agent.shell")}</span>}
+      </button>
       {others && (
         <div className="dropdown-anchor">
           <button

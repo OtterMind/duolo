@@ -24,6 +24,7 @@ import { SetupDialog } from "./components/SetupDialog";
 import { onSetupRequest } from "./lib/setup";
 import { loadLayout, MAX_PANES, saveLayout, type PaneSizes } from "./lib/layout";
 import { setDropHandler, type DropZone } from "./lib/paneDrag";
+import { requestShell } from "./lib/shellPanel";
 import { isMac, matches } from "./lib/platform";
 
 /** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
@@ -581,6 +582,7 @@ export function App() {
             : []),
           { id: "review", label: t("menu.review"), keys: "⌘⇧R", run: run("review") },
           { id: "handoff", label: t("command.handoff"), run: () => setHandoff(current.task.id) },
+          { id: "shell", label: t("shell.toggle"), keys: "⌃`", run: () => requestShell(current.task.id, "toggle") },
           { id: "reveal", label: t(isMac ? "task.reveal" : "task.openFolder"), keys: "⌘⇧F", run: run("reveal") },
           { id: "close-task", label: t("menu.closeTask"), keys: "⌘⇧W", run: run("close-task") },
         ]
@@ -592,6 +594,14 @@ export function App() {
     // macOS 上菜单里的快捷键由原生菜单处理；Windows / Linux 没有原生菜单，全部在这里处理。
     const shortcuts = isMac ? EXTRA_SHORTCUTS : [...MENU_SHORTCUTS, ...EXTRA_SHORTCUTS];
     const onKey = (e: KeyboardEvent) => {
+      // ⌃`：开关当前任务下方的终端（各个系统都是 Ctrl，和 VS Code 一样）。
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === "Backquote") {
+        e.preventDefault();
+        e.stopPropagation();
+        const v = viewRef.current;
+        if (v.kind === "task") requestShell(v.task, "toggle");
+        return;
+      }
       const hit = shortcuts.find(([, keys]) => matches(e, keys));
       if (!hit) return;
       e.preventDefault();
@@ -644,6 +654,10 @@ export function App() {
         onOpenBeside={(task) => addPane(task)}
         onShowProject={showProject}
         onClosePane={closePane}
+        onOpenShell={(task) => {
+          openTask(task);
+          requestShell(task, "new");
+        }}
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}

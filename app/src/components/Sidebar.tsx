@@ -36,6 +36,8 @@ interface Props {
   onShowProject(project: string): void;
   /** 把任务从并排的格子里拿掉（任务不关）。 */
   onClosePane(task: number): void;
+  /** 打开任务，在它下方开一个终端。 */
+  onOpenShell(task: number): void;
   /** 放在旁边一格（⌘ 点任务）。 */
   onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
@@ -217,6 +219,7 @@ function TaskRow({
   onOpenReview,
   onHandoff,
   onClosePane,
+  onOpenShell,
   onCloseTask,
   onError,
 }: Props & { task: Task; current: boolean }) {
@@ -238,6 +241,7 @@ function TaskRow({
     { label: t("sidebar.handoff"), run: () => onHandoff(task.id) },
     { sep: true },
     { label: t(isMac ? "task.reveal" : "task.openFolder"), run: () => void api.reveal(task.worktree) },
+    { label: t("shell.openHere"), run: () => onOpenShell(task.id) },
     { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },
     { label: t("sidebar.copyBranch"), run: () => void navigator.clipboard.writeText(task.branch) },
     { sep: true },

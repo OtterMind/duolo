@@ -1,7 +1,17 @@
+import { SquareTerminal } from "lucide-react";
+
 import { pluginOf } from "../lib/plugins";
 
 /** Agent 的图标：用图形区分模型，不写名字。图标来自插件（单色 SVG），没有的显示首字母。 */
 export function AgentIcon({ kind, size = 14, title }: { kind: string; size?: number; title?: string }) {
+  // 内置的终端（不是 AI）。
+  if (kind === "shell") {
+    return (
+      <span className="agent-icon" role="img" aria-label={title} title={title} style={{ width: size, height: size }}>
+        <SquareTerminal size={size} strokeWidth={1.75} />
+      </span>
+    );
+  }
   const plugin = pluginOf(kind);
   if (!plugin?.icon) {
     return (

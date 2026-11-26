@@ -202,6 +202,8 @@ fn main() {
             commands::start_reviewer,
             commands::switch_writer,
             commands::fork_task,
+            commands::open_shell,
+            commands::close_shell,
             commands::set_surface,
             commands::set_reviewer,
             commands::start_review,

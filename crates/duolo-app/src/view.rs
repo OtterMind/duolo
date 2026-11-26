@@ -113,6 +113,8 @@ impl From<Draft> for DraftView {
 pub enum Role {
     Writer,
     Reviewer,
+    /// 任务里另开的终端。
+    Shell,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -266,6 +268,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
             role: match agent.role {
                 AgentRole::Writer => Role::Writer,
                 AgentRole::Reviewer => Role::Reviewer,
+                AgentRole::Shell => Role::Shell,
             },
             status: engine.agent_status(task.key(agent.id)).into(),
             session: engine.session_id(task.key(agent.id)),

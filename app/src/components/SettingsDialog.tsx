@@ -1,40 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Check as CheckIcon, Info, Mic, Palette, SlidersHorizontal, TriangleAlert, UserRound, X } from "lucide-react";
+import { Info, Mic, SlidersHorizontal, TriangleAlert, UserRound, X } from "lucide-react";
 
-import { LOCALES, useI18n, type LanguagePref, type MessageKey } from "../i18n";
+import { LOCALES, useI18n, type LanguagePref } from "../i18n";
 import { api, type Check, type FnKeyStatus, type Surface, type VoiceSettings } from "../lib/api";
 import { agentOptions, defaultChoice, rememberChoice } from "../lib/agents";
 import { isMac, TALK_KEY } from "../lib/platform";
 import { allPlugins } from "../lib/plugins";
-import {
-  ACCENTS,
-  appearance,
-  FONT_SIZES,
-  setAppearance,
-  THEME_SWATCH,
-  THEMES,
-  type AccentId,
-  type Appearance as AppearanceSettings,
-  type ThemeId,
-} from "../lib/theme";
+import { FONT_SIZES, setTerminalFontSize, terminalFontSize } from "../lib/terminalFont";
 import { AccountSettings } from "./AccountSettings";
 
-const THEME_NAME: Record<ThemeId, MessageKey> = {
-  dark: "settings.themeDark",
-  light: "settings.themeLight",
-  midnight: "settings.themeMidnight",
-  mocha: "settings.themeMocha",
-  system: "settings.themeSystem",
-};
-const ACCENT_NAME: Record<AccentId, MessageKey> = {
-  blue: "settings.accentBlue",
-  orange: "settings.accentOrange",
-  green: "settings.accentGreen",
-  purple: "settings.accentPurple",
-  pink: "settings.accentPink",
-};
-
-type Tab = "general" | "appearance" | "voice" | "accounts" | "about";
+type Tab = "general" | "voice" | "accounts" | "about";
 
 const TAB_KEY = "duolo.settingsTab";
 
@@ -54,7 +29,6 @@ export function SettingsDialog({
   const hasAccounts = allPlugins().some((p) => p.accounts);
   const tabs: { id: Tab; label: string; icon: typeof Mic }[] = [
     { id: "general", label: t("settings.general"), icon: SlidersHorizontal },
-    { id: "appearance", label: t("settings.appearance"), icon: Palette },
     { id: "voice", label: t("settings.voice"), icon: Mic },
     ...(hasAccounts ? [{ id: "accounts" as const, label: t("account.title"), icon: UserRound }] : []),
     { id: "about", label: t("settings.about"), icon: Info },
@@ -106,7 +80,6 @@ export function SettingsDialog({
           </header>
           <div className="settings-pane">
             {tab === "general" && <General env={env} onError={onError} />}
-            {tab === "appearance" && <Appearance />}
             {tab === "about" && <About onError={onError} />}
             {tab === "voice" && <Voice onError={onError} />}
             {tab === "accounts" && <AccountSettings onError={onError} />}
@@ -127,6 +100,7 @@ function readTab(): Tab | null {
 
 function General({ env, onError }: { env: Check[] | null; onError(err: unknown): void }) {
   const { pref, setPref, t } = useI18n();
+  const [fontSize, setFontSize] = useState(terminalFontSize);
   const [defaults, setDefaults] = useState<{ writer: string; reviewer: string; surface: Surface } | null>(null);
   const installed = agentOptions(env).filter((a) => a.installed);
 
@@ -163,6 +137,23 @@ function General({ env, onError }: { env: Check[] | null; onError(err: unknown):
             {LOCALES.map((l) => (
               <option key={l.code} value={l.code}>
                 {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="settings-row">
+          <span className="grow">{t("settings.fontSize")}</span>
+          <select
+            value={fontSize}
+            onChange={(e) => {
+              const size = Number(e.target.value);
+              setTerminalFontSize(size);
+              setFontSize(size);
+            }}
+          >
+            {FONT_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
               </option>
             ))}
           </select>
@@ -217,84 +208,6 @@ function General({ env, onError }: { env: Check[] | null; onError(err: unknown):
         </label>
       </div>
     </>
-  );
-}
-
-function Appearance() {
-  const { t } = useI18n();
-  const [value, setValue] = useState<AppearanceSettings>(appearance);
-  const change = (next: Partial<AppearanceSettings>) => {
-    setAppearance(next);
-    setValue(appearance());
-  };
-  return (
-    <>
-      <div className="settings-group-title">{t("settings.theme")}</div>
-      <div className="theme-grid">
-        {THEMES.map((id) => (
-          <button
-            key={id}
-            className={value.theme === id ? "theme-card is-on" : "theme-card"}
-            onClick={() => change({ theme: id })}
-          >
-            <ThemeSwatch id={id} />
-            <span>{t(THEME_NAME[id])}</span>
-          </button>
-        ))}
-      </div>
-      <div className="settings-card">
-        <div className="settings-row">
-          <span className="grow">{t("settings.accent")}</span>
-          <span className="accent-dots">
-            {ACCENTS.map((a) => (
-              <button
-                key={a.id}
-                className={value.accent === a.id ? "accent-dot is-on" : "accent-dot"}
-                style={{ background: a.color }}
-                title={t(ACCENT_NAME[a.id])}
-                aria-label={t(ACCENT_NAME[a.id])}
-                onClick={() => change({ accent: a.id })}
-              >
-                {value.accent === a.id && <CheckIcon size={11} strokeWidth={3} />}
-              </button>
-            ))}
-          </span>
-        </div>
-        <label className="settings-row">
-          <span className="grow">
-            {t("settings.fontSize")}
-            {value.theme === "light" && <span className="settings-hint">{t("settings.lightTerminal")}</span>}
-          </span>
-          <select value={value.fontSize} onChange={(e) => change({ fontSize: Number(e.target.value) })}>
-            {FONT_SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-    </>
-  );
-}
-
-/** 主题的小预览：侧边栏、底色和两行"文字"。跟随系统的左右各一半。 */
-function ThemeSwatch({ id }: { id: (typeof THEMES)[number] }) {
-  if (id === "system") {
-    return (
-      <span className="theme-swatch split">
-        <ThemeSwatch id="dark" />
-        <ThemeSwatch id="light" />
-      </span>
-    );
-  }
-  const [bg, side, text] = THEME_SWATCH[id];
-  return (
-    <span className="theme-swatch" style={{ background: bg }}>
-      <span className="theme-swatch-side" style={{ background: side }} />
-      <span className="theme-swatch-line" style={{ background: text }} />
-      <span className="theme-swatch-line short" style={{ background: text }} />
-    </span>
   );
 }
 

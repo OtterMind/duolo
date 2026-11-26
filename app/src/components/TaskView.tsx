@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 
-import { onAppearanceChange } from "../lib/theme";
+import { onTerminalFontSizeChange } from "../lib/terminalFont";
 import { useT } from "../i18n";
 
 import { api, type Agent, type Diff, type Surface, type Task } from "../lib/api";
@@ -548,10 +548,10 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
     const observer = new ResizeObserver(resize);
     observer.observe(el);
     // 改了终端字号：格子数变了。
-    const offAppearance = onAppearanceChange(() => requestAnimationFrame(resize));
+    const offFontSize = onTerminalFontSizeChange(() => requestAnimationFrame(resize));
     return () => {
       observer.disconnect();
-      offAppearance();
+      offFontSize();
       unmount();
     };
   }, [task.id, agent.id]);

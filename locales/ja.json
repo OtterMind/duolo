@@ -522,5 +522,6 @@
   "shell.failed": "ターミナルがエラーで終了しました",
   "shell.reopen": "もう一度開く",
   "newTask.shell": "ターミナル（AI なし）：このタスクのフォルダーでコマンドを実行、またはシェルだけを開く",
-  "newTask.shellPlaceholder": "ターミナルで実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます"
+  "newTask.shellPlaceholder": "ターミナルで実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます",
+  "terminal.openLink": "{key} を押しながらクリックでブラウザで開く"
 }

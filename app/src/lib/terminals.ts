@@ -5,10 +5,11 @@ import { Terminal, type IDecoration, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
 import { agentKey, api, type AgentRef } from "./api";
-import { isMac } from "./platform";
+import { isMac, modKey } from "./platform";
 
 export const THEME: ITheme = {
   // 背景透明，由外层元素提供底色，这样输入块可以垫在文字下面。
@@ -110,6 +111,12 @@ window.addEventListener("wheel", releaseIfUp, { capture: true, passive: true });
 window.addEventListener("mouseup", () => (pressedInTerminal = false), true);
 
 /** 用户在终端里的输入（发给 Agent 之前），App 用它给新任务起名。 */
+/** 鼠标停在链接上时的提示（当前语言，由界面设置）。 */
+let linkHint = "";
+export function setLinkHint(text: string) {
+  linkHint = text;
+}
+
 let inputListener: ((ref: AgentRef, data: string) => void) | null = null;
 export function setInputListener(listener: typeof inputListener) {
   inputListener = listener;
@@ -159,6 +166,20 @@ function create(ref: AgentRef): Entry {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new Unicode11Addon());
+  // 输出里的网址：按住 ⌘（Windows / Linux 是 Ctrl）点击用默认浏览器打开。不按住时照常点终端、选文字。
+  term.loadAddon(
+    new WebLinksAddon(
+      (event, uri) => {
+        if (modKey(event)) void api.openUrl(uri).catch(() => {});
+      },
+      {
+        hover: () => {
+          if (linkHint) el.title = linkHint;
+        },
+        leave: () => el.removeAttribute("title"),
+      },
+    ),
+  );
   term.unicode.activeVersion = "11";
 
   const el = document.createElement("div");

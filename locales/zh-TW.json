@@ -522,5 +522,6 @@
   "shell.failed": "終端機出錯結束了",
   "shell.reopen": "重新開啟",
   "newTask.shell": "終端機，不用 AI：在這個任務的資料夾裡執行一條指令，或只開一個 shell",
-  "newTask.shellPlaceholder": "要在終端機裡執行的指令，例如 pnpm dev（不填就只開一個 shell）"
+  "newTask.shellPlaceholder": "要在終端機裡執行的指令，例如 pnpm dev（不填就只開一個 shell）",
+  "terminal.openLink": "按住 {key} 點擊，在瀏覽器中開啟"
 }

@@ -221,6 +221,7 @@ fn main() {
             commands::diff_stat,
             commands::reveal,
             commands::open_terminal,
+            commands::open_url,
             commands::voice_start,
             commands::voice_cancel,
             commands::voice_status,

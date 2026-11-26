@@ -18,6 +18,22 @@ pub fn reveal(path: &Path) -> io::Result<()> {
     Command::new(program).arg(path).spawn().map(drop)
 }
 
+/// 用默认浏览器打开网址。只打开 http / https：终端里的输出是程序写的，不能借它打开本机的文件或别的程序。
+pub fn open_url(url: &str) -> io::Result<()> {
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "only http and https links are opened"));
+    }
+    if cfg!(target_os = "macos") {
+        return Command::new("open").arg(url).spawn().map(drop);
+    }
+    if cfg!(windows) {
+        // 不经过 cmd：网址里的 & 会被它当成分隔符。
+        return duolo_core::process::command("rundll32").arg("url.dll,FileProtocolHandler").arg(url).spawn().map(drop);
+    }
+    Command::new("xdg-open").arg(url).spawn().map(drop)
+}
+
 /// 在终端里打开目录：macOS 用"终端"，Windows 优先 Windows Terminal，Linux 依次试常见的终端。
 pub fn open_terminal(path: &Path) -> io::Result<()> {
     if cfg!(target_os = "macos") {
@@ -62,5 +78,18 @@ pub fn open_settings(pane: &str) -> io::Result<()> {
         duolo_core::process::command("cmd").args(["/C", "start", "", page]).spawn().map(drop)
     } else {
         Err(io::Error::new(io::ErrorKind::Unsupported, "system settings are not available"))
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::open_url;
+
+    /// 终端输出里的链接只打开网页，不打开本机文件或别的程序。
+    #[test]
+    fn only_web_links_are_opened() {
+        for url in ["file:///etc/passwd", "javascript:alert(1)", "ssh://host", "/Applications/Calculator.app"] {
+            assert_eq!(open_url(url).unwrap_err().kind(), std::io::ErrorKind::InvalidInput, "{url}");
+        }
     }
 }

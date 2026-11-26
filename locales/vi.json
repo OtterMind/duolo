@@ -522,5 +522,6 @@
   "shell.failed": "Terminal đã đóng do lỗi",
   "shell.reopen": "Mở lại",
   "newTask.shell": "Terminal, không dùng AI: chạy một lệnh trong thư mục của nhiệm vụ này, hoặc chỉ mở một shell",
-  "newTask.shellPlaceholder": "Lệnh chạy trong terminal, vd: pnpm dev (để trống nếu chỉ mở shell)"
+  "newTask.shellPlaceholder": "Lệnh chạy trong terminal, vd: pnpm dev (để trống nếu chỉ mở shell)",
+  "terminal.openLink": "Giữ {key} và nhấp để mở trong trình duyệt"
 }

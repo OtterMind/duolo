@@ -522,5 +522,6 @@
   "shell.failed": "The terminal closed with an error",
   "shell.reopen": "Open again",
   "newTask.shell": "Terminal, no AI: run a command in this task's folder, or just open a shell",
-  "newTask.shellPlaceholder": "A command to run in the terminal, e.g. pnpm dev (leave empty for a plain shell)"
+  "newTask.shellPlaceholder": "A command to run in the terminal, e.g. pnpm dev (leave empty for a plain shell)",
+  "terminal.openLink": "Hold {key} and click to open in your browser"
 }

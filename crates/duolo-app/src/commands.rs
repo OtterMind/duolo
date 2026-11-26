@@ -412,6 +412,12 @@ pub fn open_terminal(path: String) -> Res<()> {
     Ok(crate::platform::open_terminal(&PathBuf::from(path))?)
 }
 
+/// 用默认浏览器打开网址（终端里按住 ⌘ / Ctrl 点链接）。
+#[tauri::command]
+pub fn open_url(url: String) -> Res<()> {
+    Ok(crate::platform::open_url(&url)?)
+}
+
 // ---- 语音 ----
 
 /// 实际使用的语音配置：是否整理按界面里的设置。

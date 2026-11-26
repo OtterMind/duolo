@@ -522,5 +522,6 @@
   "shell.failed": "Le terminal s’est fermé avec une erreur",
   "shell.reopen": "Rouvrir",
   "newTask.shell": "Terminal, sans IA : exécuter une commande dans le dossier de cette tâche, ou ouvrir simplement un shell",
-  "newTask.shellPlaceholder": "Commande à lancer dans le terminal, ex. pnpm dev (laisser vide pour un shell simple)"
+  "newTask.shellPlaceholder": "Commande à lancer dans le terminal, ex. pnpm dev (laisser vide pour un shell simple)",
+  "terminal.openLink": "Maintenez {key} et cliquez pour ouvrir dans le navigateur"
 }

@@ -522,5 +522,6 @@
   "shell.failed": "터미널이 오류로 종료되었습니다",
   "shell.reopen": "다시 열기",
   "newTask.shell": "터미널(AI 없음): 이 작업 폴더에서 명령을 실행하거나 셸만 엽니다",
-  "newTask.shellPlaceholder": "터미널에서 실행할 명령(예: pnpm dev). 비워 두면 셸만 엽니다"
+  "newTask.shellPlaceholder": "터미널에서 실행할 명령(예: pnpm dev). 비워 두면 셸만 엽니다",
+  "terminal.openLink": "{key}를 누른 채 클릭하면 브라우저에서 엽니다"
 }

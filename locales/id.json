@@ -522,5 +522,6 @@
   "shell.failed": "Terminal ditutup karena galat",
   "shell.reopen": "Buka lagi",
   "newTask.shell": "Terminal tanpa AI: jalankan perintah di folder tugas ini, atau buka shell saja",
-  "newTask.shellPlaceholder": "Perintah yang dijalankan di terminal, mis. pnpm dev (kosongkan untuk shell biasa)"
+  "newTask.shellPlaceholder": "Perintah yang dijalankan di terminal, mis. pnpm dev (kosongkan untuk shell biasa)",
+  "terminal.openLink": "Tahan {key} lalu klik untuk membuka di browser"
 }

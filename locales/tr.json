@@ -522,5 +522,6 @@
   "shell.failed": "Terminal bir hatayla kapandı",
   "shell.reopen": "Yeniden aç",
   "newTask.shell": "Terminal, yapay zekâ yok: bu görevin klasöründe bir komut çalıştır ya da yalnızca bir kabuk aç",
-  "newTask.shellPlaceholder": "Terminalde çalıştırılacak komut, ör. pnpm dev (yalnızca kabuk için boş bırakın)"
+  "newTask.shellPlaceholder": "Terminalde çalıştırılacak komut, ör. pnpm dev (yalnızca kabuk için boş bırakın)",
+  "terminal.openLink": "Tarayıcıda açmak için {key} tuşuna basılı tutup tıklayın"
 }

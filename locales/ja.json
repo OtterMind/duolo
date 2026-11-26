@@ -558,5 +558,19 @@
   "account.remove": "アカウントを削除",
   "account.continue": "前のアカウントが使用上限に達したため、別のアカウントに切り替えました。中断したところから続けてください。",
   "error.accountNotFound": "このアカウントはもうありません。アカウント一覧を開き直してもう一度お試しください。",
-  "account.add": "アカウントを追加"
+  "account.add": "アカウントを追加",
+  "project.remove": "Duolo から削除…",
+  "project.removeTitle": "「{project}」を Duolo から削除しますか？",
+  "project.removeBody": "一覧から外すだけです。フォルダー {root} はディスクにそのまま残ります。",
+  "project.removeBodyTasks": "先に {count} 件のタスクを閉じます：未コミットの変更は各タスクのブランチにコミットされ、ブランチは残ります。そのあと一覧から外します。フォルダー {root} はディスクにそのまま残ります。",
+  "project.removeAction": "削除",
+  "project.removed": "「{project}」を削除しました。フォルダーはディスクに残っています。",
+  "project.removedSaved": "「{project}」を削除しました。{count} 件のタスクの変更は各ブランチに保存されています。",
+  "command.removeProject": "{project} を Duolo から削除",
+  "error.projectHasTasks": "このプロジェクトにはまだタスクがあります。先に閉じてください。",
+  "cli.help.remove": "プロジェクトを Duolo から削除（フォルダーはディスクに残ります）",
+  "cli.help.removeProject": "プロジェクト ID（duolo ls を参照）",
+  "cli.help.yes": "プロジェクトのタスクも閉じる（変更は各ブランチに保存）",
+  "cli.removeNeedsYes": "「{project}」には {count} 件のタスクがあります。削除すると先にそれらを閉じます（未コミットの変更は各ブランチにコミット）。続けるには --yes を付けてもう一度実行してください。",
+  "cli.projectRemoved": "「{project}」を Duolo から削除しました。フォルダーはディスクに残っています。"
 }

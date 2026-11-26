@@ -558,5 +558,19 @@
   "account.remove": "Remove account",
   "account.continue": "The previous account hit its usage limit, so I switched you to another account. Please continue where you left off.",
   "error.accountNotFound": "This account no longer exists. Reopen the account list and try again.",
-  "account.add": "Add account"
+  "account.add": "Add account",
+  "project.remove": "Remove from Duolo…",
+  "project.removeTitle": "Remove “{project}” from Duolo?",
+  "project.removeBody": "It only leaves the list. The folder {root} stays on your disk as it is.",
+  "project.removeBodyTasks": "Its {count} tasks are closed first: uncommitted changes are committed to each task's branch, and the branches are kept. Then it leaves the list. The folder {root} stays on your disk as it is.",
+  "project.removeAction": "Remove",
+  "project.removed": "Removed “{project}”. Its folder is still on your disk.",
+  "project.removedSaved": "Removed “{project}”. Changes from {count} tasks are saved on their branches.",
+  "command.removeProject": "Remove {project} from Duolo",
+  "error.projectHasTasks": "This project still has tasks. Close them first.",
+  "cli.help.remove": "Remove a project from Duolo; its folder stays on disk",
+  "cli.help.removeProject": "Project id (see duolo ls)",
+  "cli.help.yes": "Also close the project's tasks (changes are saved on their branches)",
+  "cli.removeNeedsYes": "“{project}” has {count} tasks. Removing it closes them first (uncommitted changes are committed to their branches). Run again with --yes to go ahead.",
+  "cli.projectRemoved": "Removed “{project}” from Duolo. Its folder is still on your disk."
 }

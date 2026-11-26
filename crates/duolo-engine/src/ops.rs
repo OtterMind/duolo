@@ -27,6 +27,19 @@ pub fn close_task(engine: &Mutex<Engine>, id: TaskId) -> Result<Closed> {
     lock(engine).finish_close(id, result)
 }
 
+/// 移除项目：先逐个关闭它的任务（没提交的改动提交到各自的分支，见 [`Engine::close_task`]），
+/// 再把项目从列表里去掉，磁盘上的文件夹不动。有一个任务没能关掉（改动没法完整保存）就停下报错，
+/// 项目和剩下的任务都留着；已经关掉的照旧关掉。返回关掉的任务各自的结果。
+pub fn remove_project(engine: &Mutex<Engine>, id: &ProjectId) -> Result<Vec<Closed>> {
+    let tasks: Vec<TaskId> = lock(engine).state().tasks_of(id).map(|t| t.id).collect();
+    let mut closed = Vec::new();
+    for task in tasks {
+        closed.push(close_task(engine, task)?);
+    }
+    lock(engine).remove_project(id)?;
+    Ok(closed)
+}
+
 /// 换写代码的 Agent，见 [`Engine::switch_writer_with`]。记下代码样子的 git 不拿着锁做。
 pub fn switch_writer(engine: &Mutex<Engine>, id: TaskId, kind: AgentKind, request: &str) -> Result<AgentKey> {
     let Some(worktree) = lock(engine).prepare_switch(id, &kind)? else { return lock(engine).writer_key(id) };
@@ -128,6 +141,47 @@ mod tests {
             result.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
             longest
         })
+    }
+
+    /// 移除项目：关掉它的任务（没提交的改动留在分支上），项目从列表里去掉，磁盘上的文件夹和分支都在。
+    #[test]
+    fn removing_a_project_closes_its_tasks_and_keeps_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("shop");
+        std::fs::create_dir(&repo).unwrap();
+        std::fs::write(repo.join("a.txt"), "a\n").unwrap();
+        duolo_git::init_repo(&repo).unwrap();
+        let home = dir.path().join("home");
+        std::fs::create_dir(&home).unwrap();
+        std::fs::write(
+            home.join("config.toml"),
+            "[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", \"cat\", \"agent\"]\n",
+        )
+        .unwrap();
+        let mut opened = Engine::open(Paths::at(&home)).unwrap();
+        let project = opened.add_project(&repo).unwrap();
+        let other = opened.add_project(&dir.path().join("home")).unwrap();
+        let engine = Mutex::new(opened);
+        let task = create_task(&engine, &project, "Export orders", &TaskOptions::default()).unwrap();
+        let (worktree, branch) = {
+            let engine = lock(&engine);
+            let t = engine.state().task(task).unwrap();
+            (t.worktree.clone(), t.branch.clone())
+        };
+        std::fs::write(worktree.join("a.txt"), "changed\n").unwrap();
+
+        let err = lock(&engine).remove_project(&project).unwrap_err();
+        assert!(matches!(err.downcast_ref(), Some(UserError::ProjectHasTasks)), "{err:#}");
+
+        let closed = remove_project(&engine, &project).unwrap();
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].saved_to.as_deref(), Some(branch.as_str()), "没提交的改动提交到了任务的分支");
+        let engine = lock(&engine);
+        assert!(engine.state().project(&project).is_none());
+        assert!(engine.state().project(&other).is_some(), "别的项目不动");
+        assert!(engine.state().task(task).is_none() && !worktree.exists());
+        assert_eq!(std::fs::read_to_string(repo.join("a.txt")).unwrap(), "a\n", "项目文件夹原样留着");
+        assert!(duolo_git::branch_exists(&repo, &branch), "分支保留");
     }
 
     #[test]

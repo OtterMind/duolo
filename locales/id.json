@@ -558,5 +558,19 @@
   "account.remove": "Hapus akun",
   "account.continue": "Akun sebelumnya mencapai batas penggunaan, jadi saya beralih ke akun lain. Silakan lanjutkan dari bagian terakhir.",
   "error.accountNotFound": "Akun ini sudah tidak ada. Buka lagi daftar akun lalu coba lagi.",
-  "account.add": "Tambah akun"
+  "account.add": "Tambah akun",
+  "project.remove": "Hapus dari Duolo…",
+  "project.removeTitle": "Hapus “{project}” dari Duolo?",
+  "project.removeBody": "Hanya keluar dari daftar. Folder {root} tetap utuh di disk Anda.",
+  "project.removeBodyTasks": "Ke-{count} tugasnya ditutup dulu: perubahan yang belum di-commit di-commit ke branch masing-masing tugas, dan branch-nya tetap ada. Lalu keluar dari daftar. Folder {root} tetap utuh di disk Anda.",
+  "project.removeAction": "Hapus",
+  "project.removed": "“{project}” dihapus. Foldernya masih ada di disk.",
+  "project.removedSaved": "“{project}” dihapus. Perubahan dari {count} tugas tersimpan di branch-nya.",
+  "command.removeProject": "Hapus {project} dari Duolo",
+  "error.projectHasTasks": "Proyek ini masih punya tugas. Tutup dulu tugas-tugasnya.",
+  "cli.help.remove": "Hapus proyek dari Duolo; foldernya tetap di disk",
+  "cli.help.removeProject": "ID proyek (lihat duolo ls)",
+  "cli.help.yes": "Tutup juga tugas-tugas proyek (perubahan tetap di branch-nya)",
+  "cli.removeNeedsYes": "“{project}” punya {count} tugas. Menghapusnya akan menutup tugas-tugas itu dulu (perubahan yang belum di-commit di-commit ke branch-nya). Jalankan lagi dengan --yes untuk melanjutkan.",
+  "cli.projectRemoved": "“{project}” dihapus dari Duolo. Foldernya masih ada di disk."
 }

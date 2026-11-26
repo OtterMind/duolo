@@ -436,6 +436,19 @@ impl Engine {
         })
     }
 
+    /// 把项目从列表里去掉，不碰磁盘上的文件夹。项目里还有任务时报错：先关掉它们，
+    /// 共用一个加锁的引擎时用 [`crate::ops::remove_project`]，它会逐个关闭任务再移除。
+    pub fn remove_project(&mut self, id: &ProjectId) -> Result<()> {
+        self.update(|state| {
+            state.project(id).ok_or(UserError::ProjectNotFound)?;
+            if state.tasks.iter().any(|t| &t.project == id) {
+                return Err(UserError::ProjectHasTasks.into());
+            }
+            state.projects.retain(|p| &p.id != id);
+            Ok(())
+        })
+    }
+
     /// 在 `parent` 下新建文件夹 `name`，初始化为 git 仓库，并加为项目。
     pub fn create_project_folder(&mut self, parent: &Path, name: &str) -> Result<ProjectId> {
         let dir = new_folder(parent, name)?;

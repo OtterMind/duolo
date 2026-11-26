@@ -558,5 +558,19 @@
   "account.remove": "Xóa tài khoản",
   "account.continue": "Tài khoản trước đã hết hạn mức sử dụng nên tôi đã chuyển sang tài khoản khác. Hãy tiếp tục từ chỗ đang dở.",
   "error.accountNotFound": "Tài khoản này không còn nữa. Mở lại danh sách tài khoản rồi thử lại.",
-  "account.add": "Thêm tài khoản"
+  "account.add": "Thêm tài khoản",
+  "project.remove": "Gỡ khỏi Duolo…",
+  "project.removeTitle": "Gỡ “{project}” khỏi Duolo?",
+  "project.removeBody": "Chỉ gỡ khỏi danh sách. Thư mục {root} vẫn giữ nguyên trên ổ đĩa.",
+  "project.removeBodyTasks": "Trước tiên sẽ đóng {count} nhiệm vụ của nó: thay đổi chưa commit được commit vào nhánh của từng nhiệm vụ, các nhánh được giữ lại. Sau đó gỡ khỏi danh sách. Thư mục {root} vẫn giữ nguyên trên ổ đĩa.",
+  "project.removeAction": "Gỡ",
+  "project.removed": "Đã gỡ “{project}”. Thư mục vẫn còn trên ổ đĩa.",
+  "project.removedSaved": "Đã gỡ “{project}”. Thay đổi của {count} nhiệm vụ được lưu trên nhánh của chúng.",
+  "command.removeProject": "Gỡ {project} khỏi Duolo",
+  "error.projectHasTasks": "Dự án này vẫn còn nhiệm vụ. Hãy đóng chúng trước.",
+  "cli.help.remove": "Gỡ một dự án khỏi Duolo; thư mục vẫn ở trên ổ đĩa",
+  "cli.help.removeProject": "Mã dự án (xem duolo ls)",
+  "cli.help.yes": "Đóng luôn các nhiệm vụ của dự án (thay đổi giữ trên nhánh của chúng)",
+  "cli.removeNeedsYes": "“{project}” còn {count} nhiệm vụ. Gỡ sẽ đóng chúng trước (thay đổi chưa commit được commit vào nhánh của chúng). Chạy lại với --yes để tiếp tục.",
+  "cli.projectRemoved": "Đã gỡ “{project}” khỏi Duolo. Thư mục vẫn còn trên ổ đĩa."
 }

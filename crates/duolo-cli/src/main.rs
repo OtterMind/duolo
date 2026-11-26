@@ -3,6 +3,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Mutex;
 
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -59,6 +60,11 @@ enum Cmd {
         #[arg(long, conflicts_with = "request")]
         review: bool,
         request: Vec<String>,
+    },
+    Remove {
+        project: String,
+        #[arg(short, long)]
+        yes: bool,
     },
     Ls,
     Doctor,
@@ -170,6 +176,11 @@ fn localized_command() -> clap::Command {
                 .mut_arg("fork", |a| a.help(t("cli.help.handoffFork")))
                 .mut_arg("review", |a| a.help(t("cli.help.handoffReview")))
                 .mut_arg("request", |a| a.help(t("cli.help.handoffRequest")))
+        })
+        .mut_subcommand("remove", |c| {
+            c.about(t("cli.help.remove"))
+                .mut_arg("project", |a| a.help(t("cli.help.removeProject")))
+                .mut_arg("yes", |a| a.help(t("cli.help.yes")))
         })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
@@ -309,6 +320,28 @@ fn run(cli: Cli) -> Result<()> {
                 engine.switch_writer_with(id, kind, &request)?;
                 println!("{}", tf("cli.writerSwitched", &[("id", &id), ("agent", &name)]));
             }
+            Ok(())
+        }
+        Some(Cmd::Remove { project, yes }) => {
+            let engine = Mutex::new(open_engine(paths)?);
+            let id = ProjectId(project);
+            let (name, count) = {
+                let engine = engine.lock().unwrap_or_else(|p| p.into_inner());
+                let Some(found) = engine.state().project(&id) else {
+                    bail!(Plain(tf("cli.noSuchProject", &[("id", &id)])));
+                };
+                (found.name.clone(), engine.state().tasks_of(&id).count())
+            };
+            // 有任务时要关掉它们，先说清楚，加上 --yes 才做。
+            if count > 0 && !yes {
+                bail!(Plain(tf("cli.removeNeedsYes", &[("project", &name), ("count", &count)])));
+            }
+            for closed in duolo_engine::ops::remove_project(&engine, &id)? {
+                if let Some(branch) = closed.saved_to {
+                    println!("  {}", tf("task.savedTo", &[("branch", &branch)]));
+                }
+            }
+            println!("{}", tf("cli.projectRemoved", &[("project", &name)]));
             Ok(())
         }
         Some(Cmd::Ls) => {

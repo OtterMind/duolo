@@ -558,5 +558,19 @@
   "account.remove": "Hesabı kaldır",
   "account.continue": "Önceki hesap kullanım sınırına ulaştı, bu yüzden başka bir hesaba geçtim. Kaldığın yerden devam et.",
   "error.accountNotFound": "Bu hesap artık yok. Hesap listesini yeniden açıp tekrar deneyin.",
-  "account.add": "Hesap ekle"
+  "account.add": "Hesap ekle",
+  "project.remove": "Duolo'dan kaldır…",
+  "project.removeTitle": "“{project}” Duolo'dan kaldırılsın mı?",
+  "project.removeBody": "Yalnızca listeden çıkar. {root} klasörü diskinizde olduğu gibi kalır.",
+  "project.removeBodyTasks": "Önce {count} görevi kapatılır: commit edilmemiş değişiklikler her görevin dalına commit edilir ve dallar korunur. Sonra listeden çıkar. {root} klasörü diskinizde olduğu gibi kalır.",
+  "project.removeAction": "Kaldır",
+  "project.removed": "“{project}” kaldırıldı. Klasörü hâlâ diskinizde.",
+  "project.removedSaved": "“{project}” kaldırıldı. {count} görevin değişiklikleri kendi dallarında saklandı.",
+  "command.removeProject": "{project} projesini Duolo'dan kaldır",
+  "error.projectHasTasks": "Bu projenin hâlâ görevleri var. Önce onları kapatın.",
+  "cli.help.remove": "Bir projeyi Duolo'dan kaldır; klasörü diskte kalır",
+  "cli.help.removeProject": "Proje kimliği (bkz. duolo ls)",
+  "cli.help.yes": "Projenin görevlerini de kapat (değişiklikler dallarında kalır)",
+  "cli.removeNeedsYes": "“{project}” projesinin {count} görevi var. Kaldırmak önce onları kapatır (commit edilmemiş değişiklikler dallarına commit edilir). Devam etmek için --yes ile yeniden çalıştırın.",
+  "cli.projectRemoved": "“{project}” Duolo'dan kaldırıldı. Klasörü hâlâ diskinizde."
 }

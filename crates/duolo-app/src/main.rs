@@ -202,6 +202,7 @@ fn main() {
             commands::rename_branch,
             commands::name_task,
             commands::close_task,
+            commands::remove_project,
             commands::start_agent,
             commands::start_reviewer,
             commands::switch_writer,

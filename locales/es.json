@@ -558,5 +558,19 @@
   "account.remove": "Quitar cuenta",
   "account.continue": "La cuenta anterior llegó a su límite de uso, así que cambié a otra cuenta. Continúa donde lo dejaste.",
   "error.accountNotFound": "Esta cuenta ya no existe. Vuelve a abrir la lista de cuentas e inténtalo de nuevo.",
-  "account.add": "Añadir cuenta"
+  "account.add": "Añadir cuenta",
+  "project.remove": "Quitar de Duolo…",
+  "project.removeTitle": "¿Quitar «{project}» de Duolo?",
+  "project.removeBody": "Solo sale de la lista. La carpeta {root} se queda en tu disco tal cual.",
+  "project.removeBodyTasks": "Primero se cierran sus {count} tareas: los cambios sin confirmar se confirman en la rama de cada tarea y las ramas se conservan. Luego sale de la lista. La carpeta {root} se queda en tu disco tal cual.",
+  "project.removeAction": "Quitar",
+  "project.removed": "Se quitó «{project}». Su carpeta sigue en tu disco.",
+  "project.removedSaved": "Se quitó «{project}». Los cambios de {count} tareas están guardados en sus ramas.",
+  "command.removeProject": "Quitar {project} de Duolo",
+  "error.projectHasTasks": "Este proyecto aún tiene tareas. Ciérralas primero.",
+  "cli.help.remove": "Quitar un proyecto de Duolo; su carpeta se queda en el disco",
+  "cli.help.removeProject": "ID del proyecto (ver duolo ls)",
+  "cli.help.yes": "Cerrar también las tareas del proyecto (los cambios quedan en sus ramas)",
+  "cli.removeNeedsYes": "«{project}» tiene {count} tareas. Al quitarlo se cierran primero (los cambios sin confirmar se confirman en sus ramas). Ejecuta de nuevo con --yes para continuar.",
+  "cli.projectRemoved": "Se quitó «{project}» de Duolo. Su carpeta sigue en tu disco."
 }

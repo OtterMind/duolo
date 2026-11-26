@@ -558,5 +558,19 @@
   "account.remove": "Supprimer le compte",
   "account.continue": "Le compte précédent a atteint sa limite d'utilisation, je suis donc passé à un autre compte. Reprends là où tu t'étais arrêté.",
   "error.accountNotFound": "Ce compte n'existe plus. Rouvrez la liste des comptes et réessayez.",
-  "account.add": "Ajouter un compte"
+  "account.add": "Ajouter un compte",
+  "project.remove": "Retirer de Duolo…",
+  "project.removeTitle": "Retirer « {project} » de Duolo ?",
+  "project.removeBody": "Il quitte seulement la liste. Le dossier {root} reste tel quel sur votre disque.",
+  "project.removeBodyTasks": "Ses {count} tâches sont d’abord fermées : les modifications non validées sont validées dans la branche de chaque tâche, et les branches sont conservées. Puis il quitte la liste. Le dossier {root} reste tel quel sur votre disque.",
+  "project.removeAction": "Retirer",
+  "project.removed": "« {project} » retiré. Son dossier est toujours sur votre disque.",
+  "project.removedSaved": "« {project} » retiré. Les modifications de {count} tâches sont enregistrées dans leurs branches.",
+  "command.removeProject": "Retirer {project} de Duolo",
+  "error.projectHasTasks": "Ce projet a encore des tâches. Fermez-les d’abord.",
+  "cli.help.remove": "Retirer un projet de Duolo ; son dossier reste sur le disque",
+  "cli.help.removeProject": "ID du projet (voir duolo ls)",
+  "cli.help.yes": "Fermer aussi les tâches du projet (les modifications restent dans leurs branches)",
+  "cli.removeNeedsYes": "« {project} » a {count} tâches. Le retirer les ferme d’abord (les modifications non validées sont validées dans leurs branches). Relancez avec --yes pour continuer.",
+  "cli.projectRemoved": "« {project} » retiré de Duolo. Son dossier est toujours sur votre disque."
 }

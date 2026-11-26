@@ -558,5 +558,19 @@
   "account.remove": "Rimuovi account",
   "account.continue": "L'account precedente ha raggiunto il limite di utilizzo, quindi sono passato a un altro account. Riprendi da dove avevi lasciato.",
   "error.accountNotFound": "Questo account non esiste più. Riapri l'elenco degli account e riprova.",
-  "account.add": "Aggiungi account"
+  "account.add": "Aggiungi account",
+  "project.remove": "Rimuovi da Duolo…",
+  "project.removeTitle": "Rimuovere «{project}» da Duolo?",
+  "project.removeBody": "Esce solo dall’elenco. La cartella {root} resta com’è sul disco.",
+  "project.removeBodyTasks": "Prima vengono chiuse le sue {count} attività: le modifiche non salvate vengono salvate nel branch di ciascuna attività e i branch restano. Poi esce dall’elenco. La cartella {root} resta com’è sul disco.",
+  "project.removeAction": "Rimuovi",
+  "project.removed": "«{project}» rimosso. La cartella è ancora sul disco.",
+  "project.removedSaved": "«{project}» rimosso. Le modifiche di {count} attività sono salvate nei loro branch.",
+  "command.removeProject": "Rimuovi {project} da Duolo",
+  "error.projectHasTasks": "Questo progetto ha ancora attività. Chiudile prima.",
+  "cli.help.remove": "Rimuovi un progetto da Duolo; la cartella resta sul disco",
+  "cli.help.removeProject": "ID del progetto (vedi duolo ls)",
+  "cli.help.yes": "Chiudi anche le attività del progetto (le modifiche restano nei loro branch)",
+  "cli.removeNeedsYes": "«{project}» ha {count} attività. Rimuoverlo le chiude prima (le modifiche non salvate vengono salvate nei loro branch). Esegui di nuovo con --yes per procedere.",
+  "cli.projectRemoved": "«{project}» rimosso da Duolo. La cartella è ancora sul disco."
 }

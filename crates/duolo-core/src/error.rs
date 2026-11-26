@@ -53,6 +53,8 @@ pub enum UserError {
     TaskClosing,
     #[error("project not found")]
     ProjectNotFound,
+    #[error("the project still has tasks")]
+    ProjectHasTasks,
     #[error("no agent named \"{kind}\" in config")]
     UnknownAgent { kind: String },
     #[error("{path} already exists")]
@@ -112,6 +114,7 @@ impl UserError {
             Self::TaskNotFound => "taskNotFound",
             Self::TaskClosing => "taskClosing",
             Self::ProjectNotFound => "projectNotFound",
+            Self::ProjectHasTasks => "projectHasTasks",
             Self::UnknownAgent { .. } => "unknownAgent",
             Self::PathExists { .. } => "pathExists",
             Self::InvalidCloneUrl { .. } => "invalidCloneUrl",
@@ -221,6 +224,7 @@ mod tests {
             UserError::TaskNotFound,
             UserError::TaskClosing,
             UserError::ProjectNotFound,
+            UserError::ProjectHasTasks,
             UserError::UnknownAgent { kind: "k".into() },
             UserError::PathExists { path: "/x".into() },
             UserError::InvalidCloneUrl { url: "u".into() },

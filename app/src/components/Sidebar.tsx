@@ -36,6 +36,8 @@ interface Props {
   panes: number[];
   /** 并排看这个项目的全部任务。 */
   onShowProject(project: string): void;
+  /** 从 Duolo 移除项目（会先确认）。 */
+  onRemoveProject(project: string): void;
   /** 把任务从并排的格子里拿掉（任务不关）。 */
   onClosePane(task: number): void;
   /** 打开任务，在它下方开一个终端。 */
@@ -75,6 +77,15 @@ export function Sidebar(props: Props) {
   const [width, startResize] = useResizableWidth();
   const [query, setQuery] = useState("");
   const [collapsed, toggleCollapsed] = useCollapsed();
+  /** 项目右键（或 ⋯）菜单：哪个项目、在哪里弹出。 */
+  const [projectMenu, setProjectMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const projectEntries = (project: { id: string; name: string; root: string; tasks: Task[] }): MenuEntry[] => [
+    { label: t("sidebar.newTaskIn", { project: project.name }), kbd: "⌘N", run: () => onNewTask(project.id) },
+    ...(project.tasks.length >= 2 ? [{ label: t("sidebar.showProject"), run: () => props.onShowProject(project.id) }] : []),
+    { label: t(isMac ? "task.reveal" : "task.openFolder"), run: () => void api.reveal(project.root) },
+    { sep: true },
+    { label: t("project.remove"), danger: true, run: () => props.onRemoveProject(project.id) },
+  ];
   const search = useRef<HTMLInputElement>(null);
   const projects = snap?.projects ?? [];
   const waiting = projects.flatMap((p) => p.tasks).filter((task) => writerOf(task)?.status === "needs_input").length;
@@ -152,7 +163,13 @@ export function Sidebar(props: Props) {
           const folded = !needle && collapsed.has(project.id);
           return (
             <section key={project.id} className="side-project">
-              <div className="side-project-head">
+              <div
+                className="side-project-head"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setProjectMenu({ id: project.id, x: e.clientX, y: e.clientY });
+                }}
+              >
                 {/* 项目是分组标题：文件夹图标（合上 / 打开就是收起 / 展开）加上比任务名醒目的名字。 */}
                 <button className="project-toggle" onClick={() => toggleCollapsed(project.id)} title={project.root}>
                   {folded ? <Folder {...ICON} className="project-icon" /> : <FolderOpen {...ICON} className="project-icon" />}
@@ -169,12 +186,25 @@ export function Sidebar(props: Props) {
                   </button>
                 )}
                 <button
+                  className="icon-btn project-grid"
+                  title={t("common.more")}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setProjectMenu({ id: project.id, x: r.left, y: r.bottom + 4 });
+                  }}
+                >
+                  <Ellipsis {...ICON} />
+                </button>
+                <button
                   className="icon-btn project-add"
                   title={t("sidebar.newTaskIn", { project: project.name })}
                   onClick={() => onNewTask(project.id)}
                 >
                   <Plus {...ICON} />
                 </button>
+                {projectMenu?.id === project.id && (
+                  <ContextMenu at={projectMenu} entries={projectEntries(project)} onDismiss={() => setProjectMenu(null)} />
+                )}
               </div>
               {!folded &&
                 tasks.map((task) => (

@@ -558,5 +558,19 @@
   "account.remove": "刪除帳號",
   "account.continue": "上一個帳號的額度用完了，已經換了一個帳號。請接著剛才的進度繼續。",
   "error.accountNotFound": "這個帳號已經不在了。重新打開帳號列表再試。",
-  "account.add": "新增帳號"
+  "account.add": "新增帳號",
+  "project.remove": "從 Duolo 移除…",
+  "project.removeTitle": "從 Duolo 移除「{project}」？",
+  "project.removeBody": "只是從列表裡移除，磁碟上的資料夾 {root} 原樣保留。",
+  "project.removeBodyTasks": "會先關閉它的 {count} 個任務：未提交的變更提交到各自的分支，分支保留。然後從列表裡移除，磁碟上的資料夾 {root} 原樣保留。",
+  "project.removeAction": "移除",
+  "project.removed": "已移除「{project}」，資料夾還在磁碟上。",
+  "project.removedSaved": "已移除「{project}」，{count} 個任務的變更保存在各自的分支上。",
+  "command.removeProject": "從 Duolo 移除 {project}",
+  "error.projectHasTasks": "這個專案還有任務，請先關掉它們。",
+  "cli.help.remove": "從 Duolo 移除專案，磁碟上的資料夾保留",
+  "cli.help.removeProject": "專案編號（見 duolo ls）",
+  "cli.help.yes": "同時關閉專案裡的任務（變更保存在各自的分支上）",
+  "cli.removeNeedsYes": "「{project}」還有 {count} 個任務，移除會先關閉它們（未提交的變更提交到各自的分支）。確認的話加上 --yes 再執行一次。",
+  "cli.projectRemoved": "已從 Duolo 移除「{project}」，資料夾還在磁碟上。"
 }

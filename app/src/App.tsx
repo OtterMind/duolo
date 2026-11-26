@@ -469,6 +469,31 @@ export function App() {
     [refresh, openTask, fail, flash, t],
   );
 
+  /** 从 Duolo 移除项目（确认后）：它的任务先关掉，磁盘上的文件夹不动。 */
+  const requestRemoveProject = useCallback(
+    (projectId: string) => {
+      const project = snapRef.current?.projects.find((p) => p.id === projectId);
+      if (!project) return;
+      const count = project.tasks.length;
+      setConfirm({
+        title: t("project.removeTitle", { project: project.name }),
+        body: count > 0 ? t("project.removeBodyTasks", { count, root: project.root }) : t("project.removeBody", { root: project.root }),
+        action: t("project.removeAction"),
+        danger: true,
+        run: async () => {
+          const closed = await api.removeProject(projectId).finally(() => void refresh());
+          project.tasks.forEach((task) => {
+            disposeTask(task.id);
+            firstPrompt.forget(task.id);
+          });
+          const saved = closed.filter((c) => c.savedTo).length;
+          flash(saved > 0 ? t("project.removedSaved", { project: project.name, count: saved }) : t("project.removed", { project: project.name }));
+        },
+      });
+    },
+    [refresh, flash, t],
+  );
+
   const requestQuit = useCallback(() => {
     // 告诉后端界面还在，不用弹系统的"没有响应"。
     void api.quitSeen();
@@ -576,6 +601,11 @@ export function App() {
             run: run("split"),
           },
           {
+            id: "remove-project",
+            label: t("command.removeProject", { project: current.project.name }),
+            run: () => requestRemoveProject(current.project.id),
+          },
+          {
             id: "show-project",
             label: t("command.showProject", { project: current.project.name }),
             run: () => showProject(current.project.id),
@@ -662,6 +692,7 @@ export function App() {
         panes={split ? grid : []}
         onOpenBeside={(task) => addPane(task)}
         onShowProject={showProject}
+        onRemoveProject={requestRemoveProject}
         onClosePane={closePane}
         onOpenShell={(task) => {
           openTask(task);

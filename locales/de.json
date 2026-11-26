@@ -558,5 +558,19 @@
   "account.remove": "Konto entfernen",
   "account.continue": "Das vorherige Konto hat sein Nutzungslimit erreicht, daher habe ich zu einem anderen Konto gewechselt. Bitte mach dort weiter, wo du aufgehört hast.",
   "error.accountNotFound": "Dieses Konto gibt es nicht mehr. Öffne die Kontoliste erneut und versuche es noch einmal.",
-  "account.add": "Konto hinzufügen"
+  "account.add": "Konto hinzufügen",
+  "project.remove": "Aus Duolo entfernen…",
+  "project.removeTitle": "„{project}“ aus Duolo entfernen?",
+  "project.removeBody": "Es verschwindet nur aus der Liste. Der Ordner {root} bleibt unverändert auf deiner Festplatte.",
+  "project.removeBodyTasks": "Zuerst werden die {count} Aufgaben geschlossen: Nicht committete Änderungen werden in den Branch der jeweiligen Aufgabe committet, die Branches bleiben. Dann verschwindet es aus der Liste. Der Ordner {root} bleibt unverändert auf deiner Festplatte.",
+  "project.removeAction": "Entfernen",
+  "project.removed": "„{project}“ entfernt. Der Ordner ist noch auf deiner Festplatte.",
+  "project.removedSaved": "„{project}“ entfernt. Änderungen aus {count} Aufgaben sind in ihren Branches gespeichert.",
+  "command.removeProject": "{project} aus Duolo entfernen",
+  "error.projectHasTasks": "Dieses Projekt hat noch Aufgaben. Schließe sie zuerst.",
+  "cli.help.remove": "Ein Projekt aus Duolo entfernen; der Ordner bleibt auf der Festplatte",
+  "cli.help.removeProject": "Projekt-ID (siehe duolo ls)",
+  "cli.help.yes": "Auch die Aufgaben des Projekts schließen (Änderungen bleiben in ihren Branches)",
+  "cli.removeNeedsYes": "„{project}“ hat {count} Aufgaben. Beim Entfernen werden sie zuerst geschlossen (nicht committete Änderungen werden in ihre Branches committet). Führe es mit --yes erneut aus, um fortzufahren.",
+  "cli.projectRemoved": "„{project}“ aus Duolo entfernt. Der Ordner ist noch auf deiner Festplatte."
 }

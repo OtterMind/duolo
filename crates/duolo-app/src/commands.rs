@@ -325,6 +325,17 @@ pub async fn close_task(app: AppHandle, task: u64) -> Res<ClosedView> {
     Ok(ClosedView { saved_to: closed.saved_to, left_at: closed.left_at.map(|p| p.display().to_string()) })
 }
 
+/// 移除项目：先关闭它的任务（没提交的改动提交到各自的分支），再从列表里去掉，磁盘上的文件夹不动。
+/// 返回关掉的任务各自把改动存到了哪个分支。
+#[tauri::command]
+pub async fn remove_project(app: AppHandle, project: String) -> Res<Vec<ClosedView>> {
+    let closed = blocking(app, move |state| ops::remove_project(&state.engine, &ProjectId(project))).await?;
+    Ok(closed
+        .into_iter()
+        .map(|c| ClosedView { saved_to: c.saved_to, left_at: c.left_at.map(|p| p.display().to_string()) })
+        .collect())
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClosedView {

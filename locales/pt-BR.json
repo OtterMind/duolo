@@ -558,5 +558,19 @@
   "account.remove": "Remover conta",
   "account.continue": "A conta anterior atingiu o limite de uso, então troquei para outra conta. Continue de onde parou.",
   "error.accountNotFound": "Esta conta não existe mais. Abra a lista de contas de novo e tente outra vez.",
-  "account.add": "Adicionar conta"
+  "account.add": "Adicionar conta",
+  "project.remove": "Remover do Duolo…",
+  "project.removeTitle": "Remover “{project}” do Duolo?",
+  "project.removeBody": "Ele só sai da lista. A pasta {root} continua no seu disco como está.",
+  "project.removeBodyTasks": "Primeiro as {count} tarefas são fechadas: alterações não commitadas são commitadas no branch de cada tarefa, e os branches são mantidos. Depois ele sai da lista. A pasta {root} continua no seu disco como está.",
+  "project.removeAction": "Remover",
+  "project.removed": "“{project}” removido. A pasta continua no seu disco.",
+  "project.removedSaved": "“{project}” removido. As alterações de {count} tarefas estão salvas nos seus branches.",
+  "command.removeProject": "Remover {project} do Duolo",
+  "error.projectHasTasks": "Este projeto ainda tem tarefas. Feche-as primeiro.",
+  "cli.help.remove": "Remover um projeto do Duolo; a pasta continua no disco",
+  "cli.help.removeProject": "ID do projeto (veja duolo ls)",
+  "cli.help.yes": "Fechar também as tarefas do projeto (as alterações ficam nos seus branches)",
+  "cli.removeNeedsYes": "“{project}” tem {count} tarefas. Removê-lo fecha-as primeiro (alterações não commitadas vão para os seus branches). Rode de novo com --yes para continuar.",
+  "cli.projectRemoved": "“{project}” removido do Duolo. A pasta continua no seu disco."
 }

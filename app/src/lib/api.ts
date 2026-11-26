@@ -296,6 +296,8 @@ export const api = {
   cloneProject: (url: string) => invoke<string>("clone_project", { url }),
   nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt, branch: null }),
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
+  /** 移除项目：先关闭它的任务（改动存到各自的分支），再从列表里去掉；磁盘上的文件夹不动。 */
+  removeProject: (project: string) => invoke<Closed[]>("remove_project", { project }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
   switchWriter: (task: number, kind: string, request?: string) =>

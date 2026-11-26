@@ -122,6 +122,18 @@ export interface Check {
 /** 一键安装、升级 Agent，或者登录它的账号。 */
 export type SetupStep = "install" | "update" | "login";
 
+/** 一种 Agent 的一个账号。 */
+export interface AgentAccount {
+  /** 账号的文件夹，默认账号是空字符串。 */
+  id: string;
+  /** 从哪里来：`default`、`duolo`，或者别的软件的名字（例如 Orca）。 */
+  source: string;
+  /** 登录的邮箱，查不出来时为空。 */
+  email: string;
+  signedIn: boolean | null;
+  chosen: boolean;
+}
+
 /** 一种 Agent 的名字和图标。 */
 export interface AgentPlugin {
   id: string;
@@ -134,6 +146,8 @@ export interface AgentPlugin {
   reviews: boolean;
   /** 能不能在聊天模式下运行。 */
   chat: boolean;
+  /** 能不能用多个账号。 */
+  accounts: boolean;
 }
 
 /** 关闭任务的结果。 */
@@ -315,14 +329,38 @@ export const api = {
     return invoke<void>("attach", { ...r, onData: channel });
   },
 
-  /** 在单独的终端里安装、升级 Agent 或登录账号，返回这是第几次；结束时发带着这个编号的 `setup-exit` 事件。 */
-  setupStart(agent: string, step: SetupStep, rows: number, cols: number, onData: (bytes: Uint8Array) => void) {
+  /**
+   * 在单独的终端里安装、升级 Agent 或登录账号，返回这是第几次（结束时发带着这个编号的 `setup-exit` 事件）。
+   * 登录时 `account` 是要登录的账号，`new` 是新添加一个，返回里的 `account` 是新账号的文件夹。
+   */
+  setupStart(
+    agent: string,
+    step: SetupStep,
+    account: string | undefined,
+    rows: number,
+    cols: number,
+    onData: (bytes: Uint8Array) => void,
+  ) {
     const channel = new Channel<ArrayBuffer | number[]>();
     channel.onmessage = (data) => onData(data instanceof ArrayBuffer ? new Uint8Array(data) : Uint8Array.from(data));
-    return invoke<number>("setup_start", { agent, step, rows, cols, onData: channel });
+    return invoke<{ run: number; account: string | null }>("setup_start", {
+      agent,
+      step,
+      account: account ?? null,
+      rows,
+      cols,
+      onData: channel,
+    });
   },
-  /** 现在登录了没有，不知道时为 null。 */
-  setupSignedIn: (agent: string) => invoke<boolean | null>("setup_signed_in", { agent }),
+  /** 现在登录了没有（`account` 没有时是默认账号），不知道时为 null。 */
+  setupSignedIn: (agent: string, account?: string) =>
+    invoke<boolean | null>("setup_signed_in", { agent, account: account ?? null }),
+  /** 一种 Agent 的账号和登录状态（要查一会儿）。 */
+  agentAccounts: (agent: string) => invoke<AgentAccount[]>("agent_accounts", { agent }),
+  chooseAccount: (agent: string, id: string) => invoke<void>("choose_account", { agent, id }),
+  removeAccount: (agent: string, id: string) => invoke<void>("remove_account", { agent, id }),
+  autoSwitchAccount: () => invoke<boolean>("auto_switch_account"),
+  setAutoSwitchAccount: (on: boolean) => invoke<void>("set_auto_switch_account", { on }),
   setupWrite: (data: string) => invoke<void>("setup_write", { data }),
   setupResize: (rows: number, cols: number) => invoke<void>("setup_resize", { rows, cols }),
   setupStop: () => invoke<void>("setup_stop"),

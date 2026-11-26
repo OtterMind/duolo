@@ -523,5 +523,16 @@
   "shell.reopen": "다시 열기",
   "newTask.shell": "터미널(AI 없음): 이 작업 폴더에서 명령을 실행하거나 셸만 엽니다",
   "newTask.shellPlaceholder": "터미널에서 실행할 명령(예: pnpm dev). 비워 두면 셸만 엽니다",
-  "terminal.openLink": "{key}를 누른 채 클릭하면 브라우저에서 엽니다"
+  "terminal.openLink": "{key}를 누른 채 클릭하면 브라우저에서 엽니다",
+  "account.title": "계정",
+  "account.autoSwitch": "사용 한도에 도달하면 계정 전환",
+  "account.default": "기본",
+  "account.unnamed": "계정 {n}",
+  "account.addTitle": "{agent} 계정 추가",
+  "account.addHint": "다른 {agent} 계정으로 로그인합니다. 한 계정이 사용 한도에 도달하면 Duolo가 다음 계정으로 바꿔 대화를 이어갑니다.",
+  "account.added": "{agent} 계정을 추가했습니다",
+  "account.addedBody": "계정이 사용 한도에 도달하면 Duolo가 다음 계정으로 바꿔 대화를 이어갑니다.",
+  "account.remove": "계정 삭제",
+  "account.continue": "이전 계정이 사용 한도에 도달해 다른 계정으로 바꿨습니다. 하던 곳부터 이어서 진행해 주세요.",
+  "error.accountNotFound": "이 계정은 더 이상 없습니다. 계정 목록을 다시 열고 시도해 주세요."
 }

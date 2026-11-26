@@ -21,7 +21,7 @@ import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneGrid } from "./components/PaneGrid";
 import { PaneDragGhost } from "./components/PaneDragGhost";
 import { SetupDialog } from "./components/SetupDialog";
-import { onSetupRequest } from "./lib/setup";
+import { onSetupRequest, type SetupRequest } from "./lib/setup";
 import { loadLayout, MAX_PANES, saveLayout, type PaneSizes } from "./lib/layout";
 import { setDropHandler, type DropZone } from "./lib/paneDrag";
 import { requestShell } from "./lib/shellPanel";
@@ -325,10 +325,10 @@ export function App() {
   /** 重新检查环境，例如用户刚装好 Claude 或 Codex。 */
   const refreshEnv = useCallback(() => void api.environment().then(setEnv, () => {}), []);
 
-  /** 正在一键安装或登录的 Agent。 */
-  const [setupAgent, setSetupAgent] = useState<string | null>(null);
-  useEffect(() => onSetupRequest(setSetupAgent), []);
-  const setupOption = setupAgent ? agentOptions(env).find((a) => a.id === setupAgent) : undefined;
+  /** 正在一键安装或登录的 Agent（和账号）。 */
+  const [setup, setSetup] = useState<SetupRequest | null>(null);
+  useEffect(() => onSetupRequest(setSetup), []);
+  const setupOption = setup ? agentOptions(env).find((a) => a.id === setup.agent) : undefined;
 
   // 打开应用直接进入命令行：有任务就打开最近的那个，没有就新建一个。
   const booted = useRef(false);
@@ -727,9 +727,10 @@ export function App() {
       {setupOption && (
         <SetupDialog
           agent={setupOption}
+          account={setup?.account}
           onEnv={setEnv}
           onClose={() => {
-            setSetupAgent(null);
+            setSetup(null);
             refreshEnv();
           }}
         />

@@ -583,6 +583,53 @@ body.is-resizing * {
   color: var(--text);
   font: 12px var(--sans);
 }
+.settings {
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+.account-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  font-size: 12px;
+}
+.account-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--dim);
+  text-align: left;
+}
+.account-pick:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.account-row.is-chosen .account-pick {
+  color: var(--text);
+}
+.account-check {
+  flex: none;
+  width: 12px;
+  display: inline-flex;
+}
+.account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .settings-note {
   display: flex;
   align-items: flex-start;

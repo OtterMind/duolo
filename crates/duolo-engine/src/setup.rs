@@ -5,7 +5,7 @@
 //! 做法参考 T3 Code：在终端里运行，结束后界面重新检查环境。
 
 use anyhow::Result;
-use duolo_agent::Registry;
+use duolo_agent::{Account, Registry};
 use duolo_core::{process, AgentKind, UserError};
 use duolo_pty::{OutputSink, Rules, Session, SessionSpec, Size};
 
@@ -23,6 +23,7 @@ pub fn start_setup(
     agents: &Registry,
     kind: &AgentKind,
     step: SetupStep,
+    account: Option<&Account>,
     size: Size,
     sink: OutputSink,
 ) -> Result<Session> {
@@ -43,6 +44,8 @@ pub fn start_setup(
             (plugin.command().to_string(), args.to_vec(), plugin.start_env())
         }
     };
+    // 登录某个账号：在它的文件夹里登录（见 `accounts.rs`）。
+    let env = env.into_iter().chain(account.map(|a| plugin.account_vars(a)).unwrap_or_default()).collect();
     let session = Session::spawn(SessionSpec {
         program,
         args,
@@ -88,6 +91,8 @@ mod tests {
         assert_eq!(args, ["-lc", "echo hi"]);
         // 没有这个插件时什么也不运行。
         let size = Size::new(10, 40);
-        assert!(start_setup(&agents, &AgentKind("gone".into()), SetupStep::Login, size, Box::new(|_| {})).is_err());
+        assert!(
+            start_setup(&agents, &AgentKind("gone".into()), SetupStep::Login, None, size, Box::new(|_| {})).is_err()
+        );
     }
 }

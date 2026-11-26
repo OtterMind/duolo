@@ -29,17 +29,27 @@ const TITLE = {
  */
 export function SetupDialog({
   agent,
+  account,
   onEnv,
-  onClose,
+  onClose: close,
 }: {
   agent: AgentOption;
+  /** 只登录这个账号（`new` 是新添加一个，见 `api.setupStart`）。 */
+  account?: string;
   /** 每步结束后重新检查的环境，交给 App 更新。 */
   onEnv(env: Check[]): void;
   onClose(): void;
 }) {
   const t = useT();
   /** 第几次运行哪一步：换一步、重试都是新的一次，开一个新终端。 */
-  const [run, setRun] = useState<{ step: SetupStep; n: number }>({ step: firstSetupStep(agent), n: 0 });
+  const [run, setRun] = useState<{ step: SetupStep; n: number }>({
+    step: account === undefined ? firstSetupStep(agent) : "login",
+    n: 0,
+  });
+  /** 登录的账号：新添加的开始后换成它的文件夹，重试时还登录这一个。 */
+  const target = useRef(account);
+  /** 这次新添加的账号：没登录好就关掉时删掉，不留下空的账号。 */
+  const added = useRef<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   const host = useRef<HTMLDivElement>(null);
   const done = useRef<HTMLButtonElement>(null);
@@ -80,14 +90,17 @@ export function SetupDialog({
       if (e.payload.run === runId) finish(e.payload.success);
     });
     void exited
-      .then(() => api.setupStart(agent.id, step, term.rows, term.cols, (bytes) => term.write(bytes)))
-      .then((id) => (runId = id))
+      .then(() => api.setupStart(agent.id, step, target.current, term.rows, term.cols, (bytes) => term.write(bytes)))
+      .then((started) => {
+        runId = started.run;
+        if (started.account) target.current = added.current = started.account;
+      })
       .catch((err: unknown) => current && setPhase({ kind: "failed", why: String(err) }));
     // 登录：浏览器授权完，有的 CLI 不会自己退出（Windows 上的 Codex，Orca 也是这么处理的）。查到登录了就算完成。
     const poll =
       step === "login" && agent.canSignIn
         ? window.setInterval(() => {
-            void api.setupSignedIn(agent.id).then((ok) => {
+            void api.setupSignedIn(agent.id, target.current).then((ok) => {
               if (ok !== true || !current || finished) return;
               void api.setupStop().catch(() => {});
               finish(true);
@@ -111,6 +124,15 @@ export function SetupDialog({
     if (env) onEnv(env);
     const fresh = env && agentOptions(env).find((a) => a.id === agent.id);
     if (!success) return setPhase({ kind: "failed", why: t("setup.failed") });
+    // 登录某个账号：只看这个账号登录好了没有。
+    if (account !== undefined) {
+      const ok = await api.setupSignedIn(agent.id, target.current).catch(() => null);
+      if (ok === false) return setPhase({ kind: "failed", why: t("setup.failed") });
+      added.current = null;
+      setPhase({ kind: "done" });
+      notifySetupReady(agent.id);
+      return;
+    }
     if (!fresh?.installed) {
       const why = fresh?.tooOld ? t("newTask.tooOld", fresh.tooOld) : t("setup.notFound", { agent: agent.name });
       return setPhase({ kind: "failed", why });
@@ -129,12 +151,23 @@ export function SetupDialog({
     if (phase.kind === "done") done.current?.focus();
   }, [phase.kind]);
 
-  const title = phase.kind === "done" ? t("setup.ready", { agent: agent.name }) : t(TITLE[run.step], { agent: agent.name });
-  const hint = {
-    install: t("setup.installHint", { command: agent.install }),
-    update: t("setup.updateHint", { agent: agent.name }),
-    login: t("setup.signInHint", { agent: agent.name }),
-  }[run.step];
+  const onClose = () => {
+    if (added.current) void api.removeAccount(agent.id, added.current).catch(() => {});
+    close();
+  };
+
+  const adding = account === "new";
+  const title =
+    phase.kind === "done"
+      ? t(adding ? "account.added" : "setup.ready", { agent: agent.name })
+      : t(adding ? "account.addTitle" : TITLE[run.step], { agent: agent.name });
+  const hint = adding
+    ? t("account.addHint", { agent: agent.name })
+    : {
+        install: t("setup.installHint", { command: agent.install }),
+        update: t("setup.updateHint", { agent: agent.name }),
+        login: t("setup.signInHint", { agent: agent.name }),
+      }[run.step];
 
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && phase.kind !== "running" && onClose()}>
@@ -148,7 +181,7 @@ export function SetupDialog({
         {phase.kind === "done" && (
           <p className="setup-result">
             <CircleCheck size={15} strokeWidth={1.75} className="ok" />
-            {t("setup.readyBody", { agent: agent.name })}
+            {t(account === undefined ? "setup.readyBody" : "account.addedBody", { agent: agent.name })}
           </p>
         )}
         {phase.kind === "failed" && (

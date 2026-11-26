@@ -74,6 +74,16 @@ pub struct AccountSpec {
     pub login_args: Vec<String>,
     /// 用同一个账号的桌面客户端。
     pub apps: Vec<AppSpec>,
+    /// 多个账号：选账号的环境变量，指向账号的文件夹（例如 `CLAUDE_CONFIG_DIR`）。没写时只有默认账号。
+    pub home_env: Option<String>,
+    /// 不设 `home_env` 时它用的文件夹（`~` 是家目录），也就是默认账号的。
+    pub home: Option<String>,
+    /// 新账号的文件夹里链接到默认文件夹的（对话记录等）：换了账号，以前的对话还在，能接着做。
+    pub share: Vec<String>,
+    /// 别的软件里登录好的账号文件夹，路径里可以有一段 `*`（每个账号一个）。`name` 是软件名。
+    pub import: Vec<AppSpec>,
+    /// 额度用完时它报的错误类型（钩子、聊天协议里的），遇到时可以换个账号接着做。
+    pub limit_errors: Vec<String>,
 }
 
 /// 一个桌面客户端：名字和各系统上可能装在哪里。路径里 `~` 是家目录，`{变量名}` 换成环境变量。
@@ -400,6 +410,11 @@ impl Manifest {
         ensure!(!self.command.trim().is_empty(), "command is empty");
         if let Some(account) = &self.account {
             ensure!(account.apps.iter().all(|a| !a.name.trim().is_empty()), "account.apps: name is empty");
+            ensure!(account.import.iter().all(|a| !a.name.trim().is_empty()), "account.import: name is empty");
+            ensure!(
+                account.home_env.is_some() == account.home.is_some(),
+                "account.home_env and account.home go together"
+            );
         }
         if self.start.prompt == PromptVia::Flag {
             ensure!(!self.start.prompt_flag.is_empty(), "prompt = \"flag\" needs prompt_flag");

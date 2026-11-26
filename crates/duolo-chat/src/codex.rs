@@ -29,6 +29,14 @@ impl Driver for Codex {
                             Some("failed") => Err(turn["error"]["message"].as_str().unwrap_or("failed").to_string()),
                             _ => Ok(()),
                         };
+                        // 错误类型：`"usageLimitExceeded"`，或者带详情的 `{"usageLimitExceeded": {…}}`。
+                        let info = &turn["error"]["codexErrorInfo"];
+                        let kind = info
+                            .as_str()
+                            .or_else(|| info.as_object().and_then(|o| o.keys().next()).map(String::as_str));
+                        if let Some(kind) = kind {
+                            link.failed(kind);
+                        }
                         link.end_turn(result);
                     }
                     _ => link.conversation(|c| notified(c, &method, &params)),

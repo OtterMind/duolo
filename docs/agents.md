@@ -40,6 +40,14 @@ login_args = ["auth", "login"]   # 登录：在终端窗口里运行，带着 [s
 apps = [                   # 装了这些客户端，说明用户有这个账号：没装 CLI 时提示一键装上、用同一个账号登录
   { name = "Toy", macos = ["/Applications/Toy.app", "~/Applications/Toy.app"], windows = ["{LOCALAPPDATA}/Toy/toy.exe"] },
 ]                          # 路径里 ~ 是家目录，{变量名} 换成环境变量
+# 多个账号（设置里的"账号"）：每个账号一个文件夹，启动时用 home_env 指过去；不写时只有默认账号
+home_env = "TOY_HOME"      # 选账号的环境变量
+home = "~/.toy"            # 不设 home_env 时它用的文件夹（默认账号）
+share = ["sessions"]       # 新账号的文件夹里链接到默认文件夹的：对话记录共用，换了账号能接着做
+import = [                 # 别的软件里登录好的账号文件夹，一段 * 是每个账号一个；直接用，不复制令牌
+  { name = "Other", macos = ["~/Library/Application Support/other/toy-accounts/*/home"] },
+]
+limit_errors = ["rate_limit"]  # 额度用完时它报的错误类型（钩子、聊天协议里的）：自动换下一个账号，接着原来的会话继续
 
 [start]                    # 在终端里启动
 args = []                  # 每次都带上；config.toml 的 args 会换掉它们
@@ -92,6 +100,7 @@ home_env = "TOY_HOME"      # 设置了这个环境变量时用它
 format = "claude"          # 用哪段代码拼设置、读事件，见 crates/duolo-agent/src/hooks.rs
 args = ["--settings", "{settings}"]   # 怎么把设置文件交给它
 events = { SessionStart = "1.0.62" }  # 要的事件和最早支持它的版本；更旧、读不出版本时不装
+                                      # StopFailure 带着错误类型，额度用完时换账号要用（见 [account].limit_errors）
 
 [trust]                    # 它把"信任这个文件夹"记在哪里，Duolo 启动它之前替用户记下
 format = "claude"          # 用哪段代码写，见 crates/duolo-agent/src/trust.rs

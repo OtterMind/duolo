@@ -205,6 +205,8 @@ pub struct Engine {
     pane: Size,
     /// 每个 Agent 终端自己的尺寸：分屏时两格宽度不同，不能共用一个。没有时用 `pane`。
     sizes: HashMap<AgentKey, Size>,
+    /// 多个账号，见 `accounts.rs`。
+    pub(crate) accounts: crate::accounts::Accounts,
     on_output: Option<OutputHook>,
     diffs: Diffs,
     /// 正在关闭的任务：不再启动它的 Agent。
@@ -262,7 +264,7 @@ impl Engine {
         remove_leftovers(&paths.worktrees());
         crate::review::remove_leftovers(&paths.reviews());
         let settings = Settings::load(&paths.settings_file()).unwrap_or_default();
-        let last_reviewer = settings.reviewer.map(AgentKind);
+        let last_reviewer = settings.reviewer.clone().map(AgentKind);
         let last_surface = settings.surface;
         Ok(Self {
             paths,
@@ -286,6 +288,7 @@ impl Engine {
             last_surface,
             pane: Size::new(24, 80),
             sizes: HashMap::new(),
+            accounts: crate::accounts::Accounts::new(&settings),
             on_output: None,
             diffs: Diffs::default(),
             closing: HashSet::new(),
@@ -671,6 +674,12 @@ impl Engine {
             for plugin in self.agents.iter() {
                 let _ = plugin.forget_trust(&self.live.home, &task.worktree);
             }
+            // 用别的账号运行过的，信任记在那个账号的文件夹里。
+            for agent in task.agents.iter().chain(&task.retired) {
+                if let Ok(plugin) = self.agents.get(&agent.kind) {
+                    let _ = plugin.forget_trust(&self.home_of(task.key(agent.id)), &task.worktree);
+                }
+            }
             for agent in task.agents.iter().chain(&task.retired) {
                 let dir = self.hook_dir(task.key(agent.id));
                 let _ = std::fs::remove_dir_all(&dir);
@@ -893,7 +902,7 @@ impl Engine {
     }
 
     /// 启动进程。`fresh` 为真时不恢复会话，重新带上需求。
-    fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
+    pub(crate) fn spawn(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
         self.check_open(key.task)?;
         if self.runs_in_chat(key) {
             return self.spawn_chat(key, fresh);
@@ -910,6 +919,7 @@ impl Engine {
         let can_assign =
             self.plugin_of(key)?.assigns_session() && !kind.is_some_and(|k| self.no_session_ids.contains(&k));
         let assigned = (!resumed && can_assign).then(|| uuid::Uuid::new_v4().to_string());
+        self.use_account(key);
         let (spec, paste_later) = self.session_spec(key, fresh, assigned.as_deref())?;
         self.trust_folder(key);
         let session = Session::spawn(spec)?;
@@ -1116,6 +1126,7 @@ impl Engine {
                 .into_iter()
                 .chain(hooks.map(|_| (HOOK_DIR_ENV.to_string(), self.hook_dir(key).display().to_string())))
                 .chain(launch.env)
+                .chain(self.account_vars(key))
                 .collect(),
             env_remove: self.agents.env_remove(),
             size: self.sizes.get(&key).copied().unwrap_or(self.pane),
@@ -1131,7 +1142,7 @@ impl Engine {
         let (Some(task), Ok(plugin)) = (self.state.task(key.task), self.plugin_of(key)) else { return };
         let project = self.state.project(&task.project).map(|p| p.root.clone());
         let Some(repo) = task.repo.clone().or(project) else { return };
-        let _ = plugin.trust(&self.live.home, &task.worktree, &repo);
+        let _ = plugin.trust(&self.home_of(key), &task.worktree, &repo);
     }
 
     /// 任务里某个 Agent 的插件。

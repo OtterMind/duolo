@@ -118,6 +118,8 @@ pub enum Update {
     /// 接回会话时它重放的以前的对话（之前可能已经记过，由调用方去重）。
     History(Vec<Entry>),
     Entry(Entry),
+    /// 这一轮因为出错停了：协议里的错误类型（例如额度用完了）。
+    Failed(String),
 }
 
 /// 现在在做什么。
@@ -533,6 +535,11 @@ impl Link {
 
     fn session(&self) -> Option<String> {
         self.inner().session.clone()
+    }
+
+    /// 协议报的错误类型。
+    fn failed(&self, error: &str) {
+        self.inner().updates.push(Update::Failed(error.to_string()));
     }
 
     /// 这次用的会话编号；变了才报。

@@ -24,6 +24,15 @@ apps = [
   { name = "ChatGPT", macos = ["/Applications/ChatGPT.app", "~/Applications/ChatGPT.app"] },
   { name = "Codex", macos = ["/Applications/Codex.app", "~/Applications/Codex.app"] },
 ]
+# 多个账号：每个账号一个 CODEX_HOME。对话记录、配置链接到 ~/.codex，换了账号能接着做。
+home_env = "CODEX_HOME"
+home = "~/.codex"
+share = ["sessions", "archived_sessions", "history.jsonl", "config.toml", "AGENTS.md", "prompts", "skills", "rules"]
+import = [
+  { name = "Orca", macos = ["~/Library/Application Support/orca/codex-accounts/*/home"], linux = ["~/.config/orca/codex-accounts/*/home"], windows = ["{APPDATA}/orca/codex-accounts/*/home"] },
+]
+# 聊天模式（app-server）里一轮失败时的 codexErrorInfo。终端里没有钩子报这个，只能手动换。
+limit_errors = ["usageLimitExceeded"]
 
 [start]
 # 启动时的"有新版本"对话框：在那里按回车会选"现在升级"，装完就退出。

@@ -523,5 +523,16 @@
   "shell.reopen": "Riapri",
   "newTask.shell": "Terminale, senza IA: esegui un comando nella cartella di questa attività o apri solo una shell",
   "newTask.shellPlaceholder": "Comando da eseguire nel terminale, es. pnpm dev (lascia vuoto per una shell semplice)",
-  "terminal.openLink": "Tieni premuto {key} e fai clic per aprire nel browser"
+  "terminal.openLink": "Tieni premuto {key} e fai clic per aprire nel browser",
+  "account.title": "Account",
+  "account.autoSwitch": "Cambia account quando l'utilizzo è esaurito",
+  "account.default": "Predefinito",
+  "account.unnamed": "Account {n}",
+  "account.addTitle": "Aggiungi un account {agent}",
+  "account.addHint": "Accedi con un altro account {agent}. Quando un account raggiunge il limite di utilizzo, Duolo passa al successivo e continua la conversazione.",
+  "account.added": "Account {agent} aggiunto",
+  "account.addedBody": "Quando un account raggiunge il limite di utilizzo, Duolo passa al successivo e continua la conversazione.",
+  "account.remove": "Rimuovi account",
+  "account.continue": "L'account precedente ha raggiunto il limite di utilizzo, quindi sono passato a un altro account. Riprendi da dove avevi lasciato.",
+  "error.accountNotFound": "Questo account non esiste più. Riapri l'elenco degli account e riprova."
 }

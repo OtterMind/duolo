@@ -523,5 +523,16 @@
   "shell.reopen": "重新打开",
   "newTask.shell": "终端，不用 AI：在这个任务的文件夹里运行一条命令，或者只开一个 shell",
   "newTask.shellPlaceholder": "要在终端里运行的命令，例如 pnpm dev（不填就只开一个 shell）",
-  "terminal.openLink": "按住 {key} 点击，在浏览器中打开"
+  "terminal.openLink": "按住 {key} 点击，在浏览器中打开",
+  "account.title": "账号",
+  "account.autoSwitch": "额度用完时自动换账号",
+  "account.default": "默认",
+  "account.unnamed": "账号 {n}",
+  "account.addTitle": "添加 {agent} 账号",
+  "account.addHint": "登录另一个 {agent} 账号。一个账号的额度用完时，Duolo 换到下一个账号，接着原来的对话继续做。",
+  "account.added": "已添加 {agent} 账号",
+  "account.addedBody": "一个账号的额度用完时，Duolo 会换到下一个账号，接着原来的对话继续做。",
+  "account.remove": "删除账号",
+  "account.continue": "上一个账号的额度用完了，已经换了一个账号。请接着刚才的进度继续。",
+  "error.accountNotFound": "这个账号已经不在了。重新打开账号列表再试。"
 }

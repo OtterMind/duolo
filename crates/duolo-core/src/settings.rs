@@ -23,11 +23,22 @@ pub struct Settings {
     pub reviewer: Option<String>,
     /// 上次选的运行方式（`terminal` / `chat`），新任务的 Agent 支持的话照着用。
     pub surface: Option<crate::Surface>,
+    /// 每种 Agent（插件 id）用哪个账号：账号文件夹的路径，没有记录时用默认账号（不设插件的 `[account].home_env`）。
+    pub accounts: std::collections::BTreeMap<String, String>,
+    /// 一个账号的额度用完时自动换下一个账号接着做；没有设置过时开着。
+    pub auto_switch_account: Option<bool>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: LANGUAGE_AUTO.into(), voice_organize: None, reviewer: None, surface: None }
+        Self {
+            language: LANGUAGE_AUTO.into(),
+            voice_organize: None,
+            reviewer: None,
+            surface: None,
+            accounts: Default::default(),
+            auto_switch_account: None,
+        }
     }
 }
 

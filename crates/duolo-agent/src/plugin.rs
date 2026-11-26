@@ -7,6 +7,7 @@ use std::path::Path;
 
 use duolo_core::text::{is_older, version_in};
 
+use crate::accounts::{self, Account};
 use crate::hooks::{self, HookEvent};
 use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, SESSION, SETTINGS};
 use crate::transcript::{self, Home, Sessions, Watch};
@@ -170,6 +171,13 @@ impl Plugin {
         })
     }
 
+    /// 查某个账号有没有登录的命令。
+    pub fn account_status_of(&self, account: &Account) -> Option<OneShot> {
+        let mut status = self.account_status()?;
+        status.env.extend(self.account_vars(account));
+        Some(status)
+    }
+
     /// 启动时设置的环境变量（插件的 `[start].env`）。登录时也带上，免得它趁登录自动升级。
     pub fn start_env(&self) -> Vec<(String, String)> {
         self.manifest.start.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
@@ -179,6 +187,56 @@ impl Plugin {
     pub fn login_args(&self) -> Option<&[String]> {
         let args = &self.manifest.account.as_ref()?.login_args;
         (!args.is_empty()).then_some(args.as_slice())
+    }
+
+    /// 选账号的环境变量；插件不支持多个账号时为 None。
+    pub fn account_env(&self) -> Option<&str> {
+        self.manifest.account.as_ref()?.home_env.as_deref()
+    }
+
+    /// 能用的账号：默认的、在 Duolo 里添加的（`own_root` 下）、别的软件里登录好的（`home` 是用户的家目录时）。
+    /// 不支持多个账号时只有默认的。只看文件夹，很快。
+    pub fn accounts(&self, own_root: &Path, home: &Home) -> Vec<Account> {
+        let mut found = vec![Account::default_account()];
+        let Some(spec) = self.manifest.account.as_ref().filter(|a| a.home_env.is_some()) else { return found };
+        found.extend(accounts::own(own_root));
+        if matches!(home, Home::User) {
+            for app in &spec.import {
+                found.extend(accounts::imported(app, expand));
+            }
+        }
+        // 同一个文件夹只算一次（例如导入的路径和自己的重了）。
+        let mut seen = std::collections::HashSet::new();
+        found.retain(|a| seen.insert(a.id()));
+        found
+    }
+
+    /// 用这个账号启动时要设的环境变量。
+    pub fn account_vars(&self, account: &Account) -> Vec<(String, String)> {
+        match (self.account_env(), &account.dir) {
+            (Some(env), Some(dir)) => vec![(env.to_string(), dir.display().to_string())],
+            _ => Vec::new(),
+        }
+    }
+
+    /// 准备新账号的文件夹，见 [`accounts::prepare`]。
+    pub fn prepare_account(&self, dir: &Path) -> std::io::Result<()> {
+        let spec = self.manifest.account.as_ref();
+        let home = spec.and_then(|a| a.home.as_deref()).map(expand).unwrap_or_default();
+        accounts::prepare(dir, &home, spec.map(|a| a.share.as_slice()).unwrap_or_default())
+    }
+
+    /// 它报的这个错误是不是额度用完了，见 `[account].limit_errors`。
+    pub fn is_limit_error(&self, error: &str) -> bool {
+        self.manifest.account.as_ref().is_some_and(|a| a.limit_errors.iter().any(|e| e == error))
+    }
+
+    /// 用某个账号时的数据目录（读会话记录、写信任）。
+    pub fn home_for(&self, home: &Home, account: &Account) -> Home {
+        match (home, self.account_env(), &account.dir) {
+            (Home::User, Some(var), Some(dir)) => Home::With { var: var.to_string(), dir: dir.clone() },
+            _ => home.clone(),
+        }
     }
 
     /// 本机装了的、用同一个账号的桌面客户端的名字。

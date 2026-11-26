@@ -86,6 +86,7 @@ impl Engine {
 
     /// 在聊天模式下启动。`fresh` 为真时不接回会话。
     pub(crate) fn spawn_chat(&mut self, key: AgentKey, fresh: bool) -> Result<()> {
+        self.use_account(key);
         let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
         let agent = task.agent(key.agent).context("agent not found")?.clone();
         let launch = self.agents.get(&agent.kind)?.chat().ok_or(UserError::ChatUnsupported)?;
@@ -99,7 +100,11 @@ impl Engine {
             args: launch.args,
             resume_session_args: launch.resume_session_args,
             resume_args: launch.resume_args,
-            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())].into_iter().chain(launch.env).collect(),
+            env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())]
+                .into_iter()
+                .chain(launch.env)
+                .chain(self.account_vars(key))
+                .collect(),
             env_remove: self.agents.env_remove(),
             cwd: task.worktree.clone(),
             session: agent.session.clone().filter(|_| resumed),
@@ -150,6 +155,7 @@ impl Engine {
                     Update::Entry(entry) => {
                         self.record(key.task, event_of(key, entry));
                     }
+                    Update::Failed(error) => self.agent_failed(key, &error),
                 }
             }
         }

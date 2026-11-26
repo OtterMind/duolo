@@ -523,5 +523,16 @@
   "shell.reopen": "Abrir de nuevo",
   "newTask.shell": "Terminal, sin IA: ejecuta un comando en la carpeta de esta tarea o abre solo una shell",
   "newTask.shellPlaceholder": "Comando para ejecutar en el terminal, p. ej. pnpm dev (déjalo vacío para una shell normal)",
-  "terminal.openLink": "Mantén {key} y haz clic para abrir en el navegador"
+  "terminal.openLink": "Mantén {key} y haz clic para abrir en el navegador",
+  "account.title": "Cuentas",
+  "account.autoSwitch": "Cambiar de cuenta al agotar el uso",
+  "account.default": "Predeterminada",
+  "account.unnamed": "Cuenta {n}",
+  "account.addTitle": "Añadir una cuenta de {agent}",
+  "account.addHint": "Inicia sesión con otra cuenta de {agent}. Cuando una cuenta llega a su límite de uso, Duolo cambia a la siguiente y continúa la conversación.",
+  "account.added": "Cuenta de {agent} añadida",
+  "account.addedBody": "Cuando una cuenta llega a su límite de uso, Duolo cambia a la siguiente y continúa la conversación.",
+  "account.remove": "Quitar cuenta",
+  "account.continue": "La cuenta anterior llegó a su límite de uso, así que cambié a otra cuenta. Continúa donde lo dejaste.",
+  "error.accountNotFound": "Esta cuenta ya no existe. Vuelve a abrir la lista de cuentas e inténtalo de nuevo."
 }

@@ -11,5 +11,8 @@ export async function loadPlugins() {
 
 export const pluginOf = (id: string) => plugins.get(id);
 
+/** 所有插件。 */
+export const allPlugins = () => [...plugins.values()];
+
 /** 显示名；插件已经不在了时用 id，首字母大写。 */
 export const pluginName = (id: string) => plugins.get(id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1);

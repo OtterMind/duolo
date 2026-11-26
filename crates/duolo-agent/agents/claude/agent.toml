@@ -21,6 +21,21 @@ login_args = ["auth", "login"]
 apps = [
   { name = "Claude", macos = ["/Applications/Claude.app", "~/Applications/Claude.app"], windows = ["{LOCALAPPDATA}/AnthropicClaude/claude.exe"] },
 ]
+# 多个账号：每个账号一个配置文件夹，启动时用 CLAUDE_CONFIG_DIR 指过去（Orca 也是这么做的）。
+home_env = "CLAUDE_CONFIG_DIR"
+home = "~/.claude"
+# 新账号的文件夹里链接到 ~/.claude 的：对话记录在这些账号之间共用，换了账号能用 --resume 接着做。
+# 登录信息（.claude.json、钥匙串里的）每个账号自己的。
+share = [
+  "projects", "history.jsonl", "file-history", "todos", "plans", "shell-snapshots", "session-env", "paste-cache",
+  "settings.json", "CLAUDE.md", "agents", "commands", "skills", "plugins", "output-styles", "keybindings.json",
+]
+# Orca 里登录好的账号（它的"账号"设置），直接用，不用再登录一次。
+import = [
+  { name = "Orca", macos = ["~/Library/Application Support/orca/claude-profiles/*/home"], linux = ["~/.config/orca/claude-profiles/*/home"], windows = ["{APPDATA}/orca/claude-profiles/*/home"] },
+]
+# 额度用完时报的错误类型（StopFailure 钩子、stream-json 的出错回复）。
+limit_errors = ["rate_limit"]
 
 [start]
 prompt = "argument"
@@ -40,7 +55,8 @@ env = { DISABLE_AUTOUPDATER = "1", CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = "1" }
 [hooks]
 format = "claude"
 args = ["--settings", "{settings}"]
-events = { SessionStart = "1.0.62", PermissionRequest = "2.0.45" }
+# StopFailure：这一轮因为出错停了，带着错误类型（额度用完时换账号接着做）。
+events = { SessionStart = "1.0.62", PermissionRequest = "2.0.45", StopFailure = "2.1.78" }
 
 # 第一次在一个文件夹里启动时问的"信任这个文件夹吗"：按文件夹的真实路径记在 .claude.json 里，子文件夹不继承。
 [trust]

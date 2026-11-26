@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use duolo_core::AgentKind;
-use duolo_engine::{start_setup, Session, SetupStep, Size};
+use duolo_core::{AgentKind, UserError};
+use duolo_engine::{start_setup, Account, AccountSource, Session, SetupStep, Size};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter, State};
 
@@ -28,17 +28,27 @@ fn lock(running: &Running) -> MutexGuard<'_, Option<(u64, Session)>> {
     running.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// 开始安装（`step` 为 `install`）、升级（`update`）或登录（`login`）`agent`，返回这是第几次。上一次没结束的先结束。
+/// 开始的这一次：第几次，登录到新账号时还有新账号的文件夹（登录没成功时界面用它删掉）。
+#[derive(Debug, serde::Serialize)]
+pub struct SetupRun {
+    run: u64,
+    account: Option<String>,
+}
+
+/// 开始安装（`step` 为 `install`）、升级（`update`）或登录（`login`）`agent`。上一次没结束的先结束。
+/// 登录时 `account` 是要登录的账号（见 `Account::id`），`new` 是新添加一个账号，没有时登录默认账号。
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn setup_start(
     app: AppHandle,
     state: State<'_, AppState>,
     agent: String,
     step: String,
+    account: Option<String>,
     rows: u16,
     cols: u16,
     on_data: Channel<InvokeResponseBody>,
-) -> Res<u64> {
+) -> Res<SetupRun> {
     let step = match step.as_str() {
         "install" => SetupStep::Install,
         "update" => SetupStep::Update,
@@ -48,7 +58,23 @@ pub fn setup_start(
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
     let size = Size::new(rows.max(4), cols.max(20));
-    let session = start_setup(state.engine().agents(), &AgentKind(agent), step, size, sink)?;
+    let kind = AgentKind(agent);
+    let (account, added) = {
+        let engine = state.engine();
+        match account.as_deref() {
+            None | Some("") => (None, None),
+            Some("new") => {
+                let dir = engine.new_account_dir(&kind)?;
+                let added = dir.display().to_string();
+                (Some(Account { dir: Some(dir), source: AccountSource::Duolo }), Some(added))
+            }
+            Some(id) => {
+                let found = engine.accounts_of(&kind)?.into_iter().find(|a| a.id() == id);
+                (Some(found.ok_or(UserError::AccountNotFound)?), None)
+            }
+        }
+    };
+    let session = start_setup(state.engine().agents(), &kind, step, account.as_ref(), size, sink)?;
     let setup = &state.setup;
     let id = setup.next.fetch_add(1, Ordering::Relaxed);
     if let Some((_, mut old)) = lock(&setup.running).replace((id, session)) {
@@ -73,14 +99,22 @@ pub fn setup_start(
         let _ = app.emit(EXIT_EVENT, serde_json::json!({ "run": id, "success": exit.success }));
         return;
     });
-    Ok(id)
+    Ok(SetupRun { run: id, account: added })
 }
 
-/// 现在登录了没有（登录过程中界面隔一会儿问一次）。不知道时为 null。
+/// 现在登录了没有（登录过程中界面隔一会儿问一次）：`account` 是登录的账号，没有时是默认账号。不知道时为 null。
 #[tauri::command]
-pub async fn setup_signed_in(state: State<'_, AppState>, agent: String) -> Res<Option<bool>> {
+pub async fn setup_signed_in(state: State<'_, AppState>, agent: String, account: Option<String>) -> Res<Option<bool>> {
     let agents = state.engine().agents().clone();
-    Ok(tauri::async_runtime::spawn_blocking(move || duolo_engine::signed_in(&agents, &AgentKind(agent))).await?)
+    let kind = AgentKind(agent);
+    Ok(tauri::async_runtime::spawn_blocking(move || match account.filter(|a| !a.is_empty()) {
+        None => duolo_engine::signed_in(&agents, &kind),
+        Some(dir) => {
+            let account = Account { dir: Some(dir.into()), source: AccountSource::Duolo };
+            duolo_engine::account_status(&agents, &kind, &account).signed_in
+        }
+    })
+    .await?)
 }
 
 /// 用户在终端里输入的（粘贴授权码、按回车）。

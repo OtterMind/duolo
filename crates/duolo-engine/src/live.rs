@@ -121,7 +121,7 @@ impl Engine {
         let others =
             task.agents.iter().chain(&task.retired).filter(|a| a.id != key.agent).filter_map(|a| a.session.clone());
         let sessions = Sessions { own, others: others.collect() };
-        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.live.home, sessions)) {
+        match self.plugin_of(key).ok().and_then(|plugin| plugin.watch(&task.worktree, &self.home_of(key), sessions)) {
             Some(watch) => self.live.watchers.insert(key, watch),
             None => self.live.watchers.remove(&key),
         };
@@ -168,6 +168,7 @@ impl Engine {
                     HookEvent::Approval { tool, target } => {
                         self.record(key.task, EventKind::Approval { agent: key.agent, tool, target });
                     }
+                    HookEvent::Failed(error) => self.agent_failed(key, &error),
                 }
             }
         }
@@ -900,6 +901,57 @@ mod tests {
         assert_eq!(engine.state().task(task).unwrap().agents[0].session.as_deref(), Some("zz-1"));
         engine.close_task(task).unwrap();
         assert!(!std::path::Path::new(&settings_file).exists(), "关任务时清掉");
+    }
+
+    /// 额度用完（钩子报的 StopFailure）：换下一个账号，接着同一次会话启动，让它继续；之后新启动的也用这个账号。
+    #[cfg(unix)]
+    #[test]
+    fn switches_account_when_usage_runs_out() {
+        let (dir, engine, project) = engine("cat");
+        drop(engine);
+        let hook = dir.path().join("hook.sh");
+        std::fs::write(
+            &hook,
+            "f=\"$DUOLO_HOOK_DIR/$(date +%s)$$-$1.json\"; cat > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"\n",
+        )
+        .unwrap();
+        // 在 Duolo 里添加过的另一个账号。
+        let second = dir.path().join("home/accounts/claude/000000000000001");
+        std::fs::create_dir_all(&second).unwrap();
+        // 用默认账号时：说了会话编号就报额度用完。换到另一个账号（CLAUDE_CONFIG_DIR 指向它）就正常运行。
+        let script = format!(
+            "echo \"args:$* home:${{CLAUDE_CONFIG_DIR:-none}}\"; \
+             if [ \"$CLAUDE_CONFIG_DIR\" != {second:?} ]; then \
+               printf '%s' '{{\"hook_event_name\":\"SessionStart\",\"session_id\":\"zz-1\"}}' | sh {hook} 1; \
+               printf '%s' '{{\"hook_event_name\":\"StopFailure\",\"error\":\"rate_limit\"}}' | sh {hook} 2; \
+             fi; cat",
+            hook = hook.display(),
+            second = second.display().to_string()
+        );
+        let config = format!(
+            "[agents.claude]\ncommand = \"sh\"\nargs = [\"-c\", {script:?}, \"agent\"]\nsession_id_args = []\n"
+        );
+        std::fs::write(dir.path().join("home/config.toml"), config).unwrap();
+        let mut engine = Engine::open(Paths::at(dir.path().join("home"))).unwrap();
+        engine.set_agent_home(dir.path().join("user-home"));
+        duolo_core::process::remember("sh", &["--version".to_string()], "2.1.300 (Claude Code)");
+        engine.set_hook_program(hook.clone());
+        let claude = duolo_core::AgentKind("claude".into());
+        assert_eq!(engine.accounts_of(&claude).unwrap().len(), 2);
+
+        let task = engine.create_task(&project, "Export orders").unwrap();
+        let key = engine.writer_key(task).unwrap();
+        engine.start_agent(key).unwrap();
+        wait_screen(&mut engine, key, &format!("home:{}", second.display()));
+        assert!(screen(&engine, key).contains("--resume zz-1"), "接着原来的会话：{}", screen(&engine, key));
+        wait_screen(&mut engine, key, "usage limit");
+        assert_eq!(engine.chosen_account(&claude).dir.as_deref(), Some(second.as_path()), "之后都用新账号");
+
+        // 关掉自动换时，额度用完就停在那里。
+        engine.set_auto_switch_account(false);
+        engine.agent_failed(key, "rate_limit");
+        assert_eq!(engine.chosen_account(&claude).dir.as_deref(), Some(second.as_path()));
+        engine.close_task(task).unwrap();
     }
 
     /// 能定会话编号的：启动时就定好、记下，下次按它恢复；重新开始时换一个新的。

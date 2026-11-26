@@ -47,7 +47,7 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 
 ## 安装
 
-需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`curl -fsSL https://claude.ai/install.sh | bash`）、[Codex](https://github.com/openai/codex)（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）、[pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）或 [Grok](https://x.ai/cli)（`curl -fsSL https://x.ai/cli/install.sh | bash`）。Duolo 也可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
+需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`curl -fsSL https://claude.ai/install.sh | bash`）、[Codex](https://github.com/openai/codex)（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）、[pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）或 [Grok](https://x.ai/cli)（`curl -fsSL https://x.ai/cli/install.sh | bash`）。Duolo 也可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

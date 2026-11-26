@@ -155,6 +155,8 @@ pub struct PluginView {
     pub reviews: bool,
     /// 能不能在聊天模式下运行。
     pub chat: bool,
+    /// 能不能用多个账号。
+    pub accounts: bool,
 }
 
 impl From<&Plugin> for PluginView {
@@ -166,6 +168,7 @@ impl From<&Plugin> for PluginView {
             color: plugin.icon_color().map(Into::into),
             reviews: plugin.review().is_some(),
             chat: plugin.chat().is_some(),
+            accounts: plugin.account_env().is_some(),
         }
     }
 }
@@ -336,5 +339,38 @@ fn verdict_code(verdict: Verdict) -> &'static str {
         Verdict::Pass => "pass",
         Verdict::Issues(_) => "issues",
         Verdict::Unknown => "unknown",
+    }
+}
+
+/// 一种 Agent 的一个账号。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountView {
+    /// 账号的文件夹，默认账号是空字符串。
+    pub id: String,
+    /// 从哪里来：`default`、`duolo`，或者别的软件的名字（例如 Orca）。
+    pub source: String,
+    /// 登录的邮箱，查不出来时为空。
+    pub email: String,
+    /// 有没有登录；不知道时为 null。
+    pub signed_in: Option<bool>,
+    /// 是不是现在选的。
+    pub chosen: bool,
+}
+
+impl AccountView {
+    pub fn new(account: &duolo_engine::Account, status: duolo_engine::AccountStatus, chosen: &str) -> Self {
+        let source = match &account.source {
+            duolo_engine::AccountSource::Default => "default".to_string(),
+            duolo_engine::AccountSource::Duolo => "duolo".to_string(),
+            duolo_engine::AccountSource::App(name) => name.clone(),
+        };
+        Self {
+            id: account.id(),
+            source,
+            email: status.email.unwrap_or_default(),
+            signed_in: status.signed_in,
+            chosen: account.id() == chosen,
+        }
     }
 }

@@ -30,6 +30,10 @@ impl Driver for Claude {
                 if !params["parent_tool_use_id"].is_null() {
                     return;
                 }
+                // 出错的回复带着错误类型（`rate_limit`、`authentication_failed`……）。
+                if let Some(error) = params["error"].as_str().filter(|_| method == "assistant") {
+                    link.failed(error);
+                }
                 match method.as_str() {
                     "result" => link.end_turn(self.outcome(&params)),
                     _ => link.conversation(|c| said(c, &method, &params)),

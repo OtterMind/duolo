@@ -3,6 +3,7 @@
 //! 引擎不依赖任何界面。现在由 TUI 直接持有；以后拆出守护进程 `duolod` 时，
 //! 这里的公开方法就是守护进程对外提供的接口，终端、手机和网页客户端都通过它操作。
 
+mod accounts;
 mod chat;
 #[cfg(test)]
 mod conformance;
@@ -20,7 +21,8 @@ mod shells;
 mod status;
 mod switch;
 
-pub use duolo_agent::{Plugin, Registry};
+pub use accounts::{account_status, AccountStatus};
+pub use duolo_agent::{Account, AccountSource, Plugin, Registry};
 pub use duolo_chat::Draft;
 pub use duolo_git::DiffStat;
 pub use duolo_pty::{Session, Size};

@@ -523,5 +523,16 @@
   "shell.reopen": "Mở lại",
   "newTask.shell": "Terminal, không dùng AI: chạy một lệnh trong thư mục của nhiệm vụ này, hoặc chỉ mở một shell",
   "newTask.shellPlaceholder": "Lệnh chạy trong terminal, vd: pnpm dev (để trống nếu chỉ mở shell)",
-  "terminal.openLink": "Giữ {key} và nhấp để mở trong trình duyệt"
+  "terminal.openLink": "Giữ {key} và nhấp để mở trong trình duyệt",
+  "account.title": "Tài khoản",
+  "account.autoSwitch": "Đổi tài khoản khi hết hạn mức",
+  "account.default": "Mặc định",
+  "account.unnamed": "Tài khoản {n}",
+  "account.addTitle": "Thêm tài khoản {agent}",
+  "account.addHint": "Đăng nhập một tài khoản {agent} khác. Khi một tài khoản hết hạn mức sử dụng, Duolo chuyển sang tài khoản tiếp theo và tiếp tục cuộc trò chuyện.",
+  "account.added": "Đã thêm tài khoản {agent}",
+  "account.addedBody": "Khi một tài khoản hết hạn mức sử dụng, Duolo chuyển sang tài khoản tiếp theo và tiếp tục cuộc trò chuyện.",
+  "account.remove": "Xóa tài khoản",
+  "account.continue": "Tài khoản trước đã hết hạn mức sử dụng nên tôi đã chuyển sang tài khoản khác. Hãy tiếp tục từ chỗ đang dở.",
+  "error.accountNotFound": "Tài khoản này không còn nữa. Mở lại danh sách tài khoản rồi thử lại."
 }

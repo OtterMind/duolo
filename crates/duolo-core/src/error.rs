@@ -41,6 +41,8 @@ pub enum UserError {
     AgentNotRunning,
     #[error("this agent cannot run in chat mode")]
     ChatUnsupported,
+    #[error("the account is gone")]
+    AccountNotFound,
     #[error("the agent is no longer waiting for this answer")]
     PromptChanged,
     #[error("the command arrived too late")]
@@ -104,6 +106,7 @@ impl UserError {
             Self::ReviewNotConfigured => "reviewNotConfigured",
             Self::AgentNotRunning => "agentNotRunning",
             Self::ChatUnsupported => "chatUnsupported",
+            Self::AccountNotFound => "accountNotFound",
             Self::PromptChanged => "promptChanged",
             Self::CommandExpired => "commandExpired",
             Self::TaskNotFound => "taskNotFound",
@@ -214,6 +217,7 @@ mod tests {
             UserError::ReviewNotConfigured,
             UserError::AgentNotRunning,
             UserError::ChatUnsupported,
+            UserError::AccountNotFound,
             UserError::TaskNotFound,
             UserError::TaskClosing,
             UserError::ProjectNotFound,

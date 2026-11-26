@@ -69,27 +69,44 @@ pub enum Home {
     User,
     /// 指定的目录（测试用），不看环境变量。
     At(PathBuf),
+    /// 和 `User` 一样，只是 Agent 的环境变量 `var` 设成了 `dir`（用某个账号时，见 `Plugin::home_for`）。
+    With { var: String, dir: PathBuf },
 }
 
 impl Home {
     /// Agent 的一个配置文件：设置了 `env` 时是它下面的 `env_file`，否则是家目录下的 `file`。
+    /// 账号文件夹里链接到默认文件夹的（见 `accounts::prepare`），写的是链接指向的文件：直接替换会把链接换成普通文件。
     pub(crate) fn config_file(&self, file: &str, env: Option<&str>, env_file: Option<&str>) -> PathBuf {
         match self {
-            Self::User => match env.and_then(std::env::var_os).filter(|dir| !dir.is_empty()) {
-                Some(dir) => PathBuf::from(dir).join(env_file.unwrap_or(file)),
+            Self::At(home) => home.join(file),
+            _ => match env.and_then(|name| self.var(name)).filter(|dir| !dir.is_empty()) {
+                Some(dir) => {
+                    let path = PathBuf::from(dir).join(env_file.unwrap_or(file));
+                    match std::fs::symlink_metadata(&path) {
+                        Ok(meta) if meta.file_type().is_symlink() => std::fs::canonicalize(&path).unwrap_or(path),
+                        _ => path,
+                    }
+                }
                 None => duolo_core::process::home_dir().join(file),
             },
-            Self::At(home) => home.join(file),
         }
     }
 
     pub(crate) fn data_dir(&self, default: &str, env: Option<&str>) -> PathBuf {
         match self {
-            Self::User => env
-                .and_then(std::env::var_os)
+            Self::At(home) => home.join(default),
+            _ => env
+                .and_then(|name| self.var(name))
                 .filter(|dir| !dir.is_empty())
                 .map_or_else(|| duolo_core::process::home_dir().join(default), PathBuf::from),
-            Self::At(home) => home.join(default),
+        }
+    }
+
+    /// Agent 看到的环境变量。
+    fn var(&self, name: &str) -> Option<std::ffi::OsString> {
+        match self {
+            Self::With { var, dir } if var == name => Some(dir.clone().into_os_string()),
+            _ => std::env::var_os(name),
         }
     }
 }

@@ -604,3 +604,47 @@ pub async fn quit(app: AppHandle) {
     .await;
     handle.exit(0);
 }
+
+/// 一种 Agent 的账号和各自的登录状态（每个账号查一次，同时查）。
+#[tauri::command]
+pub async fn agent_accounts(app: AppHandle, agent: String) -> Res<Vec<view::AccountView>> {
+    blocking(app, move |state| {
+        let kind = AgentKind(agent);
+        let (agents, accounts, chosen) = {
+            let engine = state.engine();
+            (engine.agents().clone(), engine.accounts_of(&kind)?, engine.chosen_account(&kind).id())
+        };
+        let statuses: Vec<duolo_engine::AccountStatus> = std::thread::scope(|scope| {
+            let running: Vec<_> = accounts
+                .iter()
+                .map(|account| scope.spawn(|| duolo_engine::account_status(&agents, &kind, account)))
+                .collect();
+            running.into_iter().map(|h| h.join().unwrap_or_default()).collect()
+        });
+        Ok(accounts.iter().zip(statuses).map(|(a, s)| view::AccountView::new(a, s, &chosen)).collect())
+    })
+    .await
+}
+
+/// 选账号：之后启动的用它。
+#[tauri::command]
+pub fn choose_account(state: State<'_, AppState>, agent: String, id: String) -> Res<()> {
+    Ok(state.engine().choose_account(&AgentKind(agent), &id)?)
+}
+
+/// 删掉在 Duolo 里添加的账号。
+#[tauri::command]
+pub fn remove_account(state: State<'_, AppState>, agent: String, id: String) -> Res<()> {
+    Ok(state.engine().remove_account(&AgentKind(agent), &id)?)
+}
+
+/// 额度用完时自动换账号。
+#[tauri::command]
+pub fn auto_switch_account(state: State<'_, AppState>) -> bool {
+    state.engine().auto_switch_account()
+}
+
+#[tauri::command]
+pub fn set_auto_switch_account(state: State<'_, AppState>, on: bool) {
+    state.engine().set_auto_switch_account(on);
+}

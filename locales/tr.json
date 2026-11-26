@@ -523,5 +523,16 @@
   "shell.reopen": "Yeniden aç",
   "newTask.shell": "Terminal, yapay zekâ yok: bu görevin klasöründe bir komut çalıştır ya da yalnızca bir kabuk aç",
   "newTask.shellPlaceholder": "Terminalde çalıştırılacak komut, ör. pnpm dev (yalnızca kabuk için boş bırakın)",
-  "terminal.openLink": "Tarayıcıda açmak için {key} tuşuna basılı tutup tıklayın"
+  "terminal.openLink": "Tarayıcıda açmak için {key} tuşuna basılı tutup tıklayın",
+  "account.title": "Hesaplar",
+  "account.autoSwitch": "Kullanım bitince hesap değiştir",
+  "account.default": "Varsayılan",
+  "account.unnamed": "Hesap {n}",
+  "account.addTitle": "{agent} hesabı ekle",
+  "account.addHint": "Başka bir {agent} hesabıyla giriş yapın. Bir hesap kullanım sınırına ulaşınca Duolo sonrakine geçer ve sohbete devam eder.",
+  "account.added": "{agent} hesabı eklendi",
+  "account.addedBody": "Bir hesap kullanım sınırına ulaşınca Duolo sonraki hesaba geçer ve sohbete devam eder.",
+  "account.remove": "Hesabı kaldır",
+  "account.continue": "Önceki hesap kullanım sınırına ulaştı, bu yüzden başka bir hesaba geçtim. Kaldığın yerden devam et.",
+  "error.accountNotFound": "Bu hesap artık yok. Hesap listesini yeniden açıp tekrar deneyin."
 }

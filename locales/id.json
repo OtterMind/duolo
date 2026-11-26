@@ -523,5 +523,16 @@
   "shell.reopen": "Buka lagi",
   "newTask.shell": "Terminal tanpa AI: jalankan perintah di folder tugas ini, atau buka shell saja",
   "newTask.shellPlaceholder": "Perintah yang dijalankan di terminal, mis. pnpm dev (kosongkan untuk shell biasa)",
-  "terminal.openLink": "Tahan {key} lalu klik untuk membuka di browser"
+  "terminal.openLink": "Tahan {key} lalu klik untuk membuka di browser",
+  "account.title": "Akun",
+  "account.autoSwitch": "Ganti akun saat kuota habis",
+  "account.default": "Bawaan",
+  "account.unnamed": "Akun {n}",
+  "account.addTitle": "Tambah akun {agent}",
+  "account.addHint": "Masuk ke akun {agent} lain. Saat satu akun mencapai batas penggunaan, Duolo beralih ke akun berikutnya dan melanjutkan percakapan.",
+  "account.added": "Akun {agent} ditambahkan",
+  "account.addedBody": "Saat satu akun mencapai batas penggunaan, Duolo beralih ke akun berikutnya dan melanjutkan percakapan.",
+  "account.remove": "Hapus akun",
+  "account.continue": "Akun sebelumnya mencapai batas penggunaan, jadi saya beralih ke akun lain. Silakan lanjutkan dari bagian terakhir.",
+  "error.accountNotFound": "Akun ini sudah tidak ada. Buka lagi daftar akun lalu coba lagi."
 }

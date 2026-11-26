@@ -523,5 +523,16 @@
   "shell.reopen": "重新開啟",
   "newTask.shell": "終端機，不用 AI：在這個任務的資料夾裡執行一條指令，或只開一個 shell",
   "newTask.shellPlaceholder": "要在終端機裡執行的指令，例如 pnpm dev（不填就只開一個 shell）",
-  "terminal.openLink": "按住 {key} 點擊，在瀏覽器中開啟"
+  "terminal.openLink": "按住 {key} 點擊，在瀏覽器中開啟",
+  "account.title": "帳號",
+  "account.autoSwitch": "額度用完時自動換帳號",
+  "account.default": "預設",
+  "account.unnamed": "帳號 {n}",
+  "account.addTitle": "新增 {agent} 帳號",
+  "account.addHint": "登入另一個 {agent} 帳號。一個帳號的額度用完時，Duolo 會換到下一個帳號，接著原本的對話繼續做。",
+  "account.added": "已新增 {agent} 帳號",
+  "account.addedBody": "一個帳號的額度用完時，Duolo 會換到下一個帳號，接著原本的對話繼續做。",
+  "account.remove": "刪除帳號",
+  "account.continue": "上一個帳號的額度用完了，已經換了一個帳號。請接著剛才的進度繼續。",
+  "error.accountNotFound": "這個帳號已經不在了。重新打開帳號列表再試。"
 }

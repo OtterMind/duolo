@@ -15,6 +15,8 @@ pub enum HookEvent {
     Session(String),
     /// 请求授权：用什么工具、对什么（文件路径、命令）。
     Approval { tool: String, target: String },
+    /// 这一轮因为出错停了：错误类型（例如额度用完了，见插件的 `[account].limit_errors`）。
+    Failed(String),
 }
 
 pub(crate) trait Format: std::fmt::Debug + Send + Sync {
@@ -50,6 +52,7 @@ impl Format for Claude {
                 tool: event["tool_name"].as_str().unwrap_or("tool").to_string(),
                 target: tool_target(&event["tool_input"]),
             }),
+            "StopFailure" => event["error"].as_str().map(|e| HookEvent::Failed(e.to_string())),
             _ => None,
         }
     }
@@ -71,5 +74,7 @@ mod tests {
         let ask = json!({"hook_event_name": "PermissionRequest", "tool_name": "Bash", "tool_input": {"command": "pnpm test\nmore", "description": "Run tests"}});
         assert_eq!(Claude.parse(&ask), Some(HookEvent::Approval { tool: "Bash".into(), target: "pnpm test".into() }));
         assert_eq!(Claude.parse(&json!({"hook_event_name": "Stop"})), None);
+        let limit = json!({"hook_event_name": "StopFailure", "error": "rate_limit", "error_details": "429"});
+        assert_eq!(Claude.parse(&limit), Some(HookEvent::Failed("rate_limit".into())));
     }
 }

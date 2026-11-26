@@ -523,5 +523,16 @@
   "shell.reopen": "Open again",
   "newTask.shell": "Terminal, no AI: run a command in this task's folder, or just open a shell",
   "newTask.shellPlaceholder": "A command to run in the terminal, e.g. pnpm dev (leave empty for a plain shell)",
-  "terminal.openLink": "Hold {key} and click to open in your browser"
+  "terminal.openLink": "Hold {key} and click to open in your browser",
+  "account.title": "Accounts",
+  "account.autoSwitch": "Switch accounts when usage runs out",
+  "account.default": "Default",
+  "account.unnamed": "Account {n}",
+  "account.addTitle": "Add a {agent} account",
+  "account.addHint": "Sign in to another {agent} account. When one account hits its usage limit, Duolo switches to the next and keeps the conversation going.",
+  "account.added": "{agent} account added",
+  "account.addedBody": "When an account hits its usage limit, Duolo switches to the next one and continues the conversation.",
+  "account.remove": "Remove account",
+  "account.continue": "The previous account hit its usage limit, so I switched you to another account. Please continue where you left off.",
+  "error.accountNotFound": "This account no longer exists. Reopen the account list and try again."
 }

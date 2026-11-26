@@ -523,5 +523,16 @@
   "shell.reopen": "もう一度開く",
   "newTask.shell": "ターミナル（AI なし）：このタスクのフォルダーでコマンドを実行、またはシェルだけを開く",
   "newTask.shellPlaceholder": "ターミナルで実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます",
-  "terminal.openLink": "{key} を押しながらクリックでブラウザで開く"
+  "terminal.openLink": "{key} を押しながらクリックでブラウザで開く",
+  "account.title": "アカウント",
+  "account.autoSwitch": "使用上限に達したらアカウントを切り替える",
+  "account.default": "デフォルト",
+  "account.unnamed": "アカウント {n}",
+  "account.addTitle": "{agent} アカウントを追加",
+  "account.addHint": "別の {agent} アカウントでサインインします。使用上限に達したら Duolo が次のアカウントに切り替え、会話をそのまま続けます。",
+  "account.added": "{agent} アカウントを追加しました",
+  "account.addedBody": "アカウントが使用上限に達すると、Duolo は次のアカウントに切り替えて会話を続けます。",
+  "account.remove": "アカウントを削除",
+  "account.continue": "前のアカウントが使用上限に達したため、別のアカウントに切り替えました。中断したところから続けてください。",
+  "error.accountNotFound": "このアカウントはもうありません。アカウント一覧を開き直してもう一度お試しください。"
 }

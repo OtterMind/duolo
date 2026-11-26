@@ -4,8 +4,9 @@ import { TriangleAlert } from "lucide-react";
 import { LOCALES, useI18n, type LanguagePref } from "../i18n";
 import { api, type FnKeyStatus, type VoiceSettings } from "../lib/api";
 import { TALK_KEY } from "../lib/platform";
+import { AccountSettings } from "./AccountSettings";
 
-/** 左下角齿轮打开的设置：界面语言，以及语音输入的快捷键、整理。 */
+/** 左下角齿轮打开的设置：界面语言，语音输入的快捷键、整理，各个 Agent 的账号。 */
 export function SettingsPopover({ onClose, onError }: { onClose(): void; onError(err: unknown): void }) {
   const { pref, setPref, t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
@@ -88,6 +89,8 @@ export function SettingsPopover({ onClose, onError }: { onClose(): void; onError
           onChange={(e) => voice && saveVoice({ ...voice, organize: e.target.checked })}
         />
       </label>
+
+      <AccountSettings onError={onError} />
     </div>
   );
 }

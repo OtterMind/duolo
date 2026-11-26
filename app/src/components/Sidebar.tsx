@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  LayoutGrid,
   Plus,
   Search,
   Settings,
@@ -20,6 +21,7 @@ import { StateIcon, useStateLabel } from "./StatusIcon";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
 import { SettingsPopover } from "./SettingsPopover";
 import { isMac, kbd, modKey } from "../lib/platform";
+import { beginPaneDrag } from "../lib/paneDrag";
 
 interface Props {
   snap: Snapshot | null;
@@ -28,8 +30,10 @@ interface Props {
   focusSearch: number;
   onNewTask(project?: string): void;
   onOpenTask(task: number): void;
-  /** 分屏时旁边那一格的任务。 */
-  beside: number | null;
+  /** 并排在右侧的任务（不并排时为空）。 */
+  panes: number[];
+  /** 并排看这个项目的全部任务。 */
+  onShowProject(project: string): void;
   /** 放在旁边一格（⌘ 点任务）。 */
   onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
@@ -148,6 +152,15 @@ export function Sidebar(props: Props) {
                   <span className="ellipsis">{project.name}</span>
                 </button>
                 {folded && project.tasks.length > 0 && <FoldedCounts tasks={project.tasks} />}
+                {project.tasks.length >= 2 && (
+                  <button
+                    className="icon-btn project-grid"
+                    title={t("sidebar.showProject")}
+                    onClick={() => props.onShowProject(project.id)}
+                  >
+                    <LayoutGrid {...ICON} />
+                  </button>
+                )}
                 <button
                   className="icon-btn project-add"
                   title={t("sidebar.newTaskIn", { project: project.name })}
@@ -196,7 +209,7 @@ export function Sidebar(props: Props) {
 function TaskRow({
   task,
   current,
-  beside,
+  panes,
   onOpenTask,
   onOpenBeside,
   onOpenReview,
@@ -228,11 +241,15 @@ function TaskRow({
 
   return (
     <div
-      className={`task-row ${current ? "is-current" : ""} ${beside === task.id ? "is-beside" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
+      className={`task-row ${current ? "is-current" : ""} ${panes.includes(task.id) && !current ? "is-beside" : ""} ${status === "needs_input" ? "is-waiting" : ""}`}
       role="button"
       tabIndex={0}
       // ⌘ 点：放在旁边一格，两个任务并排看。
       onClick={(e) => (modKey(e.nativeEvent) ? onOpenBeside(task.id) : onOpenTask(task.id))}
+      // 按住拖到右侧：并排看（见 lib/paneDrag.ts）。
+      onPointerDown={(e) => {
+        if (!renaming && !(e.target as Element).closest("button, input")) beginPaneDrag(e, task.id, title);
+      }}
       onDoubleClick={() => setRenaming(true)}
       onKeyDown={(e) => e.key === "Enter" && !renaming && onOpenTask(task.id)}
       onContextMenu={(e) => {

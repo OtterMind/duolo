@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "要它接下来做什么（可以不写）",
   "cli.taskForked": "已从任务 #{from} 分出任务 #{id}「{title}」，由 {agent} 接着做。",
   "cli.reviewing": "{agent} 正在审阅任务 #{id}…",
-  "cli.conflictingArgs": "{arg} 不能和 {other} 一起用。运行 duolo --help 查看用法。"
+  "cli.conflictingArgs": "{arg} 不能和 {other} 一起用。运行 duolo --help 查看用法。",
+  "pane.move": "拖动可以换位置",
+  "pane.zoom": "放大这一格",
+  "pane.unzoom": "回到并排",
+  "pane.full": "最多并排 {count} 个任务，先关掉一格。",
+  "pane.someLeft": "并排了 {shown} 个任务，还有 {more} 个在侧边栏。",
+  "sidebar.showProject": "并排查看全部任务",
+  "command.showProject": "并排查看 {project} 的全部任务",
+  "command.zoomPane": "放大当前这一格",
+  "command.unzoomPane": "回到并排",
+  "command.nextPane": "切到下一格",
+  "command.prevPane": "切到上一格"
 }

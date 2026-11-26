@@ -1,9 +1,9 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import { errorMessage, useT } from "./i18n";
-import { api, type AgentRef, type Check, type NewTaskOptions, type Snapshot } from "./lib/api";
+import { api, type AgentRef, type Check, type NewTaskOptions, type Snapshot, type Task } from "./lib/api";
 import { allTasks, findTask, isLive, writerOf } from "./lib/format";
 import * as firstPrompt from "./lib/firstPrompt";
 import { disposeTask, setInputListener } from "./lib/terminals";
@@ -18,10 +18,12 @@ import { Confirm, type ConfirmSpec } from "./components/Confirm";
 import { HandoffDialog, type Handoff } from "./components/HandoffDialog";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
-import { PaneDivider } from "./components/PaneDivider";
+import { PaneGrid } from "./components/PaneGrid";
+import { PaneDragGhost } from "./components/PaneDragGhost";
 import { SetupDialog } from "./components/SetupDialog";
 import { onSetupRequest } from "./lib/setup";
-import { loadLayout, saveLayout } from "./lib/layout";
+import { loadLayout, MAX_PANES, saveLayout } from "./lib/layout";
+import { setDropHandler, type DropZone } from "./lib/paneDrag";
 import { isMac, matches } from "./lib/platform";
 
 /** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
@@ -43,6 +45,9 @@ const EXTRA_SHORTCUTS: [string, string][] = [
   ["search", "⌘K"],
   ["next-waiting", "⌥↓"],
   ["split", "⌘\\"],
+  ["zoom-pane", "⌘⇧↵"],
+  ["prev-pane", "⌘⌥←"],
+  ["next-pane", "⌘⌥→"],
 ];
 
 export type View = { kind: "empty" } | { kind: "task"; task: number };
@@ -55,18 +60,20 @@ export function App() {
   const [agentDefaults, setAgentDefaults] = useState<AgentChoice | null>(null);
   const [view, setView] = useState<View>({ kind: "empty" });
   /**
-   * 分屏：旁边的另一个任务，和它在左边还是右边。正在操作的任务是 `view.task`；
-   * 点旁边那一格就换成操作它，两格的位置不变。
+   * 并排看的任务，按排列顺序；少于两个时不并排，只看 `view.task`。并排时正在操作的是 `view.task`（它总在里面），
+   * 点哪一格就换成操作它，格子的位置不变。
    */
-  const [beside, setBeside] = useState<{ task: number; left: boolean } | null>(null);
+  const [grid, setGrid] = useState<number[]>([]);
+  /** 并排时放大占满右侧的那一格，其他格照常在后台运行。 */
+  const [zoom, setZoom] = useState<number | null>(null);
   /** 上次关掉应用时的样子，启动时还原。 */
   const saved = useRef(loadLayout());
-  /** 分屏时左边一格占的比例（拖中间的线调整）。 */
+  /** 两格时左边一格占的比例（拖中间的线调整）。 */
   const [ratio, setRatio] = useState(saved.current.ratio);
   const viewRef = useRef(view);
   viewRef.current = view;
-  const besideRef = useRef(beside);
-  besideRef.current = beside;
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
   /** 上一个操作过的任务：⌘\ 分屏时放在旁边。 */
   const lastTask = useRef<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -105,44 +112,125 @@ export function App() {
   }, []);
 
   const current = view.kind === "task" ? findTask(snap, view.task) : null;
-  const besideTask = beside && current ? findTask(snap, beside.task) : null;
+  /** 右侧的格子：并排时是 `grid` 里还在的任务（放大时只有那一格），否则只有当前任务。 */
+  const split = current != null && grid.length >= 2;
+  const panes = !current
+    ? []
+    : !split
+      ? [current]
+      : zoom != null && grid.includes(zoom)
+        ? [findTask(snap, zoom)].filter((p) => p != null)
+        : grid.map((id) => findTask(snap, id)).filter((p) => p != null);
   const handoffTask = handoff != null ? (findTask(snap, handoff)?.task ?? null) : null;
-  /** 分屏时关掉一格：关的是正在操作的那格，就换成操作另一格。 */
+  /** 并排时关掉一格（任务不关）：关的是正在操作的那格，就换成操作旁边一格；只剩一格时不再并排。 */
   const closePane = (task: number) => {
-    if (beside && view.kind === "task" && task === view.task) setView({ kind: "task", task: beside.task });
-    setBeside(null);
+    const g = gridRef.current;
+    const at = g.indexOf(task);
+    if (at < 0) return;
+    const rest = g.filter((id) => id !== task);
+    const v = viewRef.current;
+    if (v.kind === "task" && v.task === task && rest.length > 0) setView({ kind: "task", task: rest[Math.min(at, rest.length - 1)] });
+    setGrid(rest.length >= 2 ? rest : []);
+    setZoom(null);
   };
 
   // ---- 打开和新建任务 ----
 
   const openTask = useCallback((task: number) => {
     if (!findTask(snapRef.current, task)) return;
-    const [v, b] = [viewRef.current, besideRef.current];
+    const [v, g] = [viewRef.current, gridRef.current];
     if (v.kind === "task" && v.task !== task) lastTask.current = v.task;
-    // 打开的是旁边那一格的任务：两格换一下谁在操作，位置不变。
-    if (b && b.task === task && v.kind === "task") setBeside({ task: v.task, left: !b.left });
+    // 并排时打开不在格子里的任务：换掉正在操作的那一格，其他格不动。
+    if (g.length >= 2 && !g.includes(task) && v.kind === "task") setGrid(g.map((id) => (id === v.task ? task : id)));
+    if (g.includes(task)) setZoom((z) => (z != null && z !== task ? task : z));
     setView({ kind: "task", task });
   }, []);
 
-  /** 把任务放在旁边一格（⌘ 点侧边栏的任务、右键菜单）。 */
-  const openBeside = useCallback(
-    (task: number) => {
+  /**
+   * 把任务放进右侧并排看（⌘ 点侧边栏的任务、右键菜单、拖进来）。`target` 是落在哪一格上：落在边上插到它前面或后面，
+   * 落在中间换掉它（拖的是已经在格子里的任务时两格对调）；不给时放在正在操作的那一格后面。
+   */
+  const addPane = useCallback(
+    (task: number, target: number | null = null, zone: DropZone = "right") => {
       const v = viewRef.current;
-      if (v.kind !== "task" || v.task === task) return openTask(task);
-      if (findTask(snapRef.current, task)) setBeside({ task, left: false });
+      if (!findTask(snapRef.current, task)) return;
+      if (v.kind !== "task") return openTask(task);
+      const g = gridRef.current.length >= 2 ? [...gridRef.current] : [v.task];
+      const from = g.indexOf(task);
+      const to = target != null && g.includes(target) ? target : v.task;
+      if (to === task) return openTask(task);
+      if (zone === "center" && target != null) {
+        if (from >= 0) [g[from], g[g.indexOf(to)]] = [to, task];
+        else g[g.indexOf(to)] = task;
+      } else {
+        if (from >= 0) g.splice(from, 1);
+        else if (g.length >= MAX_PANES) return flash(t("pane.full", { count: MAX_PANES }));
+        const before = target != null && (zone === "left" || zone === "top");
+        g.splice(g.indexOf(to) + (before ? 0 : 1), 0, task);
+      }
+      setGrid(g.length >= 2 ? g : []);
+      setZoom(null);
+      if (v.task !== task) lastTask.current = v.task;
+      setView({ kind: "task", task });
     },
-    [openTask],
+    [openTask, flash, t],
   );
 
-  /** ⌘\：开着分屏就关上，否则把上一个任务（没有就下一个任务）放在旁边。 */
+  /** ⌘\：并排着就只留正在操作的那一格，否则把上一个任务（没有就下一个任务）放在旁边。 */
   const toggleSplit = useCallback(() => {
-    if (besideRef.current) return setBeside(null);
+    if (gridRef.current.length >= 2) {
+      setGrid([]);
+      setZoom(null);
+      return;
+    }
     const v = viewRef.current;
     if (v.kind !== "task") return;
     const others = allTasks(snapRef.current).filter((t) => t.id !== v.task);
     const pick = others.find((t) => t.id === lastTask.current) ?? others[0];
-    if (pick) openBeside(pick.id);
-  }, [openBeside]);
+    if (pick) addPane(pick.id);
+  }, [addPane]);
+
+  /** 并排看一个项目的全部任务：等你处理的在前，然后是在运行的，最多放 `MAX_PANES` 个。 */
+  const showProject = useCallback(
+    (projectId: string) => {
+      const project = snapRef.current?.projects.find((p) => p.id === projectId);
+      if (!project || project.tasks.length === 0) return;
+      const rank = (task: Task) =>
+        task.state === "needs_you" ? 0 : isLive(writerOf(task)?.status ?? "not_started") ? 1 : 2;
+      const ordered = [...project.tasks].sort((a, b) => rank(a) - rank(b));
+      const shown = ordered.slice(0, MAX_PANES).map((task) => task.id);
+      const v = viewRef.current;
+      setGrid(shown.length >= 2 ? shown : []);
+      setZoom(null);
+      setView({ kind: "task", task: v.kind === "task" && shown.includes(v.task) ? v.task : shown[0] });
+      if (ordered.length > shown.length) {
+        flash(t("pane.someLeft", { shown: shown.length, more: ordered.length - shown.length }));
+      }
+    },
+    [flash, t],
+  );
+
+  /** 并排时换到前一格或后一格（⌘⌥← / ⌘⌥→）。 */
+  const cyclePane = useCallback((delta: number) => {
+    const [v, g] = [viewRef.current, gridRef.current];
+    if (v.kind !== "task" || g.length < 2) return;
+    const at = g.indexOf(v.task);
+    setZoom((z) => (z != null ? g[(at + delta + g.length) % g.length] : z));
+    setView({ kind: "task", task: g[(at + delta + g.length) % g.length] });
+  }, []);
+
+  /** 并排时放大正在操作的那一格，再按一次回到并排（⌘⇧↵）。 */
+  const toggleZoom = useCallback(() => {
+    const v = viewRef.current;
+    if (v.kind !== "task" || gridRef.current.length < 2) return;
+    setZoom((z) => (z === v.task ? null : v.task));
+  }, []);
+
+  // 拖到右侧松开：放进格子；没有任务（空白页）时直接打开它。
+  useEffect(() => {
+    setDropHandler((drop) => addPane(drop.task, drop.target, drop.zone));
+    return () => setDropHandler(null);
+  }, [addPane]);
 
   /** 当前任务所在的项目，没有时是第一个项目。 */
   const currentProject = useCallback(() => {
@@ -256,19 +344,23 @@ export function App() {
       const first = last.task !== null && findTask(s, last.task) ? last.task : latest?.id;
       if (first !== undefined) {
         openTask(first);
-        if (last.beside && last.beside.task !== first && findTask(s, last.beside.task)) setBeside(last.beside);
+        const restored = last.grid.filter((id) => findTask(s, id));
+        if (restored.length >= 2 && restored.includes(first)) setGrid(restored);
       } else if (s.projects.length > 0) await createTask(s.projects[0].id, "");
     })();
   }, [refresh, addProject, openTask, createTask]);
 
   useEffect(() => {
-    if (view.kind === "task") saveLayout({ task: view.task, beside, ratio });
-  }, [view, beside, ratio]);
+    if (view.kind === "task") saveLayout({ task: view.task, grid, ratio });
+  }, [view, grid, ratio]);
 
-  // 旁边那个任务关掉了（或者和正在操作的是同一个）：不再分屏。
+  // 格子里的任务关掉了：去掉那一格，只剩一格时不再并排。
   useEffect(() => {
-    if (beside && (view.kind !== "task" || beside.task === view.task || !findTask(snap, beside.task))) setBeside(null);
-  }, [snap, view, beside]);
+    if (grid.length === 0 || !snap) return;
+    const alive = grid.filter((id) => findTask(snap, id));
+    if (view.kind !== "task" || alive.length < 2) setGrid([]);
+    else if (alive.length !== grid.length) setGrid(alive);
+  }, [snap, view, grid]);
 
   // 当前任务被关闭后，打开同项目里最近的任务。
   useEffect(() => {
@@ -454,6 +546,9 @@ export function App() {
   handlers.current["search"] = () => setFocusSearch((n) => n + 1);
   handlers.current["next-waiting"] = jumpToWaiting;
   handlers.current["split"] = toggleSplit;
+  handlers.current["zoom-pane"] = toggleZoom;
+  handlers.current["prev-pane"] = () => cyclePane(-1);
+  handlers.current["next-pane"] = () => cyclePane(1);
 
   /** ⌘K 搜索框里能搜到的命令，和菜单、快捷键做的事一样。 */
   const run = (id: string) => () => handlers.current[id]?.();
@@ -467,10 +562,22 @@ export function App() {
       ? [
           {
             id: "split",
-            label: t(beside ? "command.unsplit" : "command.split"),
+            label: t(split ? "command.unsplit" : "command.split"),
             keys: "⌘\\",
             run: run("split"),
           },
+          {
+            id: "show-project",
+            label: t("command.showProject", { project: current.project.name }),
+            run: () => showProject(current.project.id),
+          },
+          ...(split
+            ? [
+                { id: "zoom-pane", label: t(zoom != null ? "command.unzoomPane" : "command.zoomPane"), keys: "⌘⇧↵", run: run("zoom-pane") },
+                { id: "next-pane", label: t("command.nextPane"), keys: "⌘⌥→", run: run("next-pane") },
+                { id: "prev-pane", label: t("command.prevPane"), keys: "⌘⌥←", run: run("prev-pane") },
+              ]
+            : []),
           { id: "review", label: t("menu.review"), keys: "⌘⇧R", run: run("review") },
           { id: "handoff", label: t("command.handoff"), run: () => setHandoff(current.task.id) },
           { id: "reveal", label: t(isMac ? "task.reveal" : "task.openFolder"), keys: "⌘⇧F", run: run("reveal") },
@@ -532,8 +639,9 @@ export function App() {
           openTask(task);
           setHandoff(task);
         }}
-        beside={beside?.task ?? null}
-        onOpenBeside={openBeside}
+        panes={split ? grid : []}
+        onOpenBeside={(task) => addPane(task)}
+        onShowProject={showProject}
         onCloseTask={requestClose}
         onAddProject={openAddProject}
         onJumpToWaiting={jumpToWaiting}
@@ -542,37 +650,45 @@ export function App() {
       />
       <main className="main">
         {view.kind === "task" && current ? (
-          <div className="panes">
-            {(besideTask ? (beside?.left ? [besideTask, current] : [current, besideTask]) : [current]).map(({ task }, i) => {
-              const active = task.id === current.task.id;
+          <PaneGrid
+            tasks={panes.map((p) => p.task.id)}
+            active={current.task.id}
+            ratio={ratio}
+            onRatio={setRatio}
+            onActivate={openTask}
+            render={(id) => {
+              const task = panes.find((p) => p.task.id === id)!.task;
+              const active = id === current.task.id;
               return (
-                <Fragment key={task.id}>
-                  {i > 0 && <PaneDivider ratio={ratio} onChange={setRatio} />}
-                <div
-                  className={`pane ${besideTask && active ? "is-active" : ""}`}
-                  style={besideTask ? { flex: `${i === 0 ? ratio : 1 - ratio} 1 0` } : undefined}
-                  // 点旁边那一格（包括里面的按钮、终端）就换成操作它。
-                  onMouseDownCapture={() => !active && openTask(task.id)}
-                >
-                  <TaskView
-                    task={task}
-                    voice={voice}
-                    setVoiceTarget={active ? setChatTarget : noVoiceTarget}
-                    reviewOpen={reviewOpen === task.id}
-                    agents={agentOptions(env)}
-                    onReviewOpenChange={(open) => setReviewOpen(open ? task.id : null)}
-                    onHandoff={() => setHandoff(task.id)}
-                    onSplit={besideTask ? undefined : toggleSplit}
-                    onUnsplit={besideTask ? () => closePane(task.id) : undefined}
-                    onConfirm={setConfirm}
-                    onClose={() => requestClose(task.id)}
-                    onError={fail}
-                  />
-                </div>
-                </Fragment>
+                <TaskView
+                  task={task}
+                  voice={voice}
+                  setVoiceTarget={active ? setChatTarget : noVoiceTarget}
+                  reviewOpen={reviewOpen === task.id}
+                  agents={agentOptions(env)}
+                  compact={panes.length >= 3}
+                  pane={
+                    split
+                      ? {
+                          zoomed: zoom === task.id,
+                          onZoom: () => {
+                            openTask(task.id);
+                            setZoom((z) => (z === task.id ? null : task.id));
+                          },
+                          onClose: () => closePane(task.id),
+                        }
+                      : undefined
+                  }
+                  onReviewOpenChange={(open) => setReviewOpen(open ? task.id : null)}
+                  onHandoff={() => setHandoff(task.id)}
+                  onSplit={split ? undefined : toggleSplit}
+                  onConfirm={setConfirm}
+                  onClose={() => requestClose(task.id)}
+                  onError={fail}
+                />
               );
-            })}
-          </div>
+            }}
+          />
         ) : (
           <Empty
             snap={snap}
@@ -621,6 +737,7 @@ export function App() {
           onClose={() => setAddingProject(null)}
         />
       )}
+      <PaneDragGhost />
       {handoffTask && (
         <HandoffDialog
           task={handoffTask}

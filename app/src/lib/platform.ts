@@ -46,10 +46,17 @@ export function kbd(mac: string): string {
 
 /** 把一段文字里的 macOS 快捷键（"显示审阅（⌘⇧R）"）换成当前系统的写法。 */
 export function localizeKeys(text: string): string {
-  return isMac ? text : text.replace(/[⌘⌥⇧⌃]+(?:Space|[A-Z0-9↵↑↓])?/g, pcLabel);
+  return isMac ? text : text.replace(/[⌘⌥⇧⌃]+(?:Space|[A-Z0-9↵↑↓←→])?/g, pcLabel);
 }
 
-const KEY_NAMES: Record<string, string> = { "↵": "Enter", "↑": "ArrowUp", "↓": "ArrowDown", Space: " " };
+const KEY_NAMES: Record<string, string> = {
+  "↵": "Enter",
+  "↑": "ArrowUp",
+  "↓": "ArrowDown",
+  "←": "ArrowLeft",
+  "→": "ArrowRight",
+  Space: " ",
+};
 
 /** 按键事件是不是这个快捷键（按 macOS 的写法传）。 */
 export function matches(e: KeyboardEvent, mac: string): boolean {

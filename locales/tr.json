@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Ajanın sıradaki işi (isteğe bağlı)",
   "cli.taskForked": "#{from} görevinden #{id} “{title}” görevi oluşturuldu; {agent} orada devam ediyor.",
   "cli.reviewing": "{agent}, #{id} görevini inceliyor…",
-  "cli.conflictingArgs": "{arg}, {other} ile birlikte kullanılamaz. Kullanımı görmek için duolo --help çalıştırın."
+  "cli.conflictingArgs": "{arg}, {other} ile birlikte kullanılamaz. Kullanımı görmek için duolo --help çalıştırın.",
+  "pane.move": "Bu bölmeyi taşımak için sürükleyin",
+  "pane.zoom": "Bu bölmeyi büyüt",
+  "pane.unzoom": "Tüm bölmelere dön",
+  "pane.full": "Yan yana en fazla {count} görev sığar. Önce bir bölmeyi kapatın.",
+  "pane.someLeft": "{shown} görev yan yana gösteriliyor; {more} görev daha kenar çubuğunda.",
+  "sidebar.showProject": "Tüm görevleri yan yana göster",
+  "command.showProject": "{project} içindeki tüm görevleri yan yana göster",
+  "command.zoomPane": "Geçerli bölmeyi büyüt",
+  "command.unzoomPane": "Tüm bölmeleri yeniden göster",
+  "command.nextPane": "Sonraki bölmeye git",
+  "command.prevPane": "Önceki bölmeye git"
 }

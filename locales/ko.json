@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "에이전트가 다음에 할 일(선택)",
   "cli.taskForked": "작업 #{from}에서 작업 #{id} “{title}”을(를) 만들었습니다. {agent}가 이어서 진행합니다.",
   "cli.reviewing": "{agent}가 작업 #{id}을(를) 리뷰하는 중…",
-  "cli.conflictingArgs": "{arg}은(는) {other}와(과) 함께 쓸 수 없습니다. duolo --help로 사용법을 확인하세요."
+  "cli.conflictingArgs": "{arg}은(는) {other}와(과) 함께 쓸 수 없습니다. duolo --help로 사용법을 확인하세요.",
+  "pane.move": "드래그해서 위치 이동",
+  "pane.zoom": "이 창 크게 보기",
+  "pane.unzoom": "나란히 보기로 돌아가기",
+  "pane.full": "나란히 볼 수 있는 작업은 최대 {count}개입니다. 먼저 창 하나를 닫으세요.",
+  "pane.someLeft": "작업 {shown}개를 나란히 보는 중이고, {more}개는 사이드바에 있습니다.",
+  "sidebar.showProject": "모든 작업 나란히 보기",
+  "command.showProject": "{project}의 모든 작업 나란히 보기",
+  "command.zoomPane": "현재 창 크게 보기",
+  "command.unzoomPane": "모든 창 다시 보기",
+  "command.nextPane": "다음 창으로",
+  "command.prevPane": "이전 창으로"
 }

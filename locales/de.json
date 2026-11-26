@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Was der Agent als Nächstes tun soll (optional)",
   "cli.taskForked": "Aufgabe #{id} „{title}“ aus Aufgabe #{from} erstellt; {agent} macht dort weiter.",
   "cli.reviewing": "{agent} prüft Aufgabe #{id}…",
-  "cli.conflictingArgs": "{arg} kann nicht zusammen mit {other} verwendet werden. Führe duolo --help aus, um die Verwendung zu sehen."
+  "cli.conflictingArgs": "{arg} kann nicht zusammen mit {other} verwendet werden. Führe duolo --help aus, um die Verwendung zu sehen.",
+  "pane.move": "Ziehen, um diesen Bereich zu verschieben",
+  "pane.zoom": "Diesen Bereich vergrößern",
+  "pane.unzoom": "Zurück zu allen Bereichen",
+  "pane.full": "Höchstens {count} Aufgaben passen nebeneinander. Schließe zuerst einen Bereich.",
+  "pane.someLeft": "{shown} Aufgaben nebeneinander; {more} weitere sind in der Seitenleiste.",
+  "sidebar.showProject": "Alle Aufgaben nebeneinander zeigen",
+  "command.showProject": "Alle Aufgaben in {project} nebeneinander zeigen",
+  "command.zoomPane": "Aktuellen Bereich vergrößern",
+  "command.unzoomPane": "Alle Bereiche wieder zeigen",
+  "command.nextPane": "Zum nächsten Bereich",
+  "command.prevPane": "Zum vorherigen Bereich"
 }

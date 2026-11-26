@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Yang perlu dikerjakan agen selanjutnya (opsional)",
   "cli.taskForked": "Tugas #{id} “{title}” dibuat dari tugas #{from}; {agent} melanjutkan di sana.",
   "cli.reviewing": "{agent} sedang meninjau tugas #{id}…",
-  "cli.conflictingArgs": "{arg} tidak bisa dipakai bersama {other}. Jalankan duolo --help untuk melihat cara pakai."
+  "cli.conflictingArgs": "{arg} tidak bisa dipakai bersama {other}. Jalankan duolo --help untuk melihat cara pakai.",
+  "pane.move": "Seret untuk memindahkan panel ini",
+  "pane.zoom": "Perbesar panel ini",
+  "pane.unzoom": "Kembali ke semua panel",
+  "pane.full": "Paling banyak {count} tugas muat berdampingan. Tutup satu panel dulu.",
+  "pane.someLeft": "Menampilkan {shown} tugas berdampingan; {more} lagi ada di bilah samping.",
+  "sidebar.showProject": "Tampilkan semua tugas berdampingan",
+  "command.showProject": "Tampilkan semua tugas di {project} berdampingan",
+  "command.zoomPane": "Perbesar panel saat ini",
+  "command.unzoomPane": "Tampilkan semua panel lagi",
+  "command.nextPane": "Ke panel berikutnya",
+  "command.prevPane": "Ke panel sebelumnya"
 }

@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "O que o agente deve fazer agora (opcional)",
   "cli.taskForked": "Tarefa #{id} “{title}” criada a partir da tarefa #{from}; {agent} continua nela.",
   "cli.reviewing": "{agent} está revisando a tarefa #{id}…",
-  "cli.conflictingArgs": "{arg} não pode ser usado junto com {other}. Execute duolo --help para ver o uso."
+  "cli.conflictingArgs": "{arg} não pode ser usado junto com {other}. Execute duolo --help para ver o uso.",
+  "pane.move": "Arraste para mover este painel",
+  "pane.zoom": "Ampliar este painel",
+  "pane.unzoom": "Voltar a todos os painéis",
+  "pane.full": "Cabem no máximo {count} tarefas lado a lado. Feche um painel primeiro.",
+  "pane.someLeft": "{shown} tarefas lado a lado; mais {more} estão na barra lateral.",
+  "sidebar.showProject": "Ver todas as tarefas lado a lado",
+  "command.showProject": "Ver todas as tarefas de {project} lado a lado",
+  "command.zoomPane": "Ampliar o painel atual",
+  "command.unzoomPane": "Mostrar todos os painéis de novo",
+  "command.nextPane": "Ir para o próximo painel",
+  "command.prevPane": "Ir para o painel anterior"
 }

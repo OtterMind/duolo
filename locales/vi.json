@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Việc agent cần làm tiếp (không bắt buộc)",
   "cli.taskForked": "Đã tạo nhiệm vụ #{id} “{title}” từ nhiệm vụ #{from}; {agent} làm tiếp ở đó.",
   "cli.reviewing": "{agent} đang duyệt nhiệm vụ #{id}…",
-  "cli.conflictingArgs": "Không dùng được {arg} cùng với {other}. Chạy duolo --help để xem cách dùng."
+  "cli.conflictingArgs": "Không dùng được {arg} cùng với {other}. Chạy duolo --help để xem cách dùng.",
+  "pane.move": "Kéo để di chuyển ô này",
+  "pane.zoom": "Phóng to ô này",
+  "pane.unzoom": "Quay lại xem tất cả các ô",
+  "pane.full": "Chỉ xếp được tối đa {count} nhiệm vụ cạnh nhau. Hãy đóng bớt một ô.",
+  "pane.someLeft": "Đang xếp {shown} nhiệm vụ cạnh nhau; còn {more} nhiệm vụ ở thanh bên.",
+  "sidebar.showProject": "Xem tất cả nhiệm vụ cạnh nhau",
+  "command.showProject": "Xem tất cả nhiệm vụ của {project} cạnh nhau",
+  "command.zoomPane": "Phóng to ô hiện tại",
+  "command.unzoomPane": "Xem lại tất cả các ô",
+  "command.nextPane": "Sang ô tiếp theo",
+  "command.prevPane": "Về ô trước"
 }

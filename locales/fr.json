@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Ce que l’agent doit faire ensuite (facultatif)",
   "cli.taskForked": "Tâche #{id} « {title} » créée à partir de la tâche #{from} ; {agent} y continue.",
   "cli.reviewing": "{agent} relit la tâche #{id}…",
-  "cli.conflictingArgs": "{arg} ne peut pas être utilisé avec {other}. Lancez duolo --help pour voir l’utilisation."
+  "cli.conflictingArgs": "{arg} ne peut pas être utilisé avec {other}. Lancez duolo --help pour voir l’utilisation.",
+  "pane.move": "Faites glisser pour déplacer ce volet",
+  "pane.zoom": "Agrandir ce volet",
+  "pane.unzoom": "Revenir à tous les volets",
+  "pane.full": "Au plus {count} tâches côte à côte. Fermez d’abord un volet.",
+  "pane.someLeft": "{shown} tâches côte à côte ; {more} autres sont dans la barre latérale.",
+  "sidebar.showProject": "Afficher toutes les tâches côte à côte",
+  "command.showProject": "Afficher toutes les tâches de {project} côte à côte",
+  "command.zoomPane": "Agrandir le volet actuel",
+  "command.unzoomPane": "Réafficher tous les volets",
+  "command.nextPane": "Aller au volet suivant",
+  "command.prevPane": "Aller au volet précédent"
 }

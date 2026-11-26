@@ -277,6 +277,19 @@ body.is-resizing * {
 .side-project-head:hover .project-add {
   color: var(--muted);
 }
+.project-grid {
+  width: 22px;
+  height: 22px;
+  color: var(--faint);
+  opacity: 0;
+}
+.side-project-head:hover .project-grid {
+  opacity: 1;
+  color: var(--muted);
+}
+.project-grid:focus-visible {
+  opacity: 1;
+}
 .side-empty {
   padding: 2px 12px 6px;
   color: var(--faint);
@@ -703,8 +716,100 @@ body.is-resizing * {
 .pane.is-active .topbar {
   box-shadow: inset 0 -2px 0 var(--focus);
 }
-.panes:has(.pane-divider) .pane:not(.is-active) .topbar-title {
+.panes:has(.pane-divider) .pane:not(.is-active) .topbar-title,
+.panes.is-grid .pane:not(.is-active) .topbar-title,
+.panes.is-stacked .pane:not(.is-active) .topbar-title {
   color: var(--dim);
+}
+
+/* 三格以上并排：等大的网格，格子之间一条细线。两格但太窄时上下排。 */
+.pane {
+  position: relative;
+}
+.panes.is-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--line-strong);
+}
+.panes.is-grid > .pane {
+  min-height: 0;
+  background: var(--bg);
+}
+.panes.is-stacked {
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line-strong);
+}
+.panes.is-stacked > .pane {
+  min-height: 0;
+  background: var(--bg);
+}
+.topbar.is-compact .topbar-meta {
+  display: none;
+}
+.pane-grip {
+  display: flex;
+  align-items: center;
+  margin-right: -4px;
+  color: var(--faint);
+  cursor: grab;
+}
+.pane-grip:hover {
+  color: var(--muted);
+}
+
+/* 拖任务经过时的落点：边上一条蓝边是插到旁边，整格蒙一层是换掉它。 */
+.pane-drop {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(110, 155, 245, 0.16);
+  border: 2px solid var(--focus);
+  border-radius: 6px;
+}
+.pane-drop.is-center {
+  inset: 6px;
+}
+.pane-drop.is-left {
+  inset: 6px auto 6px 6px;
+  width: 40%;
+}
+.pane-drop.is-right {
+  inset: 6px 6px 6px auto;
+  width: 40%;
+}
+.pane-drop.is-top {
+  inset: 6px 6px auto 6px;
+  height: 40%;
+}
+.pane-drop.is-bottom {
+  inset: auto 6px 6px 6px;
+  height: 40%;
+}
+.pane-ghost {
+  position: fixed;
+  z-index: 70;
+  max-width: 260px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--raised);
+  border: 1px solid var(--focus);
+  color: var(--text);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.pane-ghost.is-away {
+  border-color: var(--line-strong);
+  opacity: 0.7;
+}
+body.is-dragging-pane,
+body.is-dragging-pane * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 

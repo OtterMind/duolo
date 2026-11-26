@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "What the agent should do next (optional)",
   "cli.taskForked": "Created task #{id} “{title}” from task #{from}; {agent} continues there.",
   "cli.reviewing": "{agent} is reviewing task #{id}…",
-  "cli.conflictingArgs": "{arg} can't be used together with {other}. Run duolo --help to see usage."
+  "cli.conflictingArgs": "{arg} can't be used together with {other}. Run duolo --help to see usage.",
+  "pane.move": "Drag to move this pane",
+  "pane.zoom": "Enlarge this pane",
+  "pane.unzoom": "Back to all panes",
+  "pane.full": "At most {count} tasks fit side by side. Close a pane first.",
+  "pane.someLeft": "Showing {shown} tasks side by side; {more} more are in the sidebar.",
+  "sidebar.showProject": "Show all tasks side by side",
+  "command.showProject": "Show all tasks in {project} side by side",
+  "command.zoomPane": "Enlarge the current pane",
+  "command.unzoomPane": "Show all panes again",
+  "command.nextPane": "Go to the next pane",
+  "command.prevPane": "Go to the previous pane"
 }

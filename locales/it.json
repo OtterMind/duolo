@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Cosa deve fare l’agente adesso (facoltativo)",
   "cli.taskForked": "Creata l’attività #{id} «{title}» dall’attività #{from}; {agent} continua lì.",
   "cli.reviewing": "{agent} sta revisionando l’attività #{id}…",
-  "cli.conflictingArgs": "{arg} non si può usare insieme a {other}. Esegui duolo --help per vedere l’uso."
+  "cli.conflictingArgs": "{arg} non si può usare insieme a {other}. Esegui duolo --help per vedere l’uso.",
+  "pane.move": "Trascina per spostare questo riquadro",
+  "pane.zoom": "Ingrandisci questo riquadro",
+  "pane.unzoom": "Torna a tutti i riquadri",
+  "pane.full": "Al massimo {count} attività affiancate. Chiudi prima un riquadro.",
+  "pane.someLeft": "{shown} attività affiancate; altre {more} sono nella barra laterale.",
+  "sidebar.showProject": "Mostra tutte le attività affiancate",
+  "command.showProject": "Mostra affiancate tutte le attività di {project}",
+  "command.zoomPane": "Ingrandisci il riquadro attuale",
+  "command.unzoomPane": "Mostra di nuovo tutti i riquadri",
+  "command.nextPane": "Vai al riquadro successivo",
+  "command.prevPane": "Vai al riquadro precedente"
 }

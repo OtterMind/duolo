@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "Что агенту сделать дальше (необязательно)",
   "cli.taskForked": "Создана задача #{id} «{title}» из задачи #{from}; её продолжает {agent}.",
   "cli.reviewing": "{agent} проверяет задачу #{id}…",
-  "cli.conflictingArgs": "{arg} нельзя использовать вместе с {other}. Запустите duolo --help, чтобы посмотреть использование."
+  "cli.conflictingArgs": "{arg} нельзя использовать вместе с {other}. Запустите duolo --help, чтобы посмотреть использование.",
+  "pane.move": "Перетащите, чтобы переместить панель",
+  "pane.zoom": "Развернуть эту панель",
+  "pane.unzoom": "Вернуться ко всем панелям",
+  "pane.full": "Рядом помещается не больше {count} задач. Сначала закройте одну панель.",
+  "pane.someLeft": "Рядом показано {shown} задач; ещё {more} — в боковой панели.",
+  "sidebar.showProject": "Показать все задачи рядом",
+  "command.showProject": "Показать все задачи {project} рядом",
+  "command.zoomPane": "Развернуть текущую панель",
+  "command.unzoomPane": "Снова показать все панели",
+  "command.nextPane": "К следующей панели",
+  "command.prevPane": "К предыдущей панели"
 }

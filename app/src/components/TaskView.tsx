@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Columns2, Ellipsis, GitBranch, MessagesSquare, PanelRightClose, SquareTerminal, X } from "lucide-react";
+import {
+  ChevronDown,
+  Columns2,
+  Ellipsis,
+  GitBranch,
+  GripVertical,
+  Maximize2,
+  MessagesSquare,
+  Minimize2,
+  PanelRightClose,
+  SquareTerminal,
+  X,
+} from "lucide-react";
 
 import { useT } from "../i18n";
 
@@ -16,6 +28,7 @@ import type { ConfirmSpec } from "./Confirm";
 import { Markdown } from "./Markdown";
 import { VoiceBar } from "./VoiceBar";
 import { isMac, kbd } from "../lib/platform";
+import { beginPaneDrag } from "../lib/paneDrag";
 
 interface Props {
   task: Task;
@@ -29,10 +42,12 @@ interface Props {
   onReviewOpenChange(open: boolean): void;
   /** 交给另一个 Agent：审阅、接力或分出新任务。 */
   onHandoff(): void;
-  /** 没分屏时：在旁边再开一个任务（⌘\\）。 */
+  /** 没并排时：在旁边再开一个任务（⌘\\）。 */
   onSplit?(): void;
-  /** 分屏时：关掉这一格。 */
-  onUnsplit?(): void;
+  /** 并排时：这一格的放大和关闭。 */
+  pane?: { zoomed: boolean; onZoom(): void; onClose(): void };
+  /** 三格以上并排，格子窄：顶栏只留要紧的。 */
+  compact?: boolean;
   onConfirm(spec: ConfirmSpec): void;
   onClose(): void;
   onError(err: unknown): void;
@@ -66,13 +81,26 @@ export function TaskView(props: Props) {
 
   return (
     <div className="task">
-      <header className="topbar" data-tauri-drag-region>
+      <header className={`topbar ${props.compact ? "is-compact" : ""}`} data-tauri-drag-region>
+        {props.pane && (
+          <span
+            className="pane-grip"
+            title={t("pane.move")}
+            onPointerDown={(e) => beginPaneDrag(e, task.id, task.untitled ? t("task.untitled") : task.title)}
+          >
+            <GripVertical size={14} strokeWidth={1.75} />
+          </span>
+        )}
         <button className="agent-switch" title={t("task.writer", { agent: agent.name })} onClick={props.onHandoff}>
           <AgentIcon kind={agent.kind} />
-          <span>{agent.name}</span>
+          {!props.compact && <span>{agent.name}</span>}
           <ChevronDown size={12} strokeWidth={1.75} className="dim" />
         </button>
-        <span className={`topbar-title ellipsis ${task.untitled ? "untitled" : ""}`} title={task.prompt} data-tauri-drag-region>
+        <span
+          className={`topbar-title ellipsis ${task.untitled ? "untitled" : ""}`}
+          title={props.compact ? `${task.prompt}\n${task.branch}` : task.prompt}
+          data-tauri-drag-region
+        >
           {task.untitled ? t("task.untitled") : task.title}
         </span>
         <StatusIcon status={agent.status} />
@@ -95,8 +123,17 @@ export function TaskView(props: Props) {
             <Columns2 size={15} strokeWidth={1.75} />
           </button>
         )}
-        {props.onUnsplit && (
-          <button className="icon-btn" title={t("task.unsplit")} onClick={props.onUnsplit}>
+        {props.pane && (
+          <button
+            className="icon-btn"
+            title={`${t(props.pane.zoomed ? "pane.unzoom" : "pane.zoom")} (${kbd("⌘⇧↵")})`}
+            onClick={props.pane.onZoom}
+          >
+            {props.pane.zoomed ? <Minimize2 size={14} strokeWidth={1.75} /> : <Maximize2 size={14} strokeWidth={1.75} />}
+          </button>
+        )}
+        {props.pane && (
+          <button className="icon-btn" title={t("task.unsplit")} onClick={props.pane.onClose}>
             <PanelRightClose size={15} strokeWidth={1.75} />
           </button>
         )}

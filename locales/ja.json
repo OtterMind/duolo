@@ -498,5 +498,16 @@
   "cli.help.handoffRequest": "次にやってほしいこと（任意）",
   "cli.taskForked": "タスク #{from} からタスク #{id}「{title}」を作成しました。{agent} が続けます。",
   "cli.reviewing": "{agent} がタスク #{id} をレビュー中…",
-  "cli.conflictingArgs": "{arg} は {other} と一緒に使えません。duolo --help で使い方を確認してください。"
+  "cli.conflictingArgs": "{arg} は {other} と一緒に使えません。duolo --help で使い方を確認してください。",
+  "pane.move": "ドラッグで位置を移動",
+  "pane.zoom": "このペインを拡大",
+  "pane.unzoom": "並べた表示に戻す",
+  "pane.full": "並べて表示できるのは {count} 件までです。先にペインを1つ閉じてください。",
+  "pane.someLeft": "{shown} 件を並べて表示中。残り {more} 件はサイドバーにあります。",
+  "sidebar.showProject": "すべてのタスクを並べて表示",
+  "command.showProject": "{project} のすべてのタスクを並べて表示",
+  "command.zoomPane": "現在のペインを拡大",
+  "command.unzoomPane": "すべてのペインを再表示",
+  "command.nextPane": "次のペインへ",
+  "command.prevPane": "前のペインへ"
 }

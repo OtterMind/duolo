@@ -545,8 +545,8 @@ body.is-resizing * {
 }
 
 /* 设置：从左下角齿轮向上弹出 */
-.settings-dialog {
-  width: 620px;
+.dialog.settings-dialog {
+  width: 640px;
   max-width: calc(100vw - 32px);
   height: min(520px, calc(100vh - 64px));
   padding: 0;
@@ -644,6 +644,17 @@ body.is-resizing * {
   color: var(--text);
   font: 12px var(--sans);
 }
+.settings-row > .grow {
+  min-width: 0;
+}
+.settings-row > .switch,
+.settings-row > select,
+.settings-row > .meta {
+  flex: none;
+}
+.settings-note .link-btn {
+  white-space: nowrap;
+}
 .settings-hint {
   display: block;
   margin-top: 3px;
@@ -664,9 +675,22 @@ body.is-resizing * {
   font-weight: 500;
 }
 .account-head .btn.small {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.account-head .grow {
+  min-width: 0;
+  white-space: nowrap;
+}
+.account-source {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
+  font-size: 11px;
 }
 .account-row {
   display: flex;

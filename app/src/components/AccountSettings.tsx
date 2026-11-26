@@ -85,7 +85,7 @@ function AgentAccounts({ agent, name, onError }: { agent: string; name: string; 
           >
             <span className="account-check">{a.chosen && <Check size={12} strokeWidth={2} />}</span>
             <span className="account-name">{label(a, i)}</span>
-            <span className="meta">{source(a)}</span>
+            {(a.email || a.source !== "default") && <span className="account-source">{source(a)}</span>}
           </button>
           {a.signedIn === false && (
             <button

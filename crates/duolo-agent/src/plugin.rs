@@ -142,6 +142,11 @@ impl Plugin {
         self.manifest.install.runnable()
     }
 
+    /// 在 npm 上发布的包名（查最新版本用），见 `[install].npm`。
+    pub fn npm_package(&self) -> Option<&str> {
+        self.manifest.install.npm.as_deref()
+    }
+
     /// 官方安装脚本放命令的目录。
     pub fn bin_dirs(&self) -> Vec<std::path::PathBuf> {
         self.manifest.install.bin_dirs.iter().map(|d| expand(d)).collect()

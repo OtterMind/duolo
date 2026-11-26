@@ -47,6 +47,8 @@ pub struct Check {
     pub can_install: bool,
     /// 太旧时能一键升级（用它自己的升级命令）。
     pub can_update: bool,
+    /// 装了的能一键升级（不管旧不旧），设置的"关于"里有新版本时用。
+    pub updatable: bool,
     /// 能一键登录。
     pub can_sign_in: bool,
 }
@@ -78,6 +80,7 @@ pub fn check_environment(config: &Config, agents: &Registry) -> Vec<Check> {
         signed_in: None,
         can_install: false,
         can_update: false,
+        updatable: false,
         can_sign_in: false,
     });
     checks
@@ -104,6 +107,7 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
                     .and_then(|status| signed_in(OneShot { env_remove: agents.env_remove(), ..status })),
                 can_install: plugin.install_runnable().is_some(),
                 can_update: too_old.is_some() && plugin.update_command(Some(&check.version)).is_some(),
+                updatable: plugin.update_command(Some(&check.version)).is_some(),
                 can_sign_in: plugin.login_args().is_some(),
                 ..check
             }
@@ -122,6 +126,7 @@ fn agent_check(agents: &Registry, kind: &AgentKind) -> Check {
             signed_in: None,
             can_install: false,
             can_update: false,
+            updatable: false,
             can_sign_in: false,
         },
     }
@@ -152,6 +157,7 @@ fn check_within(kind: CheckKind, name: &str, command: OneShot, timeout: Duration
         signed_in: None,
         can_install: false,
         can_update: false,
+        updatable: false,
         can_sign_in: false,
     };
     let Some(prompted) = Prompted::new(&command, None) else { return base };

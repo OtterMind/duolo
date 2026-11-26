@@ -13,6 +13,8 @@ windows = "irm https://claude.ai/install.ps1 | iex"
 bin_dirs = ["~/.local/bin"]
 # `claude update` 照原来的安装方式升级（Homebrew、npm 装的会告诉用户用哪条命令）。
 update_args = ["update"]
+# 查最新版本用（设置的"关于"）；不管用什么方式装的，版本号都和 npm 上的一致。
+npm = "@anthropic-ai/claude-code"
 
 # Claude 的订阅（Pro、Max）直接登录 Claude Code，额度和客户端共用。装了 Claude 桌面版就说明用户有这个账号。
 [account]

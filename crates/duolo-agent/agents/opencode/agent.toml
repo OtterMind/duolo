@@ -9,6 +9,8 @@ default = "npm install -g opencode-ai"
 # 官方安装脚本（curl https://opencode.ai/install）装在这里。
 bin_dirs = ["~/.opencode/bin"]
 update_args = ["upgrade"]
+# 查最新版本用（设置的"关于"）；不管用什么方式装的，版本号都和 npm 上的一致。
+npm = "opencode-ai"
 
 # 登录是选一家模型服务、填它的账号或密钥；没有查登录状态的命令，装好后直接接着登录。
 [account]

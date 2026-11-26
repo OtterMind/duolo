@@ -117,6 +117,18 @@ export interface Check {
   canInstall: boolean;
   canUpdate: boolean;
   canSignIn: boolean;
+  /** 装了的能一键升级（不管旧不旧），有新版本时用。 */
+  updatable: boolean;
+}
+
+/** 检查更新的结果。 */
+export interface Updates {
+  /** Duolo 的新版本，已经是最新时为 null。 */
+  duolo: { version: string; url: string } | null;
+  /** 没查到 Duolo 有没有新版本（网络不通）。 */
+  duoloFailed: boolean;
+  /** 各个 Agent 的最新版本，按 Agent 的种类；查不到的不在里面。 */
+  agents: Record<string, string>;
 }
 
 /** 一键安装、升级 Agent，或者登录它的账号。 */
@@ -308,6 +320,8 @@ export const api = {
   setDefaultReviewer: (agent: string) => invoke<void>("set_default_reviewer", { agent }),
   setDefaultSurface: (surface: Surface) => invoke<void>("set_default_surface", { surface }),
   /** 版本，数据和配置文件在哪里。 */
+  /** 检查 Duolo 和各个 Agent 有没有新版本，要联网，几秒。 */
+  checkUpdates: () => invoke<Updates>("check_updates"),
   appInfo: () => invoke<{ version: string; dataDir: string; configFile: string }>("app_info"),
   openTerminal: (path: string) => invoke<void>("open_terminal", { path }),
   /** 剪贴板里的文件或图片对应的路径（复制的图片先存成临时 PNG）；只有文字时为空。 */

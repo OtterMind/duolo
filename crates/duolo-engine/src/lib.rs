@@ -20,6 +20,7 @@ mod setup;
 mod shells;
 mod status;
 mod switch;
+mod updates;
 
 pub use accounts::{account_status, AccountStatus};
 pub use duolo_agent::{Account, AccountSource, Plugin, Registry};
@@ -31,3 +32,4 @@ pub use env::{check_environment, Check, CheckKind};
 pub use naming::suggest_branch;
 pub use setup::{signed_in, start_setup, SetupStep};
 pub use status::{AgentStatus, Summary};
+pub use updates::{agent_versions, duolo_update, Release};

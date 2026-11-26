@@ -744,6 +744,7 @@ export function App() {
         <SetupDialog
           agent={setupOption}
           account={setup?.account}
+          step={setup?.step}
           onEnv={setEnv}
           onClose={() => {
             setSetup(null);

@@ -33,6 +33,7 @@ windows = "irm https://toy.dev/install.ps1 | iex"        # 还可以有 macos、
 bin_dirs = ["~/.local/bin"]      # 安装脚本把命令放在哪里：脚本不一定改 shell 的 PATH，Duolo 自己也去找（排在 PATH 后面）
 update_args = ["update"]   # 太旧时一键升级：用它自己的升级命令，照原来的安装方式（npm、Homebrew、脚本）来，不会再装一份
 update_since = "0.126.0"   # 从这个版本起才有 update_args；更旧的只能手动升级
+npm = "@openai/codex"      # 在 npm 上发布的包名：设置的"关于"里查最新版本，有新版本时能一键升级（用 update_args）
 
 [account]                  # 账号：一键登录，以及认出用同一个账号的桌面客户端
 status_args = ["auth", "status"] # 查有没有登录：已登录时退出码为 0。没有这种命令就不写，装好后直接接着登录

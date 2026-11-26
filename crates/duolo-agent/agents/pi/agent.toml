@@ -6,6 +6,8 @@ command = "pi"
 
 [install]
 default = "npm install -g @earendil-works/pi-coding-agent"
+# 查最新版本用（设置的"关于"）；不管用什么方式装的，版本号都和 npm 上的一致。
+npm = "@earendil-works/pi-coding-agent"
 
 [start]
 prompt = "argument"

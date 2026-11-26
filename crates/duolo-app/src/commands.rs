@@ -10,7 +10,7 @@ use duolo_engine::{check_environment, ops, Size, TaskOptions};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 
-use crate::view::{self, CheckView, DiffView, PluginView, Snapshot};
+use crate::view::{self, CheckView, DiffView, PluginView, ReleaseView, Snapshot, UpdatesView};
 use crate::{AppState, Res};
 
 /// 在后台线程里做费时间的事。
@@ -115,6 +115,26 @@ pub fn set_default_reviewer(state: State<'_, AppState>, agent: String) -> Res<()
 #[tauri::command]
 pub fn set_default_surface(state: State<'_, AppState>, surface: Surface) {
     state.engine().set_default_surface(surface);
+}
+
+/// 检查 Duolo 和各个 Agent 有没有新版本。要联网，几秒。
+#[tauri::command]
+pub async fn check_updates(app: AppHandle, state: State<'_, AppState>) -> Res<UpdatesView> {
+    let agents = state.engine().agents().clone();
+    let current = app.package_info().version.to_string();
+    let (duolo, latest) = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::scope(|scope| {
+            let duolo = scope.spawn(|| duolo_engine::duolo_update(&current));
+            let latest = duolo_engine::agent_versions(&agents);
+            (duolo.join().unwrap_or_else(|_| Err(anyhow::anyhow!("update check panicked"))), latest)
+        })
+    })
+    .await?;
+    Ok(UpdatesView {
+        duolo_failed: duolo.is_err(),
+        duolo: duolo.ok().flatten().map(|r| ReleaseView { version: r.version, url: r.url }),
+        agents: latest.into_iter().map(|(kind, version)| (kind.0, version)).collect(),
+    })
 }
 
 /// 设置的"关于"：版本，数据和配置文件在哪里。

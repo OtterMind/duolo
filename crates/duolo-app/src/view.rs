@@ -197,6 +197,8 @@ pub struct CheckView {
     pub can_install: bool,
     pub can_update: bool,
     pub can_sign_in: bool,
+    /// 装了的能一键升级（不管旧不旧），有新版本时用。
+    pub updatable: bool,
 }
 
 impl From<Check> for CheckView {
@@ -220,6 +222,7 @@ impl From<Check> for CheckView {
             can_install: check.can_install,
             can_update: check.can_update,
             can_sign_in: check.can_sign_in,
+            updatable: check.updatable,
         }
     }
 }
@@ -373,4 +376,22 @@ impl AccountView {
             chosen: account.id() == chosen,
         }
     }
+}
+
+/// 检查更新的结果（设置的"关于"）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatesView {
+    /// Duolo 的新版本，已经是最新时为 null。
+    pub duolo: Option<ReleaseView>,
+    /// 没查到 Duolo 有没有新版本（网络不通）。
+    pub duolo_failed: bool,
+    /// 各个 Agent 的最新版本，按 Agent 的种类；查不到的不在里面。
+    pub agents: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReleaseView {
+    pub version: String,
+    pub url: String,
 }

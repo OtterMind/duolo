@@ -30,12 +30,15 @@ const TITLE = {
 export function SetupDialog({
   agent,
   account,
+  step,
   onEnv,
   onClose: close,
 }: {
   agent: AgentOption;
   /** 只登录这个账号（`new` 是新添加一个，见 `api.setupStart`）。 */
   account?: string;
+  /** 从哪一步开始；没给时按现状决定。 */
+  step?: SetupStep;
   /** 每步结束后重新检查的环境，交给 App 更新。 */
   onEnv(env: Check[]): void;
   onClose(): void;
@@ -43,7 +46,7 @@ export function SetupDialog({
   const t = useT();
   /** 第几次运行哪一步：换一步、重试都是新的一次，开一个新终端。 */
   const [run, setRun] = useState<{ step: SetupStep; n: number }>({
-    step: account === undefined ? firstSetupStep(agent) : "login",
+    step: step ?? (account === undefined ? firstSetupStep(agent) : "login"),
     n: 0,
   });
   /** 登录的账号：新添加的开始后换成它的文件夹，重试时还登录这一个。 */

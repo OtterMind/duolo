@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Info, Mic, SlidersHorizontal, TriangleAlert, UserRound, X } from "lucide-react";
 
 import { LOCALES, useI18n, type LanguagePref } from "../i18n";
-import { api, type Check, type FnKeyStatus, type Surface, type VoiceSettings } from "../lib/api";
+import { api, type Check, type FnKeyStatus, type Surface, type Updates, type VoiceSettings } from "../lib/api";
 import { agentOptions, defaultChoice, rememberChoice } from "../lib/agents";
 import { isMac, TALK_KEY } from "../lib/platform";
 import { allPlugins } from "../lib/plugins";
+import { requestSetup, requestUpdate } from "../lib/setup";
 import { FONT_SIZES, setTerminalFontSize, terminalFontSize } from "../lib/terminalFont";
 import { AccountSettings } from "./AccountSettings";
+import { AgentIcon } from "./AgentIcon";
 
 type Tab = "general" | "voice" | "accounts" | "about";
 
@@ -41,7 +43,9 @@ export function SettingsDialog({
   useEffect(() => ref.current?.focus(), []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      // 上面叠着别的窗口（例如在"关于"里升级 Agent）时，Esc 归那个窗口。
+      const above = document.activeElement?.closest(".dialog");
+      if (e.key === "Escape" && (!above || above === ref.current)) {
         e.stopPropagation();
         onClose();
       }
@@ -80,7 +84,7 @@ export function SettingsDialog({
           </header>
           <div className="settings-pane">
             {tab === "general" && <General env={env} onError={onError} />}
-            {tab === "about" && <About onError={onError} />}
+            {tab === "about" && <About env={env} onError={onError} />}
             {tab === "voice" && <Voice onError={onError} />}
             {tab === "accounts" && <AccountSettings onError={onError} />}
           </div>
@@ -211,39 +215,126 @@ function General({ env, onError }: { env: Check[] | null; onError(err: unknown):
   );
 }
 
-function About({ onError }: { onError(err: unknown): void }) {
+function About({ env, onError }: { env: Check[] | null; onError(err: unknown): void }) {
   const { t } = useI18n();
   const [info, setInfo] = useState<{ version: string; dataDir: string; configFile: string } | null>(null);
+  /** null：正在查。 */
+  const [updates, setUpdates] = useState<Updates | null>(null);
+  const check = useCallback(() => {
+    setUpdates(null);
+    // 查不到时当作网络不通，各个 Agent 只显示装的版本。
+    api.checkUpdates().then(setUpdates, () => setUpdates({ duolo: null, duoloFailed: true, agents: {} }));
+  }, []);
+
   useEffect(() => {
     api.appInfo().then(setInfo, onError);
   }, [onError]);
+  // 打开这一页就查一次。
+  useEffect(check, [check]);
+
   const reveal = t(isMac ? "task.reveal" : "task.openFolder");
+  const agents = (env ?? []).filter((c) => c.kind === "agent" && c.agent);
   return (
-    <div className="settings-card">
-      <div className="settings-row">
-        <span className="grow">{t("settings.version")}</span>
-        <span className="meta">{info?.version ?? ""}</span>
+    <>
+      <div className="settings-card">
+        <div className="settings-row">
+          <span className="grow">
+            Duolo {info?.version ?? ""}
+            <span className="settings-hint">
+              {updates === null
+                ? t("settings.checking")
+                : updates.duolo
+                  ? t("settings.newVersion", { version: updates.duolo.version })
+                  : updates.duoloFailed
+                    ? t("settings.checkFailed")
+                    : t("settings.upToDate")}
+            </span>
+          </span>
+          {updates?.duolo ? (
+            <button className="btn small primary" onClick={() => api.openUrl(updates.duolo!.url).catch(onError)}>
+              {t("settings.download")}
+            </button>
+          ) : (
+            <button className="btn small" disabled={updates === null} onClick={check}>
+              {t("settings.checkUpdates")}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="settings-row">
-        <span className="grow">
-          {t("settings.configFile")}
-          <span className="settings-hint">{info?.configFile}</span>
-        </span>
-        <button className="btn small" disabled={!info} onClick={() => info && api.reveal(info.configFile).catch(onError)}>
-          {reveal}
+      {agents.length > 0 && (
+        <>
+          <div className="settings-group-title">{t("settings.agentVersions")}</div>
+          <div className="settings-card">
+            {agents.map((c) => (
+              <AgentVersion key={c.agent} check={c} latest={updates?.agents[c.agent]} />
+            ))}
+          </div>
+        </>
+      )}
+      <div className="settings-card">
+        <div className="settings-row">
+          <span className="grow">
+            {t("settings.configFile")}
+            <span className="settings-hint">{info?.configFile}</span>
+          </span>
+          <button className="btn small" disabled={!info} onClick={() => info && api.reveal(info.configFile).catch(onError)}>
+            {reveal}
+          </button>
+        </div>
+        <div className="settings-row">
+          <span className="grow">
+            {t("settings.dataDir")}
+            <span className="settings-hint">{info?.dataDir}</span>
+          </span>
+          <button className="btn small" disabled={!info} onClick={() => info && api.reveal(info.dataDir).catch(onError)}>
+            {reveal}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** 一个 Agent 装的版本：有新版本时能一键升级，没装的能一键安装。 */
+function AgentVersion({ check, latest }: { check: Check; latest: string | undefined }) {
+  const { t } = useI18n();
+  const newer = check.ok && !!latest && isOlder(check.version, latest);
+  const hint = !check.ok
+    ? t("newTask.notInstalled")
+    : newer
+      ? t("settings.agentNewer", { version: check.version, latest: latest! })
+      : check.version;
+  return (
+    <div className="settings-row">
+      <AgentIcon kind={check.agent} size={14} />
+      <span className="grow">
+        {check.name}
+        <span className="settings-hint">{hint}</span>
+      </span>
+      {newer && check.updatable && (
+        <button className="btn small" onClick={() => requestUpdate(check.agent)}>
+          {t("setup.update")}
         </button>
-      </div>
-      <div className="settings-row">
-        <span className="grow">
-          {t("settings.dataDir")}
-          <span className="settings-hint">{info?.dataDir}</span>
-        </span>
-        <button className="btn small" disabled={!info} onClick={() => info && api.reveal(info.dataDir).catch(onError)}>
-          {reveal}
+      )}
+      {!check.ok && check.canInstall && (
+        <button className="btn small" onClick={() => requestSetup(check.agent)}>
+          {t("setup.install")}
         </button>
-      </div>
+      )}
     </div>
   );
+}
+
+/** 版本号按数字逐段比（和 Rust 的 `duolo_core::text::is_older` 一样）。 */
+function isOlder(version: string, than: string) {
+  const parse = (v: string) => v.match(/\d+(\.\d+)*/)?.[0].split(".").map(Number);
+  const [a, b] = [parse(version), parse(than)];
+  if (!a || !b) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const [x, y] = [a[i] ?? 0, b[i] ?? 0];
+    if (x !== y) return x < y;
+  }
+  return false;
 }
 
 function Voice({ onError }: { onError(err: unknown): void }) {

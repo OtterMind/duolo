@@ -124,6 +124,8 @@ pub struct Install {
     pub update_args: Vec<String>,
     /// 从哪个版本起才有 `update_args`；更旧的只能手动升级。
     pub update_since: Option<String>,
+    /// 在 npm 上发布的包名，用来查最新版本（设置的"关于"里显示有没有新版本）。没写时不查。
+    pub npm: Option<String>,
 }
 
 impl Install {
@@ -436,6 +438,9 @@ impl Manifest {
         }
         if let Some(since) = &self.install.update_since {
             ensure!(duolo_core::text::parse_version(since).is_some(), "install.update_since must look like 1.2.3");
+        }
+        if let Some(npm) = &self.install.npm {
+            ensure!(!npm.trim().is_empty() && !npm.contains(char::is_whitespace), "install.npm must be a package name");
         }
         if let Some(hooks) = &self.hooks {
             ensure!(crate::hooks::format(&hooks.format).is_some(), "unknown hooks format {:?}", hooks.format);

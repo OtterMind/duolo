@@ -14,6 +14,8 @@ bin_dirs = ["~/.local/bin"]
 # `codex update` 照原来的安装方式升级；0.126.0 起才有（Orca 的资料）。
 update_args = ["update"]
 update_since = "0.126.0"
+# 查最新版本用（设置的"关于"）；不管用什么方式装的，版本号都和 npm 上的一致。
+npm = "@openai/codex"
 
 # ChatGPT 的账号（Plus、Pro、Team）直接登录 Codex，用的是同一份额度。
 # 装了 ChatGPT 或 Codex 的桌面客户端，就说明用户有这个账号。

@@ -187,6 +187,7 @@ fn main() {
             commands::set_default_reviewer,
             commands::set_default_surface,
             commands::app_info,
+            commands::check_updates,
             commands::task_events,
             commands::execute,
             commands::rename_task,

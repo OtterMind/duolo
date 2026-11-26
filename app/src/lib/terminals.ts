@@ -64,9 +64,35 @@ interface Entry {
   shift: number;
   /** 输入框空着（连 Agent 的灰字提示都没有）时，提示文字放在哪；不该显示时为 null。 */
   hint: { left: number; top: number; height: number } | null;
+  /** 最近发给 Agent 的几段输入，见 `recoverDroppedInput`。 */
+  sent: { data: string; at: number }[];
 }
 
 const pool = new Map<string, Entry>();
+
+/**
+ * macOS 的 WebView 里开着中文输入法时，要按 Shift 的标点（？！：）第一下会被 xterm 丢掉，要按两次。
+ *
+ * Safari 内核先发输入法交来的字（input 事件），后发这个键的 keydown。xterm 看到之前按下的 Shift
+ * 还没松开，以为这个字已经由按键处理过，就不发；随后 keydown 的 keyCode 是 229，xterm 去比对输入框
+ * 前后的内容，可字已经在里面了，比不出差别，也不发（xterm.js #5374，修复 #5614 还没合并）。
+ *
+ * 办法：输入法交来字以后稍等一下，xterm 各条路（按键、输入事件、输入法组字、比对输入框）都没把它发出去，
+ * 就由我们补发。xterm 发过的不会重复发。
+ */
+function recoverDroppedInput(entry: Entry, textarea: HTMLTextAreaElement) {
+  textarea.addEventListener("input", (e) => {
+    const ev = e as InputEvent;
+    if (ev.inputType !== "insertText" || !ev.data || ev.isComposing) return;
+    const data = ev.data;
+    const at = performance.now();
+    // xterm 自己的补发也是 setTimeout(0)，等它之后再看。
+    window.setTimeout(() => {
+      if (entry.sent.some((s) => s.at >= at - 50 && s.data.includes(data))) return;
+      entry.term.input(data, true);
+    }, 20);
+  });
+}
 
 /**
  * xterm 按下鼠标开始拖选，等 document 收到 mouseup 才结束。macOS 的 WebView 有时收不到这个 mouseup
@@ -153,12 +179,13 @@ function create(ref: AgentRef): Entry {
     }
     return true;
   });
+  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set(), shift: 0, hint: null, sent: [] };
   term.onData((data) => {
+    entry.sent.push({ data, at: performance.now() });
+    if (entry.sent.length > 8) entry.sent.shift();
     inputListener?.(ref, data);
     void api.write(ref, data).catch(() => {});
   });
-
-  const entry: Entry = { term, fit, el, input: { key: "", decorations: [] }, block, opened: false, attachedSession: null, blockListeners: new Set(), shift: 0, hint: null };
   let frame = 0;
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(() => ((frame = 0), paintInputBlock(entry)));
@@ -175,6 +202,7 @@ export function mount(ref: AgentRef, container: HTMLElement): () => void {
   if (!entry.opened) {
     entry.opened = true;
     entry.term.open(entry.el);
+    if (entry.term.textarea) recoverDroppedInput(entry, entry.term.textarea);
     try {
       const webgl = new WebglAddon();
       webgl.onContextLoss(() => webgl.dispose());

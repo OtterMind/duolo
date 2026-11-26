@@ -27,11 +27,18 @@ pub fn close_task(engine: &Mutex<Engine>, id: TaskId) -> Result<Closed> {
     lock(engine).finish_close(id, result)
 }
 
-/// 换写代码的 Agent，见 [`Engine::switch_writer`]。记下代码样子的 git 不拿着锁做。
-pub fn switch_writer(engine: &Mutex<Engine>, id: TaskId, kind: AgentKind) -> Result<AgentKey> {
+/// 换写代码的 Agent，见 [`Engine::switch_writer_with`]。记下代码样子的 git 不拿着锁做。
+pub fn switch_writer(engine: &Mutex<Engine>, id: TaskId, kind: AgentKind, request: &str) -> Result<AgentKey> {
     let Some(worktree) = lock(engine).prepare_switch(id, &kind)? else { return lock(engine).writer_key(id) };
     let snapshot = duolo_git::snapshot_commit(&worktree, crate::switch::SNAPSHOT_MESSAGE).ok();
-    lock(engine).switch_writer_at(id, kind, snapshot)
+    lock(engine).switch_writer_at(id, kind, snapshot, request)
+}
+
+/// 分出新任务，见 [`Engine::fork_task`]。记下代码样子、建 worktree 的 git 不拿着锁做。
+pub fn fork_task(engine: &Mutex<Engine>, id: TaskId, kind: AgentKind, request: &str) -> Result<TaskId> {
+    let new = lock(engine).prepare_fork(id, kind, request)?;
+    new.check_out()?;
+    lock(engine).finish_task(new)
 }
 
 /// 在项目里建一个仓库，见 [`Engine::add_repo`]。
@@ -68,7 +75,9 @@ pub fn execute(engine: &Mutex<Engine>, command: Command) -> CommandResult {
         Command::StartReview { task } => lock(engine).start_review(task).map(|()| None),
         Command::SwitchWriter { task, agent } => {
             // 和新建任务一样：没人在电脑前点开，直接启动接手的 Agent。
-            switch_writer(engine, task, AgentKind(agent)).and_then(|key| lock(engine).start_agent(key)).map(|()| None)
+            switch_writer(engine, task, AgentKind(agent), "")
+                .and_then(|key| lock(engine).start_agent(key))
+                .map(|()| None)
         }
         Command::SetReviewer { task, agent } => lock(engine).set_reviewer(task, AgentKind(agent)).map(|()| None),
         Command::CloseTask { task } => close_task(engine, task).map(|_| None),

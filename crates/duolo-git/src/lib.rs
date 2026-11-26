@@ -178,6 +178,15 @@ pub fn add_worktree(root: &Path, path: &Path, branch: &str, base: &str) -> Resul
     Ok(())
 }
 
+/// 照着另一个 worktree 的样子新建一个：`snapshot`（[`snapshot_commit`] 记下的）的父提交上新建分支 `branch`，
+/// 在 `path` 创建 worktree，再把快照里的文件放进去。没提交的改动照旧是没提交的，新文件照旧没加进 git。
+pub fn add_worktree_like(root: &Path, path: &Path, branch: &str, snapshot: &str) -> Result<()> {
+    add_worktree(root, path, branch, &format!("{snapshot}^"))?;
+    // 只改工作目录，不改暂存区；快照里没有的文件也会删掉。
+    git(path, &["restore", &format!("--source={snapshot}"), "--worktree", "--", "."])?;
+    Ok(())
+}
+
 /// 重命名 worktree 当前所在的分支。
 pub fn rename_branch(worktree: &Path, new_name: &str) -> Result<()> {
     git(worktree, &["branch", "-m", new_name])?;

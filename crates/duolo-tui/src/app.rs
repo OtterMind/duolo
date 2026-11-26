@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use duolo_core::{t, tf, AgentKey, ProjectId, Task, TaskId};
+use duolo_core::{t, tf, AgentKey, AgentKind, AgentRole, ProjectId, Task, TaskId};
 use duolo_engine::{check_environment, Check, Engine};
 use duolo_pty::Size;
 use ratatui::layout::Rect;
@@ -25,6 +25,43 @@ pub enum Mode {
     ConfirmClose(TaskId),
     ConfirmQuit,
     Help,
+    /// 交给另一个 Agent，表单在 [`App::handoff`]。
+    Handoff,
+}
+
+/// 交出去之后做什么。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandoffKind {
+    /// 分出新任务，两边并行。
+    Fork,
+    /// 在这个任务里接力，原来的停下。
+    Relay,
+    /// 审阅。
+    Review,
+}
+
+impl HandoffKind {
+    pub const ALL: [Self; 3] = [Self::Fork, Self::Relay, Self::Review];
+
+    /// 当前语言的名字，和桌面应用一样。
+    pub fn label(self) -> String {
+        t(match self {
+            Self::Fork => "handoff.fork",
+            Self::Relay => "handoff.relay",
+            Self::Review => "handoff.review",
+        })
+    }
+}
+
+/// 「交给另一个 Agent」的表单：←→ 选谁，↑↓ 选做什么，其余按键写补充的一句话。
+#[derive(Debug)]
+pub struct HandoffForm {
+    pub task: TaskId,
+    /// 装了的 Agent 和它们的名字。
+    pub agents: Vec<(AgentKind, String)>,
+    pub agent: usize,
+    pub kind: HandoffKind,
+    pub request: LineInput,
 }
 
 /// 键盘焦点在哪一侧。
@@ -69,6 +106,8 @@ pub struct App {
     pub cursor: Item,
     pub voice: Voice,
     pub home: Home,
+    /// 打开着的「交给另一个 Agent」表单。
+    pub handoff: Option<HandoffForm>,
     pub sidebar_visible: bool,
     /// 上一帧侧边栏每一行的位置，用于鼠标点击。
     pub sidebar_hits: Vec<(u16, Item)>,
@@ -109,6 +148,7 @@ impl App {
             cursor: Item::NewTask,
             voice: Voice::default(),
             home: Home { project, ..Home::default() },
+            handoff: None,
             sidebar_visible: true,
             sidebar_hits: Vec::new(),
             sidebar_area: Rect::default(),
@@ -382,6 +422,59 @@ impl App {
                 self.info(t("tui.reviewStarted"));
             }
             Err(err) => self.error(duolo_core::error::describe(&err)),
+        }
+    }
+
+    /// 打开「交给另一个 Agent」：默认交给上次叫来审阅的、不是现在在写的那个 Agent，分出新任务。
+    pub fn open_handoff(&mut self) {
+        let Some(task) = self.task_under_cursor() else {
+            self.info(t("tui.selectTaskFirst"));
+            return;
+        };
+        let agents: Vec<(AgentKind, String)> = self
+            .engine
+            .agents()
+            .iter()
+            .filter(|p| p.is_installed())
+            .map(|p| (p.kind(), p.name().to_string()))
+            .collect();
+        let writer =
+            self.engine.state().task(task).and_then(|t| t.agent_with_role(AgentRole::Writer)).map(|a| a.kind.clone());
+        let reviewer = self.engine.reviewer_of(task).ok();
+        let agent = agents
+            .iter()
+            .position(|(k, _)| Some(k) == reviewer.as_ref() && Some(k) != writer.as_ref())
+            .or_else(|| agents.iter().position(|(k, _)| Some(k) != writer.as_ref()))
+            .unwrap_or(0);
+        if agents.is_empty() {
+            self.error(t("tui.noAgents"));
+            return;
+        }
+        self.handoff =
+            Some(HandoffForm { task, agents, agent, kind: HandoffKind::Fork, request: LineInput::default() });
+        self.mode = Mode::Handoff;
+    }
+
+    pub fn close_handoff(&mut self) {
+        self.handoff = None;
+        self.mode = Mode::Normal;
+    }
+
+    /// 按表单交出去：分出新任务后打开它；接力后打开这个任务；审阅时启动审阅的 Agent。
+    pub fn submit_handoff(&mut self) {
+        let Some(form) = self.handoff.take() else { return };
+        self.mode = Mode::Normal;
+        let (kind, _) = form.agents[form.agent].clone();
+        let request = form.request.text().trim().to_string();
+        let result = match form.kind {
+            HandoffKind::Fork => self.engine.fork_task(form.task, kind, &request).map(|id| self.open_task(id)),
+            HandoffKind::Relay => {
+                self.engine.switch_writer_with(form.task, kind, &request).map(|_| self.open_task(form.task))
+            }
+            HandoffKind::Review => self.engine.set_reviewer(form.task, kind).map(|()| self.start_reviewer()),
+        };
+        if let Err(err) = result {
+            self.error(duolo_core::error::describe(&err));
         }
     }
 

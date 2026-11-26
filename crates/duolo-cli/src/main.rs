@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings, TaskId};
+use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings, TaskId, UserError};
 use duolo_engine::{check_environment, Engine, TaskOptions};
 
 #[derive(Debug, Parser)]
@@ -49,6 +49,16 @@ enum Cmd {
         writer: Option<String>,
         #[arg(short, long)]
         reviewer: Option<String>,
+    },
+    Handoff {
+        task: u64,
+        #[arg(short, long)]
+        to: String,
+        #[arg(long, conflicts_with = "review")]
+        fork: bool,
+        #[arg(long, conflicts_with = "request")]
+        review: bool,
+        request: Vec<String>,
     },
     Ls,
     Doctor,
@@ -116,6 +126,10 @@ fn exit_with(err: clap::Error) -> ! {
         ErrorKind::MissingRequiredArgument | ErrorKind::MissingSubcommand => {
             tf("cli.missingArgs", &[("arg", &context(ContextKind::InvalidArg))])
         }
+        ErrorKind::ArgumentConflict => tf(
+            "cli.conflictingArgs",
+            &[("arg", &context(ContextKind::InvalidArg)), ("other", &context(ContextKind::PriorArg))],
+        ),
         _ => {
             let arg = [ContextKind::InvalidArg, ContextKind::InvalidSubcommand, ContextKind::InvalidValue]
                 .into_iter()
@@ -149,6 +163,14 @@ fn localized_command() -> clap::Command {
                 .mut_arg("writer", |a| a.help(t("cli.help.switchWriter")))
                 .mut_arg("reviewer", |a| a.help(t("cli.help.switchReviewer")))
         })
+        .mut_subcommand("handoff", |c| {
+            c.about(t("cli.help.handoff"))
+                .mut_arg("task", |a| a.help(t("cli.help.task")))
+                .mut_arg("to", |a| a.help(t("cli.help.handoffTo")))
+                .mut_arg("fork", |a| a.help(t("cli.help.handoffFork")))
+                .mut_arg("review", |a| a.help(t("cli.help.handoffReview")))
+                .mut_arg("request", |a| a.help(t("cli.help.handoffRequest")))
+        })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
         .arg(clap::Arg::new("version").short('V').long("version").action(clap::ArgAction::Version))
@@ -173,6 +195,22 @@ fn localize_chrome(mut cmd: clap::Command) -> clap::Command {
         cmd = cmd.mut_subcommand(name, localize_chrome);
     }
     cmd
+}
+
+/// 叫 `kind` 审阅任务的改动，等它审完，把结论打出来。审阅失败时报错。
+fn review_now(engine: &mut Engine, id: TaskId, kind: AgentKind) -> Result<()> {
+    let name = engine.agents().name(&kind);
+    engine.review_with(id, kind)?;
+    eprintln!("{}", tf("cli.reviewing", &[("id", &id), ("agent", &name)]));
+    while !engine.poll_reviews().contains(&id) {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let review = engine.state().task(id).and_then(|t| t.review.clone()).ok_or(UserError::TaskNotFound)?;
+    if !review.ok {
+        bail!(Plain(review.output));
+    }
+    println!("{}", review.output.trim_end());
+    Ok(())
 }
 
 /// 终端界面用的引擎：Agent 的钩子交给这个程序（`duolo __hook`）。
@@ -247,6 +285,29 @@ fn run(cli: Cli) -> Result<()> {
             if let Some(kind) = reviewer.map(AgentKind) {
                 engine.set_reviewer(id, kind.clone())?;
                 println!("{}", tf("cli.reviewerSwitched", &[("id", &id), ("agent", &engine.agents().name(&kind))]));
+            }
+            Ok(())
+        }
+        Some(Cmd::Handoff { task, to, fork, review, request }) => {
+            let mut engine = open_engine(paths)?;
+            let (id, kind, request) = (TaskId(task), AgentKind(to), request.join(" "));
+            let name = engine.agents().name(&kind);
+            if review {
+                return review_now(&mut engine, id, kind);
+            }
+            if fork {
+                let new = engine.fork_task(id, kind, &request)?;
+                let task = engine.state().task(new).expect("task was just created");
+                println!(
+                    "{}",
+                    tf("cli.taskForked", &[("id", &new), ("title", &task.title), ("from", &id), ("agent", &name)])
+                );
+                println!("  {}", tf("cli.taskBranch", &[("branch", &task.branch)]));
+                println!("  {}", t("cli.taskHint"));
+            } else {
+                // 只改状态：Agent 在桌面应用里跑的话，由它停掉原来的、在打开任务时启动新的。
+                engine.switch_writer_with(id, kind, &request)?;
+                println!("{}", tf("cli.writerSwitched", &[("id", &id), ("agent", &name)]));
             }
             Ok(())
         }

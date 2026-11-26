@@ -55,14 +55,22 @@ pub struct Closed {
 /// 准备好、还没建 worktree 的新任务，见 [`Engine::prepare_task`]。
 #[derive(Debug)]
 pub struct NewTask {
-    task: Task,
-    repo: PathBuf,
+    pub(crate) task: Task,
+    pub(crate) repo: PathBuf,
+    /// 分出的任务：照着这个 worktree 现在的样子建（见 [`Engine::prepare_fork`]）。
+    pub(crate) like: Option<PathBuf>,
 }
 
 impl NewTask {
     /// 建分支和 worktree。
     pub fn check_out(&self) -> Result<()> {
-        duolo_git::add_worktree(&self.repo, &self.task.worktree, &self.task.branch, &self.task.base)
+        match &self.like {
+            Some(from) => {
+                let snapshot = duolo_git::snapshot_commit(from, crate::switch::FORK_MESSAGE)?;
+                duolo_git::add_worktree_like(&self.repo, &self.task.worktree, &self.task.branch, &snapshot)
+            }
+            None => duolo_git::add_worktree(&self.repo, &self.task.worktree, &self.task.branch, &self.task.base),
+        }
     }
 }
 
@@ -535,13 +543,14 @@ impl Engine {
             reviewer,
             review: None,
             retired: Vec::new(),
+            forked_from: None,
         };
-        Ok(NewTask { task, repo })
+        Ok(NewTask { task, repo, like: None })
     }
 
     /// 新建任务的最后一步：登记。
     pub fn finish_task(&mut self, new: NewTask) -> Result<TaskId> {
-        let NewTask { task, repo } = new;
+        let NewTask { task, repo, .. } = new;
         let (id, worktree) = (task.id, task.worktree.clone());
         let added = self.update(|state| {
             state.tasks.push(task);
@@ -624,7 +633,7 @@ impl Engine {
     }
 
     /// 记一条"任务建好了 / 改名了"的事件，带上当前的标题和分支名。
-    fn record_renamed(&mut self, id: TaskId, created: bool) {
+    pub(crate) fn record_renamed(&mut self, id: TaskId, created: bool) {
         let Some(task) = self.state.task(id) else { return };
         let (title, branch) = (task.title.clone(), task.branch.clone());
         let kind =

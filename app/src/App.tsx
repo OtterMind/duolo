@@ -15,6 +15,7 @@ import { Sidebar, type SearchCommand } from "./components/Sidebar";
 import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
+import { HandoffDialog, type Handoff } from "./components/HandoffDialog";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneDivider } from "./components/PaneDivider";
@@ -76,6 +77,8 @@ export function App() {
   const clearNotices = useCallback(() => setNotices([]), []);
   /** 打开了审阅面板的任务。 */
   const [reviewOpen, setReviewOpen] = useState<number | null>(null);
+  /** 打开了「交给另一个 Agent」的任务。 */
+  const [handoff, setHandoff] = useState<number | null>(null);
   /** 新建任务面板（⌘N）和它预选的项目。 */
   const [panel, setPanel] = useState<{ project: string | null } | null>(null);
   /** 正在把文件夹拖进窗口。 */
@@ -103,6 +106,7 @@ export function App() {
 
   const current = view.kind === "task" ? findTask(snap, view.task) : null;
   const besideTask = beside && current ? findTask(snap, beside.task) : null;
+  const handoffTask = handoff != null ? (findTask(snap, handoff)?.task ?? null) : null;
   /** 分屏时关掉一格：关的是正在操作的那格，就换成操作另一格。 */
   const closePane = (task: number) => {
     if (beside && view.kind === "task" && task === view.task) setView({ kind: "task", task: beside.task });
@@ -319,6 +323,23 @@ export function App() {
     [fail],
   );
 
+  /** 交给另一个 Agent：审阅时打开审阅面板，分出新任务时打开新任务。 */
+  const runHandoff = useCallback(
+    async (task: number, h: Handoff) => {
+      if (h.kind === "review") {
+        setReviewOpen(task);
+        await api.startReview(task, h.agent);
+      } else if (h.kind === "relay") {
+        await api.switchWriter(task, h.agent, h.request);
+      } else {
+        const id = await api.forkTask(task, h.agent, h.request);
+        await refresh();
+        openTask(id);
+      }
+    },
+    [refresh, openTask],
+  );
+
   const requestClose = useCallback(
     (task: number) => {
       const found = findTask(snapRef.current, task);
@@ -451,6 +472,7 @@ export function App() {
             run: run("split"),
           },
           { id: "review", label: t("menu.review"), keys: "⌘⇧R", run: run("review") },
+          { id: "handoff", label: t("command.handoff"), run: () => setHandoff(current.task.id) },
           { id: "reveal", label: t(isMac ? "task.reveal" : "task.openFolder"), keys: "⌘⇧F", run: run("reveal") },
           { id: "close-task", label: t("menu.closeTask"), keys: "⌘⇧W", run: run("close-task") },
         ]
@@ -506,9 +528,9 @@ export function App() {
           openTask(task);
           setReviewOpen(task);
         }}
-        onStartReview={(task) => {
+        onHandoff={(task) => {
           openTask(task);
-          toggleReview(task);
+          setHandoff(task);
         }}
         beside={beside?.task ?? null}
         onOpenBeside={openBeside}
@@ -539,6 +561,7 @@ export function App() {
                     reviewOpen={reviewOpen === task.id}
                     agents={agentOptions(env)}
                     onReviewOpenChange={(open) => setReviewOpen(open ? task.id : null)}
+                    onHandoff={() => setHandoff(task.id)}
                     onSplit={besideTask ? undefined : toggleSplit}
                     onUnsplit={besideTask ? () => closePane(task.id) : undefined}
                     onConfirm={setConfirm}
@@ -596,6 +619,15 @@ export function App() {
             projectAdded(id, known);
           }}
           onClose={() => setAddingProject(null)}
+        />
+      )}
+      {handoffTask && (
+        <HandoffDialog
+          task={handoffTask}
+          agents={agentOptions(env)}
+          onRun={(h) => runHandoff(handoffTask.id, h)}
+          onDone={() => setHandoff(null)}
+          onError={fail}
         />
       )}
       {confirm && <Confirm spec={confirm} onDone={() => setConfirm(null)} onError={fail} />}

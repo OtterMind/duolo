@@ -47,6 +47,8 @@ pub struct TaskView {
     pub state: TaskState,
     /// 换回来时能接着原来会话的 Agent（插件 id）。
     pub resumable: Vec<String>,
+    /// 从哪个任务分出来的。
+    pub forked_from: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -311,6 +313,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
         reviewing_since: engine.review_started_at(task.id),
         state,
         resumable: engine.resumable_writers(task.id).into_iter().map(|kind| kind.0).collect(),
+        forked_from: task.forked_from.map(|id| id.0),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,

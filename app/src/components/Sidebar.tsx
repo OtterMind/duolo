@@ -33,7 +33,8 @@ interface Props {
   /** 放在旁边一格（⌘ 点任务）。 */
   onOpenBeside(task: number): void;
   onOpenReview(task: number): void;
-  onStartReview(task: number): void;
+  /** 交给另一个 Agent：审阅、接力或分出新任务。 */
+  onHandoff(task: number): void;
   onCloseTask(task: number): void;
   onAddProject(): void;
   onJumpToWaiting(): void;
@@ -199,7 +200,7 @@ function TaskRow({
   onOpenTask,
   onOpenBeside,
   onOpenReview,
-  onStartReview,
+  onHandoff,
   onCloseTask,
   onError,
 }: Props & { task: Task; current: boolean }) {
@@ -216,7 +217,7 @@ function TaskRow({
   const entries: MenuEntry[] = [
     { label: t("sidebar.openBeside"), kbd: "⌘\\", run: () => onOpenBeside(task.id) },
     { label: t("sidebar.rename"), run: () => setRenaming(true) },
-    { label: t("sidebar.review", { agent: task.reviewer.name }), kbd: "⌘⇧R", run: () => onStartReview(task.id) },
+    { label: t("sidebar.handoff"), run: () => onHandoff(task.id) },
     { sep: true },
     { label: t(isMac ? "task.reveal" : "task.openFolder"), run: () => void api.reveal(task.worktree) },
     { label: t("task.openTerminal"), run: () => void api.openTerminal(task.worktree) },

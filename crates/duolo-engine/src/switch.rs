@@ -6,16 +6,19 @@
 //!
 //! 换回一天之内换下来的同一种 Agent 时，接回它原来的那次会话（它记得自己做过的事），
 //! 恢复后先告诉它这期间的对话和改动；接不回来（会话没了）就带着交接说明重新开始。
+//!
+//! 也可以分出一个新任务（[`Engine::fork_task`]）：照着原任务现在的代码新建分支和 worktree，
+//! 另一个 Agent 带着同样的交接说明在里面接着做，原来的任务不停，两边并行。
 
 use std::path::PathBuf;
 
 use anyhow::Result;
-use duolo_core::text::{now_secs, truncate_chars};
+use duolo_core::text::{derive_title, now_secs, slug, truncate_chars};
 use duolo_core::{
     AgentKey, AgentKind, AgentRole, AgentSpec, Departure, EventKind, Speaker, Task, TaskEvent, TaskId, UserError,
 };
 
-use crate::engine::Engine;
+use crate::engine::{Engine, NewTask};
 
 /// 交接说明里最多带几条最近的对话。
 const HANDOFF_MESSAGES: usize = 20;
@@ -27,6 +30,8 @@ const HANDOFF_CHARS: usize = 10_000;
 const REVIVE_WITHIN_SECS: u64 = 24 * 3600;
 /// 记下离开时代码样子的提交说明。
 pub(crate) const SNAPSHOT_MESSAGE: &str = "Duolo: work when the agent was switched";
+/// 分出任务时记下原任务代码样子的提交说明。
+pub(crate) const FORK_MESSAGE: &str = "Duolo: work when the task was forked";
 
 impl Engine {
     /// 换写代码的 Agent：停下原来的，让 `kind` 在同一个 worktree 里接着做。返回接手的 Agent。
@@ -36,11 +41,16 @@ impl Engine {
     /// 只是改状态：原来的 Agent 在哪个进程里跑，那个进程同步状态时停掉它（见 `adopt`），所以命令行也能换。
     /// 原来的在这个进程里跑时，接手的马上启动；否则等打开任务时启动。
     pub fn switch_writer(&mut self, id: TaskId, kind: AgentKind) -> Result<AgentKey> {
+        self.switch_writer_with(id, kind, "")
+    }
+
+    /// 和 [`Engine::switch_writer`] 一样，再带上用户要接手的 Agent 做的事（`request`，可以为空）。
+    pub fn switch_writer_with(&mut self, id: TaskId, kind: AgentKind, request: &str) -> Result<AgentKey> {
         let snapshot = match self.prepare_switch(id, &kind)? {
             Some(worktree) => duolo_git::snapshot_commit(&worktree, SNAPSHOT_MESSAGE).ok(),
             None => return self.writer_key(id),
         };
-        self.switch_writer_at(id, kind, snapshot)
+        self.switch_writer_at(id, kind, snapshot, request)
     }
 
     /// 换人前的检查。返回要记下样子的 worktree；已经是它时为 None。
@@ -57,11 +67,13 @@ impl Engine {
     }
 
     /// 换人。`snapshot` 是现在代码的样子（[`duolo_git::snapshot_commit`]），换回原来的 Agent 时告诉它改了什么。
+    /// `request` 是用户要接手的 Agent 做的事，跟在交接说明后面。
     pub(crate) fn switch_writer_at(
         &mut self,
         id: TaskId,
         kind: AgentKind,
         snapshot: Option<String>,
+        request: &str,
     ) -> Result<AgentKey> {
         if self.prepare_switch(id, &kind)?.is_none() {
             return self.writer_key(id);
@@ -70,9 +82,10 @@ impl Engine {
         let was_running = self.sessions.contains_key(&old) || self.chats.contains_key(&old);
         let task = self.state.task(id).ok_or(UserError::TaskNotFound)?;
         let current = task.agent(old.agent).ok_or(UserError::AgentNotRunning)?;
-        let handoff = self.handoff(task, current);
+        let handoff = with_request(self.handoff(task, current), request);
         let revived = self.revivable(task, &kind);
         let note = revived.and_then(|r| r.left.as_ref()).map(|left| self.welcome_back(task, left));
+        let note = with_request(note, request);
         let revived = revived.map(|r| r.id);
         // 接手的照旧在聊天模式下运行，它不支持时在终端里。
         let surface = self.surface_for(&kind, current.surface);
@@ -121,6 +134,58 @@ impl Engine {
         let last = task.retired.iter().rev().find(|a| a.kind == *kind && a.role == AgentRole::Writer)?;
         let recent = last.left.as_ref().is_some_and(|l| now_secs().saturating_sub(l.at) <= REVIVE_WITHIN_SECS);
         (recent && last.session.is_some() && last.launched && plugin.resumes_session()).then_some(last)
+    }
+
+    /// 分出新任务：照着任务 `id` 现在的代码（包括没提交的改动）新建分支和 worktree，让 `kind` 带着交接说明和
+    /// `request`（可以为空）在里面接着做。原来的任务照旧运行。返回新任务；Agent 在打开它时才启动。
+    /// 会运行 git，大仓库要一会儿；共用一个加锁的引擎时用 [`crate::ops::fork_task`]。
+    pub fn fork_task(&mut self, id: TaskId, kind: AgentKind, request: &str) -> Result<TaskId> {
+        let new = self.prepare_fork(id, kind, request)?;
+        new.check_out()?;
+        self.finish_task(new)
+    }
+
+    /// 分出新任务的第一步：检查、定好名字和交接说明、占住编号。之后和新建任务一样
+    /// 用 [`NewTask::check_out`] 建 worktree，[`Engine::finish_task`] 登记。
+    pub fn prepare_fork(&mut self, id: TaskId, kind: AgentKind, request: &str) -> Result<NewTask> {
+        self.check_open(id)?;
+        let plugin = self.agents().get(&kind)?;
+        if !plugin.is_installed() {
+            return Err(UserError::CommandNotFound { program: plugin.command().into() }.into());
+        }
+        let parent = self.state.task(id).cloned().ok_or(UserError::TaskNotFound)?;
+        let from = self.writer_key(id)?;
+        let current = parent.agent(from.agent).ok_or(UserError::AgentNotRunning)?;
+        let handoff = self.handoff(&parent, current).map(|text| format!("{text}\n\n{FORK_NOTE}"));
+        let prompt = with_request(handoff, request);
+        let surface = self.surface_for(&kind, current.surface);
+        let repo = match &parent.repo {
+            Some(repo) => repo.clone(),
+            None => self.state.project(&parent.project).ok_or(UserError::ProjectNotFound)?.root.clone(),
+        };
+        let request = request.trim();
+        let title = if request.is_empty() { parent.title.clone() } else { derive_title(request) };
+        let new_id = self.update(|state| Ok(state.allocate_task_id()))?;
+        let branch = duolo_git::unique_branch(&repo, &parent.branch);
+        let worktree = self.paths().worktrees().join(&parent.project.0).join(format!("{new_id}-{}", slug(&title)));
+        let writer = AgentSpec { prompt, surface, ..AgentSpec::new(0, kind, AgentRole::Writer) };
+        let task = Task {
+            id: new_id,
+            project: parent.project,
+            title,
+            prompt: parent.prompt,
+            branch,
+            base: parent.base,
+            worktree,
+            created_at: now_secs(),
+            agents: vec![writer],
+            repo: Some(repo.clone()),
+            reviewer: parent.reviewer,
+            review: None,
+            retired: Vec::new(),
+            forked_from: Some(id),
+        };
+        Ok(NewTask { task, repo, like: Some(parent.worktree) })
     }
 
     /// 换审阅的 Agent，下一次审阅起生效。正在进行的审阅不受影响。
@@ -208,6 +273,20 @@ summarize the current state briefly and ask the user what to do next.",
         base = task.base
     ));
     text
+}
+
+/// 分出的任务里，交接说明后面再说一句：这是一份副本，原来的 Agent 还在原任务里做。
+const FORK_NOTE: &str = "This worktree is a separate copy on its own branch, made for you. The other agent keeps \
+working on the original task, so do not wait for it or coordinate with it.";
+
+/// 交接说明后面带上用户要它做的事。没有交接说明时，就是这句话本身。
+fn with_request(text: Option<String>, request: &str) -> Option<String> {
+    let request = request.trim();
+    match (text, request.is_empty()) {
+        (text, true) => text,
+        (Some(text), false) => Some(format!("{text}\n\nWhat the user wants you to do now:\n{request}")),
+        (None, false) => Some(request.to_string()),
+    }
 }
 
 /// 换回来的 Agent 恢复会话后先收到的话。
@@ -305,6 +384,64 @@ mod tests {
         assert_eq!(task.retired[0].id, first.agent, "事件里的编号还能对上");
         assert_eq!(engine.writer_key(id).unwrap(), next);
         assert_eq!(engine.switch_writer(id, AgentKind("codex".into())).unwrap(), next, "已经是它了");
+        engine.shutdown();
+    }
+
+    /// 接力时带上一句话：跟在交接说明后面。
+    #[test]
+    fn a_request_follows_the_handoff() {
+        let (_dir, mut engine, project) = engine();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let first = engine.writer_key(id).unwrap();
+        engine.start_agent(first).unwrap();
+        let worktree = engine.state().task(id).unwrap().worktree.clone();
+        read_when_written(&worktree.join("started-claude"));
+
+        engine.switch_writer_with(id, AgentKind("codex".into()), "  Add a total row ").unwrap();
+        let handoff = read_when_written(&worktree.join("started-codex"));
+        assert!(handoff.starts_with("You are taking over"), "{handoff}");
+        assert!(handoff.ends_with("What the user wants you to do now:\nAdd a total row"), "{handoff}");
+        engine.shutdown();
+    }
+
+    /// 分出新任务：新的 worktree 和原来的代码一样（没提交的改动照旧没提交），另一个 Agent 带着交接说明
+    /// 在里面接着做；原来的任务不受影响。
+    #[test]
+    fn a_fork_continues_from_a_copy_of_the_work() {
+        let (_dir, mut engine, project) = engine();
+        let id = engine.create_task(&project, "Export orders as CSV").unwrap();
+        let first = engine.writer_key(id).unwrap();
+        engine.start_agent(first).unwrap();
+        let parent = engine.state().task(id).unwrap().clone();
+        read_when_written(&parent.worktree.join("started-claude"));
+        std::fs::write(parent.worktree.join("tracked.txt"), "v1\n").unwrap();
+        git(&parent.worktree, &["add", "tracked.txt"]);
+        git(&parent.worktree, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1"]);
+        std::fs::write(parent.worktree.join("tracked.txt"), "v2\n").unwrap();
+        std::fs::write(parent.worktree.join("new.txt"), "new\n").unwrap();
+
+        let fork = engine.fork_task(id, AgentKind("codex".into()), "Use cursor paging").unwrap();
+        let task = engine.state().task(fork).unwrap().clone();
+        assert_eq!(task.forked_from, Some(id));
+        assert_eq!(task.branch, format!("{}-2", parent.branch));
+        assert_eq!((task.base.as_str(), task.prompt.as_str()), (parent.base.as_str(), "Export orders as CSV"));
+        assert_eq!(task.title, "Use cursor paging");
+        assert_ne!(task.worktree, parent.worktree);
+        assert_eq!(std::fs::read_to_string(task.worktree.join("tracked.txt")).unwrap(), "v2\n");
+        assert_eq!(std::fs::read_to_string(task.worktree.join("new.txt")).unwrap(), "new\n");
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&task.worktree)
+            .args(["status", "--porcelain", "--", "tracked.txt", "new.txt"])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&status.stdout), " M tracked.txt\n?? new.txt\n", "改动照旧没提交");
+        assert_eq!(engine.agent_status(first), AgentStatus::Running, "原来的任务照旧运行");
+
+        engine.start_agent(engine.writer_key(fork).unwrap()).unwrap();
+        let handoff = read_when_written(&task.worktree.join("started-codex"));
+        assert!(handoff.contains("from another agent (Claude)") && handoff.contains("separate copy"), "{handoff}");
+        assert!(handoff.ends_with("What the user wants you to do now:\nUse cursor paging"), "{handoff}");
         engine.shutdown();
     }
 

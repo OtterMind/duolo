@@ -298,12 +298,21 @@ pub async fn start_reviewer(state: State<'_, AppState>, task: u64) -> Res<u32> {
     Ok(state.engine().start_reviewer(TaskId(task))?.agent)
 }
 
-/// 换写代码的 Agent：原来的停下，`kind` 在同一个 worktree 里接着做。返回接手的 Agent。
+/// 换写代码的 Agent：原来的停下，`kind` 在同一个 worktree 里接着做，交接说明后面带上 `request`。返回接手的 Agent。
 #[tauri::command]
-pub async fn switch_writer(app: AppHandle, task: u64, kind: String) -> Res<u32> {
-    blocking(app, move |state| ops::switch_writer(&state.engine, TaskId(task), AgentKind(kind)))
+pub async fn switch_writer(app: AppHandle, task: u64, kind: String, request: Option<String>) -> Res<u32> {
+    let request = request.unwrap_or_default();
+    blocking(app, move |state| ops::switch_writer(&state.engine, TaskId(task), AgentKind(kind), &request))
         .await
         .map(|key| key.agent)
+}
+
+/// 分出新任务：照着现在的代码新建 worktree，`kind` 带着交接说明和 `request` 接着做，原来的任务不停。返回新任务。
+#[tauri::command]
+pub async fn fork_task(app: AppHandle, task: u64, kind: String, request: String) -> Res<u64> {
+    blocking(app, move |state| ops::fork_task(&state.engine, TaskId(task), AgentKind(kind), &request))
+        .await
+        .map(|id| id.0)
 }
 
 /// 换审阅的 Agent，下一次审阅起生效。

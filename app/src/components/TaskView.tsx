@@ -27,6 +27,8 @@ interface Props {
   /** 可以换成的 Agent。 */
   agents: AgentOption[];
   onReviewOpenChange(open: boolean): void;
+  /** 交给另一个 Agent：审阅、接力或分出新任务。 */
+  onHandoff(): void;
   /** 没分屏时：在旁边再开一个任务（⌘\\）。 */
   onSplit?(): void;
   /** 分屏时：关掉这一格。 */
@@ -45,7 +47,6 @@ export function TaskView(props: Props) {
   const ref = { task: task.id, agent: agent.id };
   const diff = useDiff(task.id);
   const [menu, setMenu] = useState(false);
-  const [agentMenu, setAgentMenu] = useState(false);
   const focusTerminal = () => {
     if (!chat) terminals.terminalFor(ref).term.focus();
   };
@@ -66,26 +67,11 @@ export function TaskView(props: Props) {
   return (
     <div className="task">
       <header className="topbar" data-tauri-drag-region>
-        <div className="dropdown-anchor">
-          <button
-            className={`agent-switch ${agentMenu ? "is-open" : ""}`}
-            title={t("task.writer", { agent: agent.name })}
-            onClick={() => setAgentMenu((m) => !m)}
-          >
-            <AgentIcon kind={agent.kind} />
-            <span>{agent.name}</span>
-            <ChevronDown size={12} strokeWidth={1.75} className="dim" />
-          </button>
-          {agentMenu && (
-            <SwitchMenu
-              task={task}
-              writer={agent}
-              agents={agents}
-              onConfirm={props.onConfirm}
-              onClose={() => setAgentMenu(false)}
-            />
-          )}
-        </div>
+        <button className="agent-switch" title={t("task.writer", { agent: agent.name })} onClick={props.onHandoff}>
+          <AgentIcon kind={agent.kind} />
+          <span>{agent.name}</span>
+          <ChevronDown size={12} strokeWidth={1.75} className="dim" />
+        </button>
         <span className={`topbar-title ellipsis ${task.untitled ? "untitled" : ""}`} title={task.prompt} data-tauri-drag-region>
           {task.untitled ? t("task.untitled") : task.title}
         </span>
@@ -103,13 +89,7 @@ export function TaskView(props: Props) {
         </span>
         <span className="grow" data-tauri-drag-region />
         {agent.chat && <SurfaceSwitch task={task} agent={agent} onConfirm={props.onConfirm} onError={onError} />}
-        <ReviewButton
-          task={task}
-          open={reviewOpen}
-          agents={agents}
-          onStart={startReview}
-          onToggle={() => onReviewOpenChange(!reviewOpen)}
-        />
+        <ReviewButton task={task} open={reviewOpen} onHandoff={props.onHandoff} onToggle={() => onReviewOpenChange(!reviewOpen)} />
         {props.onSplit && (
           <button className="icon-btn" title={`${t("task.split")} (${kbd("⌘\\")})`} onClick={props.onSplit}>
             <Columns2 size={15} strokeWidth={1.75} />
@@ -222,57 +202,22 @@ function SurfaceSwitch({
   );
 }
 
-/** 换谁来写：要先确认，原来的会停下，新的接着做。 */
-function SwitchMenu({
-  task,
-  writer,
-  agents,
-  onConfirm,
-  onClose,
-}: {
-  task: Task;
-  writer: Agent;
-  agents: AgentOption[];
-  onConfirm(spec: ConfirmSpec): void;
-  onClose(): void;
-}) {
-  const t = useT();
-  const pickWriter = (id: string) => {
-    onClose();
-    if (id === writer.kind) return;
-    const to = agents.find((a) => a.id === id)?.name ?? id;
-    onConfirm({
-      title: t("task.switchWriterTitle", { agent: to }),
-      body: t(task.resumable.includes(id) ? "task.switchBackBody" : "task.switchWriterBody", { from: writer.name, to }),
-      action: t("task.switchWriterAction"),
-      run: async () => {
-        await api.switchWriter(task.id, id);
-      },
-    });
-  };
-  return (
-    <Popover onClose={onClose}>
-      <AgentList title={t("newTask.writerTitle")} agents={agents} selected={writer.kind} onPick={pickWriter} />
-    </Popover>
-  );
-}
-
-/** 顶部的审阅入口：平时是一个小按钮，点开选谁来审（上次叫的排在最前）；审阅中显示用时，有结论时显示摘要。 */
+/**
+ * 顶部的「交给…」入口：平时点开交给另一个 Agent（审阅、接力或分出新任务）；审阅中显示用时，有结论时显示摘要，
+ * 点了开关审阅面板。
+ */
 function ReviewButton({
   task,
   open,
-  agents,
-  onStart,
+  onHandoff,
   onToggle,
 }: {
   task: Task;
   open: boolean;
-  agents: AgentOption[];
-  onStart(reviewer: string): void;
+  onHandoff(): void;
   onToggle(): void;
 }) {
   const t = useT();
-  const [picking, setPicking] = useState(false);
   const now = useNow(task.reviewingSince != null);
   if (task.reviewingSince != null) {
     return (
@@ -295,26 +240,9 @@ function ReviewButton({
     );
   }
   return (
-    <div className="dropdown-anchor">
-      <button
-        className={`review-btn ${picking ? "is-open" : ""}`}
-        onClick={() => setPicking((p) => !p)}
-        title={t("review.buttonTitle", { agent: task.reviewer.name })}
-      >
-        {t("review.button")}
-      </button>
-      {picking && (
-        <ReviewerPicker
-          task={task}
-          agents={agents}
-          onPick={(id) => {
-            setPicking(false);
-            onStart(id);
-          }}
-          onClose={() => setPicking(false)}
-        />
-      )}
-    </div>
+    <button className="review-btn" onClick={onHandoff} title={t("handoff.buttonTitle", { agent: task.reviewer.name })}>
+      {t("handoff.button")}
+    </button>
   );
 }
 

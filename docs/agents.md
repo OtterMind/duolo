@@ -154,4 +154,3 @@ env = { TOY_NO_UPDATE = "1" }
   `item/tool/requestUserInput`、MCP 的表单请求也还不支持。
 - 聊天模式下的审阅者：后台审阅照旧用 `[review]`，在终端里打开的审阅者也照旧在终端里。
 - 没有编号的确认框不能在手机上回答。
-- 终端界面里还不能换写代码的 Agent（可以在另一个终端里用 `duolo switch`）。

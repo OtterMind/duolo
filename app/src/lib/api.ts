@@ -67,6 +67,8 @@ export interface Task {
   state: TaskState;
   /** 换回来时能接着原来会话的 Agent。 */
   resumable: string[];
+  /** 从哪个任务分出来的。 */
+  forkedFrom: number | null;
 }
 
 export interface Review {
@@ -270,7 +272,10 @@ export const api = {
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
-  switchWriter: (task: number, kind: string) => invoke<number>("switch_writer", { task, kind }),
+  switchWriter: (task: number, kind: string, request?: string) =>
+    invoke<number>("switch_writer", { task, kind, request }),
+  /** 分出新任务：照着现在的代码新建工作区，`kind` 带着交接说明接着做，原来的任务不停。返回新任务。 */
+  forkTask: (task: number, kind: string, request: string) => invoke<number>("fork_task", { task, kind, request }),
   /** 换个方式运行写代码的 Agent，接着同一个会话。 */
   setSurface: (task: number, surface: Surface) => invoke<void>("set_surface", { task, surface }),
   setReviewer: (task: number, kind: string) => invoke<void>("set_reviewer", { task, kind }),

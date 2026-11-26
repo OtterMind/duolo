@@ -10,7 +10,7 @@
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::layout::Position;
 
-use crate::app::{App, Focus, Mode};
+use crate::app::{App, Focus, HandoffKind, Mode};
 use crate::keys;
 use crate::line_input::LineInput;
 use crate::voice::VoiceTarget;
@@ -50,6 +50,7 @@ fn on_key(app: &mut App, key: KeyEvent) {
             }
         }
         Mode::Help => app.mode = Mode::Normal,
+        Mode::Handoff => handoff(app, key),
         Mode::Normal => {
             if keys::is_prefix(&key) {
                 match app.focus {
@@ -76,6 +77,7 @@ fn sidebar(app: &mut App, key: KeyEvent) {
         KeyCode::Char('n') => app.new_task(),
         KeyCode::Char('a') => app.add_project(),
         KeyCode::Char('r') => app.start_reviewer(),
+        KeyCode::Char('t') => app.open_handoff(),
         KeyCode::Char('x') => app.request_close(),
         KeyCode::Char(c @ '1'..='9') => app.select_nth_task(c as usize - '1' as usize),
         KeyCode::Char('b') => {
@@ -90,6 +92,27 @@ fn sidebar(app: &mut App, key: KeyEvent) {
 }
 
 /// 首页输入框。
+/// 「交给另一个 Agent」表单：←→ 谁来，↑↓ 做什么，↵ 交出去，Esc 取消，其余按键写补充的一句话（审阅时不用写）。
+fn handoff(app: &mut App, key: KeyEvent) {
+    let Some(form) = app.handoff.as_mut() else {
+        app.mode = Mode::Normal;
+        return;
+    };
+    let step = |i: usize, len: usize, back: bool| if back { (i + len - 1) % len } else { (i + 1) % len };
+    match key.code {
+        KeyCode::Esc => app.close_handoff(),
+        KeyCode::Enter => app.submit_handoff(),
+        KeyCode::Left | KeyCode::Right => form.agent = step(form.agent, form.agents.len(), key.code == KeyCode::Left),
+        KeyCode::Up | KeyCode::Down => {
+            let all = HandoffKind::ALL;
+            let at = all.iter().position(|k| *k == form.kind).unwrap_or(0);
+            form.kind = all[step(at, all.len(), key.code == KeyCode::Up)];
+        }
+        _ if form.kind != HandoffKind::Review => edit_line(&mut form.request, &key),
+        _ => {}
+    }
+}
+
 fn home(app: &mut App, key: KeyEvent) {
     if keys::is_voice(&key) {
         app.toggle_voice(VoiceTarget::Home);

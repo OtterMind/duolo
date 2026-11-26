@@ -173,6 +173,9 @@ pub struct Task {
     /// 中途换下来的 Agent。事件里的 Agent 编号还指着它们，编号也不再分给新的。
     #[serde(default)]
     pub retired: Vec<AgentSpec>,
+    /// 从哪个任务分出来的（见 `Engine::fork_task`）。
+    #[serde(default)]
+    pub forked_from: Option<TaskId>,
 }
 
 /// 一次后台审阅的结果。

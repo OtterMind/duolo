@@ -572,5 +572,11 @@
   "cli.help.removeProject": "Proje kimliği (bkz. duolo ls)",
   "cli.help.yes": "Projenin görevlerini de kapat (değişiklikler dallarında kalır)",
   "cli.removeNeedsYes": "“{project}” projesinin {count} görevi var. Kaldırmak önce onları kapatır (commit edilmemiş değişiklikler dallarına commit edilir). Devam etmek için --yes ile yeniden çalıştırın.",
-  "cli.projectRemoved": "“{project}” Duolo'dan kaldırıldı. Klasörü hâlâ diskinizde."
+  "cli.projectRemoved": "“{project}” Duolo'dan kaldırıldı. Klasörü hâlâ diskinizde.",
+  "clone.connecting": "Sunucuya bağlanılıyor…",
+  "clone.preparing": "Sunucu dosyaları hazırlıyor",
+  "clone.receiving": "İndiriliyor",
+  "clone.resolving": "Açılıyor",
+  "clone.checkingOut": "Dosyalar yazılıyor",
+  "error.cancelled": "İptal edildi."
 }

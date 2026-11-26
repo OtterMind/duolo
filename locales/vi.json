@@ -572,5 +572,11 @@
   "cli.help.removeProject": "Mã dự án (xem duolo ls)",
   "cli.help.yes": "Đóng luôn các nhiệm vụ của dự án (thay đổi giữ trên nhánh của chúng)",
   "cli.removeNeedsYes": "“{project}” còn {count} nhiệm vụ. Gỡ sẽ đóng chúng trước (thay đổi chưa commit được commit vào nhánh của chúng). Chạy lại với --yes để tiếp tục.",
-  "cli.projectRemoved": "Đã gỡ “{project}” khỏi Duolo. Thư mục vẫn còn trên ổ đĩa."
+  "cli.projectRemoved": "Đã gỡ “{project}” khỏi Duolo. Thư mục vẫn còn trên ổ đĩa.",
+  "clone.connecting": "Đang kết nối máy chủ…",
+  "clone.preparing": "Máy chủ đang chuẩn bị tệp",
+  "clone.receiving": "Đang tải xuống",
+  "clone.resolving": "Đang giải nén",
+  "clone.checkingOut": "Đang ghi tệp",
+  "error.cancelled": "Đã hủy."
 }

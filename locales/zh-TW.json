@@ -572,5 +572,11 @@
   "cli.help.removeProject": "專案編號（見 duolo ls）",
   "cli.help.yes": "同時關閉專案裡的任務（變更保存在各自的分支上）",
   "cli.removeNeedsYes": "「{project}」還有 {count} 個任務，移除會先關閉它們（未提交的變更提交到各自的分支）。確認的話加上 --yes 再執行一次。",
-  "cli.projectRemoved": "已從 Duolo 移除「{project}」，資料夾還在磁碟上。"
+  "cli.projectRemoved": "已從 Duolo 移除「{project}」，資料夾還在磁碟上。",
+  "clone.connecting": "正在連線伺服器…",
+  "clone.preparing": "伺服器在準備檔案",
+  "clone.receiving": "正在下載",
+  "clone.resolving": "正在解包",
+  "clone.checkingOut": "正在寫入檔案",
+  "error.cancelled": "已取消。"
 }

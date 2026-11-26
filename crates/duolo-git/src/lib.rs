@@ -102,6 +102,151 @@ pub fn clone(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// 克隆进行到哪一步。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClonePhase {
+    /// 连接服务器（还没有进度）。
+    Connecting,
+    /// 服务器在清点、压缩要发的内容。
+    Preparing,
+    /// 下载。
+    Receiving,
+    /// 在本地整理下载的内容。
+    Resolving,
+    /// 把文件放进工作目录。
+    CheckingOut,
+}
+
+/// 克隆的进度：哪一步、这一步的百分比，下载时还有已下载的大小和速度（git 的写法，例如 `12.30 MiB | 2.10 MiB/s`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloneProgress {
+    pub phase: ClonePhase,
+    pub percent: Option<u8>,
+    pub detail: String,
+}
+
+/// 从 git 的一行进度里认出是哪一步、多少（`Receiving objects:  45% (450/1000), 1.20 MiB | 2.00 MiB/s`）。
+/// 不是进度的行为 None。git 用英文输出（运行时设了 `LC_ALL=C`）。
+pub fn parse_clone_progress(line: &str) -> Option<CloneProgress> {
+    let line = line.trim();
+    let body = line.strip_prefix("remote:").map(str::trim).unwrap_or(line);
+    let phase = if body.starts_with("Cloning into") {
+        ClonePhase::Connecting
+    } else if ["Enumerating objects", "Counting objects", "Compressing objects", "Total "]
+        .iter()
+        .any(|p| body.starts_with(p))
+    {
+        ClonePhase::Preparing
+    } else if body.starts_with("Receiving objects") {
+        ClonePhase::Receiving
+    } else if body.starts_with("Resolving deltas") {
+        ClonePhase::Resolving
+    } else if body.starts_with("Updating files") || body.starts_with("Checking out files") {
+        ClonePhase::CheckingOut
+    } else {
+        return None;
+    };
+    let percent = body.find('%').and_then(|end| {
+        let digits = body[..end].trim_end().rsplit(|c: char| !c.is_ascii_digit()).next()?;
+        digits.parse::<u8>().ok().filter(|p| *p <= 100)
+    });
+    // 下载时 `(450/1000), ` 后面是大小和速度；done 之前的部分去掉。
+    let detail = match phase {
+        ClonePhase::Receiving => body
+            .split_once("), ")
+            .map(|(_, rest)| rest.trim_end_matches(", done.").trim().to_string())
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+    Some(CloneProgress { phase, percent, detail })
+}
+
+/// 克隆 `url` 到 `dest`，边下载边把进度交给 `on`。`cancel` 变成 true 时结束 git（连同它启动的进程），
+/// 删掉克隆了一半的目录，返回 [`UserError::Cancelled`]。失败时也删掉克隆了一半的目录。
+/// `dest` 应该还不存在。
+pub fn clone_with_progress(
+    url: &str,
+    dest: &Path,
+    cancel: &std::sync::atomic::AtomicBool,
+    mut on: impl FnMut(&CloneProgress),
+) -> Result<()> {
+    use std::io::Read;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let parent = dest.parent().context("clone destination has no parent")?;
+    std::fs::create_dir_all(parent)?;
+    let mut cmd = duolo_core::process::command("git");
+    cmd.arg("-C").arg(parent).args(["clone", "--progress", url]).arg(dest);
+    for var in REPO_VARS {
+        cmd.env_remove(var);
+    }
+    // 进度按英文认；没有终端时不要等着输入用户名密码（会一直卡住），直接失败告诉用户。
+    cmd.env("LC_ALL", "C").env("GIT_TERMINAL_PROMPT", "0");
+    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
+    let (mut child, tree) = duolo_core::process::spawn_tree(&mut cmd).map_err(|_| UserError::GitMissing)?;
+    let mut stderr = child.stderr.take().context("no stderr")?;
+    // git 用 \r 刷新同一行进度，换行才是新的一行。
+    let (tx, rx) = mpsc::channel::<String>();
+    let reader = std::thread::spawn(move || {
+        let (mut buf, mut line) = ([0u8; 4096], Vec::new());
+        while let Ok(n) = stderr.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            for &b in &buf[..n] {
+                if b == b'\r' || b == b'\n' {
+                    if !line.is_empty() && tx.send(String::from_utf8_lossy(&line).into_owned()).is_err() {
+                        return;
+                    }
+                    line.clear();
+                } else {
+                    line.push(b);
+                }
+            }
+        }
+        if !line.is_empty() {
+            let _ = tx.send(String::from_utf8_lossy(&line).into_owned());
+        }
+    });
+    let mut messages: Vec<String> = Vec::new();
+    let cleanup = || {
+        let _ = std::fs::remove_dir_all(dest);
+    };
+    let status = loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(line) => match parse_clone_progress(&line) {
+                Some(progress) => on(&progress),
+                // 不是进度的行留着，失败时告诉用户。
+                None => {
+                    messages.push(line.trim().to_string());
+                    if messages.len() > 20 {
+                        messages.remove(0);
+                    }
+                }
+            },
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break child.wait()?,
+        }
+        if cancel.load(Ordering::SeqCst) {
+            tree.kill(None, Duration::from_secs(2));
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = reader.join();
+            cleanup();
+            return Err(UserError::Cancelled.into());
+        }
+    };
+    let _ = reader.join();
+    if !status.success() {
+        cleanup();
+        let detail = messages.iter().filter(|m| !m.is_empty()).cloned().collect::<Vec<_>>().join("\n");
+        return Err(UserError::GitFailed { command: format!("clone {url}"), detail }.into());
+    }
+    Ok(())
+}
+
 /// 从克隆地址推出目录名：`git@github.com:a/shop.git` → `shop`。
 pub fn repo_name_from_url(url: &str) -> Option<String> {
     let last = url.trim().trim_end_matches('/').rsplit(['/', ':']).next()?;
@@ -581,6 +726,54 @@ fn parse_shortstat(text: &str) -> DiffStat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clone_progress_lines() {
+        let p = |line| parse_clone_progress(line).map(|p| (p.phase, p.percent, p.detail));
+        assert_eq!(p("Cloning into '/x/shop'..."), Some((ClonePhase::Connecting, None, String::new())));
+        assert_eq!(p("remote: Counting objects:  12% (3/25)"), Some((ClonePhase::Preparing, Some(12), String::new())));
+        assert_eq!(
+            p("Receiving objects:  45% (450/1000), 1.20 MiB | 2.00 MiB/s"),
+            Some((ClonePhase::Receiving, Some(45), "1.20 MiB | 2.00 MiB/s".into()))
+        );
+        assert_eq!(
+            p("Receiving objects: 100% (1000/1000), 3.10 MiB | 2.40 MiB/s, done."),
+            Some((ClonePhase::Receiving, Some(100), "3.10 MiB | 2.40 MiB/s".into()))
+        );
+        assert_eq!(p("Resolving deltas:  30% (3/10)"), Some((ClonePhase::Resolving, Some(30), String::new())));
+        assert_eq!(p("Updating files:  80% (8/10)"), Some((ClonePhase::CheckingOut, Some(80), String::new())));
+        assert_eq!(p("fatal: repository 'x' not found"), None);
+    }
+
+    /// 从另一个仓库克隆（走 file://，和网络克隆一样有进度），收到下载的进度；取消后不留下克隆了一半的目录。
+    #[test]
+    fn clone_reports_progress_and_can_be_cancelled() {
+        use std::sync::atomic::AtomicBool;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        for i in 0..50 {
+            std::fs::write(src.join(format!("f{i}.txt")), format!("{i}\n").repeat(200)).unwrap();
+        }
+        init_repo(&src).unwrap();
+        let url = format!("file://{}", src.display()).replace('\\', "/");
+
+        let dest = dir.path().join("out").join("shop");
+        let mut phases = Vec::new();
+        clone_with_progress(&url, &dest, &AtomicBool::new(false), |p| phases.push(p.phase)).unwrap();
+        assert!(dest.join("f0.txt").exists());
+        assert!(phases.contains(&ClonePhase::Receiving), "{phases:?}");
+
+        let again = dir.path().join("out").join("again");
+        let err = clone_with_progress(&url, &again, &AtomicBool::new(true), |_| {}).unwrap_err();
+        assert!(matches!(err.downcast_ref(), Some(UserError::Cancelled)), "{err:#}");
+        assert!(!again.exists(), "取消后不留下克隆了一半的目录");
+
+        let missing = dir.path().join("out").join("missing");
+        let err = clone_with_progress("file:///nowhere/at/all", &missing, &AtomicBool::new(false), |_| {}).unwrap_err();
+        assert!(matches!(err.downcast_ref(), Some(UserError::GitFailed { .. })), "{err:#}");
+        assert!(!missing.exists());
+    }
 
     #[test]
     fn shortstat() {

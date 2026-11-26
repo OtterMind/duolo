@@ -572,5 +572,11 @@
   "cli.help.removeProject": "ID proyek (lihat duolo ls)",
   "cli.help.yes": "Tutup juga tugas-tugas proyek (perubahan tetap di branch-nya)",
   "cli.removeNeedsYes": "“{project}” punya {count} tugas. Menghapusnya akan menutup tugas-tugas itu dulu (perubahan yang belum di-commit di-commit ke branch-nya). Jalankan lagi dengan --yes untuk melanjutkan.",
-  "cli.projectRemoved": "“{project}” dihapus dari Duolo. Foldernya masih ada di disk."
+  "cli.projectRemoved": "“{project}” dihapus dari Duolo. Foldernya masih ada di disk.",
+  "clone.connecting": "Menghubungkan ke server…",
+  "clone.preparing": "Server sedang menyiapkan berkas",
+  "clone.receiving": "Mengunduh",
+  "clone.resolving": "Membongkar",
+  "clone.checkingOut": "Menulis berkas",
+  "error.cancelled": "Dibatalkan."
 }

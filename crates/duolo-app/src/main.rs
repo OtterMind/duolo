@@ -50,6 +50,8 @@ pub struct AppState {
     asking_quit: AtomicBool,
     /// 正在运行的一键安装或登录。
     setup: setup::Setup,
+    /// 取消正在进行的克隆（界面上点了取消）。
+    clone_cancel: AtomicBool,
 }
 
 impl AppState {
@@ -123,6 +125,7 @@ fn main() {
         quit_seen: AtomicBool::new(false),
         asking_quit: AtomicBool::new(false),
         setup: setup::Setup::default(),
+        clone_cancel: AtomicBool::new(false),
     };
 
     let builder = tauri::Builder::default()
@@ -194,6 +197,7 @@ fn main() {
             commands::branches,
             commands::discover_repos,
             commands::clone_project,
+            commands::cancel_clone,
             commands::projects_home,
             commands::create_project_folder,
             commands::project_repos,

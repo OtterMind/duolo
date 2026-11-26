@@ -572,5 +572,11 @@
   "cli.help.removeProject": "プロジェクト ID（duolo ls を参照）",
   "cli.help.yes": "プロジェクトのタスクも閉じる（変更は各ブランチに保存）",
   "cli.removeNeedsYes": "「{project}」には {count} 件のタスクがあります。削除すると先にそれらを閉じます（未コミットの変更は各ブランチにコミット）。続けるには --yes を付けてもう一度実行してください。",
-  "cli.projectRemoved": "「{project}」を Duolo から削除しました。フォルダーはディスクに残っています。"
+  "cli.projectRemoved": "「{project}」を Duolo から削除しました。フォルダーはディスクに残っています。",
+  "clone.connecting": "サーバーに接続中…",
+  "clone.preparing": "サーバーがファイルを準備中",
+  "clone.receiving": "ダウンロード中",
+  "clone.resolving": "展開中",
+  "clone.checkingOut": "ファイルを書き込み中",
+  "error.cancelled": "キャンセルしました。"
 }

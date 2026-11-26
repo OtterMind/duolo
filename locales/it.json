@@ -572,5 +572,11 @@
   "cli.help.removeProject": "ID del progetto (vedi duolo ls)",
   "cli.help.yes": "Chiudi anche le attività del progetto (le modifiche restano nei loro branch)",
   "cli.removeNeedsYes": "«{project}» ha {count} attività. Rimuoverlo le chiude prima (le modifiche non salvate vengono salvate nei loro branch). Esegui di nuovo con --yes per procedere.",
-  "cli.projectRemoved": "«{project}» rimosso da Duolo. La cartella è ancora sul disco."
+  "cli.projectRemoved": "«{project}» rimosso da Duolo. La cartella è ancora sul disco.",
+  "clone.connecting": "Connessione al server…",
+  "clone.preparing": "Il server sta preparando i file",
+  "clone.receiving": "Download in corso",
+  "clone.resolving": "Estrazione",
+  "clone.checkingOut": "Scrittura dei file",
+  "error.cancelled": "Annullato."
 }

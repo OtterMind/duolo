@@ -4,7 +4,8 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import { useT } from "../i18n";
 import { useModalFocus } from "../lib/modal";
-import { tildify, useProjectsHome, type ProjectAdder } from "../lib/projects";
+import type { CloneProgress } from "../lib/api";
+import { cloneOverall, tildify, useProjectsHome, type ProjectAdder } from "../lib/projects";
 
 const ICON = { size: 15, strokeWidth: 1.75 } as const;
 
@@ -145,13 +146,54 @@ function CloneRepo({
         onChange={(e) => setUrl(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}
       />
+      {adder.cloning ? (
+        <CloneProgressRow progress={adder.cloning} onCancel={adder.cancelClone} />
+      ) : (
+        <div className="add-form-row">
+          <span className="meta ellipsis grow">{t("addProject.cloneInto", { path: tildify(home) })}</span>
+          <button type="submit" className="btn primary small" disabled={!url.trim() || adder.busy}>
+            {t("addProject.cloneAction")}
+          </button>
+        </div>
+      )}
+    </form>
+  );
+}
+
+/** 克隆每一步的说明。 */
+const PHASE_LABEL = {
+  connecting: "clone.connecting",
+  preparing: "clone.preparing",
+  receiving: "clone.receiving",
+  resolving: "clone.resolving",
+  checkingOut: "clone.checkingOut",
+} as const satisfies Record<CloneProgress["phase"], string>;
+
+/** 克隆中：哪一步、整体进度条、下载的大小和速度，和取消按钮。 */
+function CloneProgressRow({ progress, onCancel }: { progress: CloneProgress; onCancel(): void }) {
+  const t = useT();
+  const overall = cloneOverall(progress);
+  const step = t(PHASE_LABEL[progress.phase]);
+  const label = progress.percent != null && progress.phase !== "connecting" ? `${step} ${progress.percent}%` : step;
+  return (
+    <div className="clone-progress" role="status" aria-live="polite">
       <div className="add-form-row">
-        <span className="meta ellipsis grow">{t("addProject.cloneInto", { path: tildify(home) })}</span>
-        <button type="submit" className="btn primary small" disabled={!url.trim() || adder.busy}>
-          {adder.busy ? <span className="status status-running" /> : t("addProject.cloneAction")}
+        <span className="ellipsis grow">{label}</span>
+        {progress.detail && <span className="meta mono">{progress.detail}</span>}
+        <button type="button" className="btn small" onClick={onCancel}>
+          {t("common.cancel")}
         </button>
       </div>
-    </form>
+      <div
+        className={`clone-bar ${progress.phase === "connecting" ? "is-waiting" : ""}`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={overall}
+      >
+        <span style={{ width: `${overall}%` }} />
+      </div>
+    </div>
   );
 }
 

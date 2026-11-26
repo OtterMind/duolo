@@ -572,5 +572,11 @@
   "cli.help.removeProject": "Project id (see duolo ls)",
   "cli.help.yes": "Also close the project's tasks (changes are saved on their branches)",
   "cli.removeNeedsYes": "“{project}” has {count} tasks. Removing it closes them first (uncommitted changes are committed to their branches). Run again with --yes to go ahead.",
-  "cli.projectRemoved": "Removed “{project}” from Duolo. Its folder is still on your disk."
+  "cli.projectRemoved": "Removed “{project}” from Duolo. Its folder is still on your disk.",
+  "clone.connecting": "Connecting to the server…",
+  "clone.preparing": "Server is preparing the files",
+  "clone.receiving": "Downloading",
+  "clone.resolving": "Unpacking",
+  "clone.checkingOut": "Writing files",
+  "error.cancelled": "Cancelled."
 }

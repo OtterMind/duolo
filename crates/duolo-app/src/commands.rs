@@ -296,9 +296,25 @@ pub async fn create_project_folder(state: State<'_, AppState>, name: String, par
     Ok(state.engine().create_project_folder(&parent, &name)?.0)
 }
 
-/// 克隆仓库到 `~/DuoloProjects`，并加为项目。
+/// 克隆的进度，发给界面（见 `duolo_git::CloneProgress`）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloneProgressView {
+    /// `connecting`、`preparing`、`receiving`、`resolving`、`checkingOut`。
+    phase: &'static str,
+    percent: Option<u8>,
+    /// 下载时已下载的大小和速度（git 的写法）。
+    detail: String,
+}
+
+/// 克隆仓库到 `~/DuoloProjects`，并加为项目。进度通过 `on_progress` 发给界面，`cancel_clone` 可以取消。
 #[tauri::command]
-pub async fn clone_project(state: State<'_, AppState>, url: String) -> Res<String> {
+pub async fn clone_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+    on_progress: Channel<CloneProgressView>,
+) -> Res<String> {
     let url = url.trim().to_string();
     let name = duolo_git::repo_name_from_url(&url)
         .filter(|_| url.contains('/') || url.contains(':'))
@@ -308,8 +324,27 @@ pub async fn clone_project(state: State<'_, AppState>, url: String) -> Res<Strin
         return Err(UserError::PathExists { path: dest.display().to_string() }.into());
     }
     let target = dest.clone();
-    tauri::async_runtime::spawn_blocking(move || duolo_git::clone(&url, &target)).await??;
+    state.clone_cancel.store(false, Ordering::SeqCst);
+    blocking(app, move |state| {
+        duolo_git::clone_with_progress(&url, &target, &state.clone_cancel, |p| {
+            let phase = match p.phase {
+                duolo_git::ClonePhase::Connecting => "connecting",
+                duolo_git::ClonePhase::Preparing => "preparing",
+                duolo_git::ClonePhase::Receiving => "receiving",
+                duolo_git::ClonePhase::Resolving => "resolving",
+                duolo_git::ClonePhase::CheckingOut => "checkingOut",
+            };
+            let _ = on_progress.send(CloneProgressView { phase, percent: p.percent, detail: p.detail.clone() });
+        })
+    })
+    .await?;
     Ok(state.engine().add_project(&dest)?.0)
+}
+
+/// 取消正在进行的克隆：结束 git，删掉克隆了一半的目录。
+#[tauri::command]
+pub fn cancel_clone(state: State<'_, AppState>) {
+    state.clone_cancel.store(true, Ordering::SeqCst);
 }
 
 /// 用户在 CLI 里第一次输入的内容作为任务的需求，补上标题；`branch` 是 AI 起的分支名（可以为空）。

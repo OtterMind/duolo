@@ -572,5 +572,11 @@
   "cli.help.removeProject": "ID проекта (см. duolo ls)",
   "cli.help.yes": "Также закрыть задачи проекта (изменения останутся в их ветках)",
   "cli.removeNeedsYes": "В «{project}» есть задачи ({count}). При удалении они сначала закроются (незакоммиченные изменения закоммитятся в их ветки). Запустите снова с --yes, чтобы продолжить.",
-  "cli.projectRemoved": "«{project}» убран из Duolo. Папка осталась на диске."
+  "cli.projectRemoved": "«{project}» убран из Duolo. Папка осталась на диске.",
+  "clone.connecting": "Подключение к серверу…",
+  "clone.preparing": "Сервер готовит файлы",
+  "clone.receiving": "Загрузка",
+  "clone.resolving": "Распаковка",
+  "clone.checkingOut": "Запись файлов",
+  "error.cancelled": "Отменено."
 }

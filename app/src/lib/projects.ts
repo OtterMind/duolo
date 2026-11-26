@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-import { api, type Repo } from "./api";
+import { api, type CloneProgress, type Repo } from "./api";
 import { useT } from "../i18n";
 
 export interface ProjectAdder {
@@ -19,12 +19,32 @@ export interface ProjectAdder {
   /** 新建文件夹 `name`（放在 `parent`，默认 ~/DuoloProjects）并加为项目。 */
   create(name: string, parent: string | null): Promise<string | null>;
   clone(url: string): Promise<string | null>;
+  /** 正在克隆时的进度，不在克隆时为 null。 */
+  cloning: CloneProgress | null;
+  /** 取消正在进行的克隆。 */
+  cancelClone(): void;
+}
+
+/** 克隆的每一步在整个进度条上占多少：下载占大头。 */
+const PHASE_SPAN: Record<CloneProgress["phase"], [number, number]> = {
+  connecting: [0, 0],
+  preparing: [0, 5],
+  receiving: [5, 85],
+  resolving: [85, 95],
+  checkingOut: [95, 100],
+};
+
+/** 整个克隆完成了百分之多少。 */
+export function cloneOverall(p: CloneProgress): number {
+  const [from, to] = PHASE_SPAN[p.phase];
+  return Math.round(from + ((to - from) * (p.percent ?? 0)) / 100);
 }
 
 export function useProjectAdder(onAdded: () => Promise<unknown>, onError: (err: unknown) => void): ProjectAdder {
   const t = useT();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [busy, setBusy] = useState(false);
+  const [cloning, setCloning] = useState<CloneProgress | null>(null);
 
   const loadRepos = useCallback(() => api.discoverRepos().then(setRepos, () => setRepos([])), []);
   useEffect(() => void loadRepos(), [loadRepos]);
@@ -38,7 +58,8 @@ export function useProjectAdder(onAdded: () => Promise<unknown>, onError: (err: 
         void loadRepos();
         return id;
       } catch (err) {
-        onError(err);
+        // 自己点的取消不算出错。
+        if ((err as { code?: string } | null)?.code !== "cancelled") onError(err);
         return null;
       } finally {
         setBusy(false);
@@ -56,9 +77,16 @@ export function useProjectAdder(onAdded: () => Promise<unknown>, onError: (err: 
     (name: string, parent: string | null) => run(() => api.createProjectFolder(name, parent)),
     [run],
   );
-  const clone = useCallback((url: string) => run(() => api.cloneProject(url)), [run]);
+  const clone = useCallback(
+    (url: string) => {
+      setCloning({ phase: "connecting", percent: null, detail: "" });
+      return run(() => api.cloneProject(url, setCloning)).finally(() => setCloning(null));
+    },
+    [run],
+  );
+  const cancelClone = useCallback(() => void api.cancelClone(), []);
 
-  return { repos, busy, add, choose, create, clone };
+  return { repos, busy, add, choose, create, clone, cloning, cancelClone };
 }
 
 /** 新建文件夹和克隆默认放在哪里（完整路径）。 */

@@ -572,5 +572,11 @@
   "cli.help.removeProject": "ID du projet (voir duolo ls)",
   "cli.help.yes": "Fermer aussi les tâches du projet (les modifications restent dans leurs branches)",
   "cli.removeNeedsYes": "« {project} » a {count} tâches. Le retirer les ferme d’abord (les modifications non validées sont validées dans leurs branches). Relancez avec --yes pour continuer.",
-  "cli.projectRemoved": "« {project} » retiré de Duolo. Son dossier est toujours sur votre disque."
+  "cli.projectRemoved": "« {project} » retiré de Duolo. Son dossier est toujours sur votre disque.",
+  "clone.connecting": "Connexion au serveur…",
+  "clone.preparing": "Le serveur prépare les fichiers",
+  "clone.receiving": "Téléchargement",
+  "clone.resolving": "Décompression",
+  "clone.checkingOut": "Écriture des fichiers",
+  "error.cancelled": "Annulé."
 }

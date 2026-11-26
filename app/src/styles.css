@@ -2450,3 +2450,36 @@ body.is-dragging-pane * {
 .shell-row .task-line {
   gap: 6px;
 }
+
+/* 克隆进度 */
+.clone-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.clone-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.clone-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--focus);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+/* 连接服务器时还不知道进度：一小段来回走。 */
+.clone-bar.is-waiting > span {
+  width: 30% !important;
+  animation: clone-wait 1.2s ease-in-out infinite alternate;
+}
+@keyframes clone-wait {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(330%);
+  }
+}

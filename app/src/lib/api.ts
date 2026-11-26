@@ -90,6 +90,13 @@ export interface Project {
   tasks: Task[];
 }
 
+/** 克隆的进度：哪一步、这一步的百分比，下载时还有已下载的大小和速度。 */
+export interface CloneProgress {
+  phase: "connecting" | "preparing" | "receiving" | "resolving" | "checkingOut";
+  percent: number | null;
+  detail: string;
+}
+
 export interface Snapshot {
   projects: Project[];
   running: number;
@@ -293,7 +300,13 @@ export const api = {
   renameTask: (task: number, title: string) => invoke<void>("rename_task", { task, title }),
   branches: (repo: string) => invoke<string[]>("branches", { repo }),
   discoverRepos: () => invoke<Repo[]>("discover_repos"),
-  cloneProject: (url: string) => invoke<string>("clone_project", { url }),
+  /** 克隆仓库并加为项目，进度交给 `onProgress`；`cancelClone` 取消（报错码 `cancelled`）。 */
+  cloneProject: (url: string, onProgress: (p: CloneProgress) => void) => {
+    const channel = new Channel<CloneProgress>();
+    channel.onmessage = onProgress;
+    return invoke<string>("clone_project", { url, onProgress: channel });
+  },
+  cancelClone: () => invoke<void>("cancel_clone"),
   nameTask: (task: number, prompt: string) => invoke<void>("name_task", { task, prompt, branch: null }),
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
   /** 移除项目：先关闭它的任务（改动存到各自的分支），再从列表里去掉；磁盘上的文件夹不动。 */

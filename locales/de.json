@@ -572,5 +572,11 @@
   "cli.help.removeProject": "Projekt-ID (siehe duolo ls)",
   "cli.help.yes": "Auch die Aufgaben des Projekts schließen (Änderungen bleiben in ihren Branches)",
   "cli.removeNeedsYes": "„{project}“ hat {count} Aufgaben. Beim Entfernen werden sie zuerst geschlossen (nicht committete Änderungen werden in ihre Branches committet). Führe es mit --yes erneut aus, um fortzufahren.",
-  "cli.projectRemoved": "„{project}“ aus Duolo entfernt. Der Ordner ist noch auf deiner Festplatte."
+  "cli.projectRemoved": "„{project}“ aus Duolo entfernt. Der Ordner ist noch auf deiner Festplatte.",
+  "clone.connecting": "Verbindung zum Server…",
+  "clone.preparing": "Der Server bereitet die Dateien vor",
+  "clone.receiving": "Wird heruntergeladen",
+  "clone.resolving": "Wird entpackt",
+  "clone.checkingOut": "Dateien werden geschrieben",
+  "error.cancelled": "Abgebrochen."
 }

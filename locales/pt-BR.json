@@ -572,5 +572,11 @@
   "cli.help.removeProject": "ID do projeto (veja duolo ls)",
   "cli.help.yes": "Fechar também as tarefas do projeto (as alterações ficam nos seus branches)",
   "cli.removeNeedsYes": "“{project}” tem {count} tarefas. Removê-lo fecha-as primeiro (alterações não commitadas vão para os seus branches). Rode de novo com --yes para continuar.",
-  "cli.projectRemoved": "“{project}” removido do Duolo. A pasta continua no seu disco."
+  "cli.projectRemoved": "“{project}” removido do Duolo. A pasta continua no seu disco.",
+  "clone.connecting": "Conectando ao servidor…",
+  "clone.preparing": "O servidor está preparando os arquivos",
+  "clone.receiving": "Baixando",
+  "clone.resolving": "Descompactando",
+  "clone.checkingOut": "Gravando arquivos",
+  "error.cancelled": "Cancelado."
 }

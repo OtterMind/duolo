@@ -518,10 +518,9 @@
   "shell.close": "Close this terminal",
   "shell.new": "New terminal",
   "shell.hide": "Hide terminals",
-  "shell.exited": "The command finished",
-  "shell.failed": "The command failed (non-zero exit code)",
-  "shell.rerun": "Run again",
+  "shell.exited": "The terminal closed",
+  "shell.failed": "The terminal closed with an error",
   "shell.reopen": "Open again",
   "newTask.shell": "Terminal, no AI: run a command in this task's folder, or just open a shell",
-  "newTask.shellPlaceholder": "A command to run, e.g. pnpm dev (leave empty for a plain shell)"
+  "newTask.shellPlaceholder": "A command to run in the terminal, e.g. pnpm dev (leave empty for a plain shell)"
 }

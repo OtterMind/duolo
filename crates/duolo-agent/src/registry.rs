@@ -190,7 +190,12 @@ mod tests {
             hooks: None,
             prompt,
         };
-        assert_eq!(shell.launch(start(Some("pnpm dev"))).args, ["-l", "-c", "pnpm dev"]);
+        // 总是一个能打字的 shell，命令等它准备好再打进去。
+        let launch = shell.launch(start(Some("pnpm dev")));
+        assert_eq!(
+            (launch.args.as_slice(), launch.paste.as_deref()),
+            (["-l".to_string()].as_slice(), Some("pnpm dev"))
+        );
         assert_eq!(shell.launch(start(None)).args, ["-l"]);
 
         let (registry, _) =

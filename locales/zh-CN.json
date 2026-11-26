@@ -518,10 +518,9 @@
   "shell.close": "关闭这个终端",
   "shell.new": "新终端",
   "shell.hide": "收起终端",
-  "shell.exited": "命令运行完了",
-  "shell.failed": "命令出错了（退出码不是 0）",
-  "shell.rerun": "重新运行",
+  "shell.exited": "终端已经退出",
+  "shell.failed": "终端出错退出了",
   "shell.reopen": "重新打开",
   "newTask.shell": "终端，不用 AI：在这个任务的文件夹里运行一条命令，或者只开一个 shell",
-  "newTask.shellPlaceholder": "要运行的命令，例如 pnpm dev（不填就只开一个 shell）"
+  "newTask.shellPlaceholder": "要在终端里运行的命令，例如 pnpm dev（不填就只开一个 shell）"
 }

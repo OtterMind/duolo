@@ -518,10 +518,9 @@
   "shell.close": "Fechar este terminal",
   "shell.new": "Novo terminal",
   "shell.hide": "Ocultar terminais",
-  "shell.exited": "O comando terminou",
-  "shell.failed": "O comando falhou (código de saída diferente de 0)",
-  "shell.rerun": "Executar de novo",
+  "shell.exited": "O terminal foi fechado",
+  "shell.failed": "O terminal foi fechado com erro",
   "shell.reopen": "Abrir de novo",
   "newTask.shell": "Terminal, sem IA: execute um comando na pasta desta tarefa ou abra só um shell",
-  "newTask.shellPlaceholder": "Comando a executar, ex.: pnpm dev (deixe vazio para um shell simples)"
+  "newTask.shellPlaceholder": "Comando para rodar no terminal, ex.: pnpm dev (deixe vazio para um shell simples)"
 }

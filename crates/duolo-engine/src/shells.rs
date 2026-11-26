@@ -1,8 +1,8 @@
 //! 任务里另开的终端：用户自己的 shell（见 `duolo_agent::Manifest::shell`），工作目录是任务的 worktree，
 //! 不用跳到系统的终端软件。它不是 AI：不写需求、不参与交接，任务关掉时一起结束。
 //!
-//! 写代码的也可以就是终端（新建任务时选「终端」）：任务的需求就是要运行的命令，运行完退出码就是结果；
-//! 没写命令时是一个能打字的 shell。这种任务和别的任务一样能并排看、交给 Agent、关闭。
+//! 写代码的也可以就是终端（新建任务时选「终端」）：任务的需求就是要运行的命令，等 shell 准备好打进去运行，
+//! 运行完终端还在，可以接着用；没写命令时就是一个能打字的 shell。这种任务和别的任务一样能并排看、交给 Agent、关闭。
 
 use anyhow::Result;
 use duolo_core::{AgentKey, AgentKind, AgentRole, AgentSpec, TaskId, UserError};
@@ -81,25 +81,34 @@ mod tests {
         }
     }
 
-    /// 终端任务：需求就是命令，在任务的 worktree 里运行，运行完退出码就是结果。
+    /// 终端任务：需求就是命令，在任务的 worktree 里的 shell 里运行；运行完 shell 还在，可以接着打字。
     #[test]
-    fn a_shell_task_runs_its_command_in_the_worktree() {
+    fn a_shell_task_runs_its_command_and_stays_open() {
         let (_dir, mut engine, project) = engine();
         let opts = TaskOptions { writer: Some(AgentKind::shell()), ..Default::default() };
-        let id = engine.create_task_with(&project, "pwd > where.txt && exit 3", &opts).unwrap();
+        let id = engine.create_task_with(&project, "pwd > where.txt", &opts).unwrap();
         let worktree = engine.state().task(id).unwrap().worktree.clone();
         let key = engine.writer_key(id).unwrap();
         engine.start_agent(key).unwrap();
-        wait("the command to finish", || matches!(engine.agent_status(key), AgentStatus::Exited(_)));
-        let AgentStatus::Exited(exit) = engine.agent_status(key) else { unreachable!() };
-        assert!(!exit.success, "退出码 3 是失败");
+        wait("the command", || {
+            engine.poll_events();
+            worktree.join("where.txt").exists()
+        });
         let written = std::fs::read_to_string(worktree.join("where.txt")).unwrap();
         assert_eq!(Path::new(written.trim()).canonicalize().unwrap(), worktree.canonicalize().unwrap());
+        assert!(engine.agent_status(key).is_live(), "运行完终端还在");
+        engine.write(key, b"echo more > more.txt\r").unwrap();
+        wait("typing after the command", || worktree.join("more.txt").exists());
 
-        // 再启动一次：重新运行这条命令，而不是打开一个空的 shell。
+        // 退出后再启动：重新打开 shell，并再运行一遍这条命令。
+        engine.write(key, b"exit\r").unwrap();
+        wait("the shell to exit", || matches!(engine.agent_status(key), AgentStatus::Exited(_)));
         std::fs::remove_file(worktree.join("where.txt")).unwrap();
         engine.start_agent(key).unwrap();
-        wait("the command to run again", || worktree.join("where.txt").exists());
+        wait("the command to run again", || {
+            engine.poll_events();
+            worktree.join("where.txt").exists()
+        });
         engine.shutdown();
     }
 

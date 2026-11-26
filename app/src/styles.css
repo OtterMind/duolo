@@ -1262,6 +1262,8 @@ body.is-dragging-pane * {
 }
 .terminal-ended {
   position: absolute;
+  /* xterm 里几层透明的元素（输入框、装饰）带着 z-index，不盖过它们的话按钮点不到。 */
+  z-index: 10;
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);

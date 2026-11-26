@@ -518,10 +518,9 @@
   "shell.close": "關閉這個終端機",
   "shell.new": "新終端機",
   "shell.hide": "收起終端機",
-  "shell.exited": "指令執行完了",
-  "shell.failed": "指令出錯了（結束代碼不是 0）",
-  "shell.rerun": "重新執行",
+  "shell.exited": "終端機已經結束",
+  "shell.failed": "終端機出錯結束了",
   "shell.reopen": "重新開啟",
   "newTask.shell": "終端機，不用 AI：在這個任務的資料夾裡執行一條指令，或只開一個 shell",
-  "newTask.shellPlaceholder": "要執行的指令，例如 pnpm dev（不填就只開一個 shell）"
+  "newTask.shellPlaceholder": "要在終端機裡執行的指令，例如 pnpm dev（不填就只開一個 shell）"
 }

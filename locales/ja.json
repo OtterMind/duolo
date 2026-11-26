@@ -518,10 +518,9 @@
   "shell.close": "このターミナルを閉じる",
   "shell.new": "新しいターミナル",
   "shell.hide": "ターミナルを隠す",
-  "shell.exited": "コマンドが終了しました",
-  "shell.failed": "コマンドが失敗しました（終了コードが 0 以外）",
-  "shell.rerun": "もう一度実行",
+  "shell.exited": "ターミナルが終了しました",
+  "shell.failed": "ターミナルがエラーで終了しました",
   "shell.reopen": "もう一度開く",
   "newTask.shell": "ターミナル（AI なし）：このタスクのフォルダーでコマンドを実行、またはシェルだけを開く",
-  "newTask.shellPlaceholder": "実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます"
+  "newTask.shellPlaceholder": "ターミナルで実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます"
 }

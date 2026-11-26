@@ -518,10 +518,9 @@
   "shell.close": "Dieses Terminal schließen",
   "shell.new": "Neues Terminal",
   "shell.hide": "Terminals ausblenden",
-  "shell.exited": "Der Befehl ist fertig",
-  "shell.failed": "Der Befehl ist fehlgeschlagen (Exit-Code ungleich 0)",
-  "shell.rerun": "Erneut ausführen",
+  "shell.exited": "Das Terminal wurde beendet",
+  "shell.failed": "Das Terminal wurde mit einem Fehler beendet",
   "shell.reopen": "Erneut öffnen",
   "newTask.shell": "Terminal ohne KI: einen Befehl im Ordner dieser Aufgabe ausführen oder nur eine Shell öffnen",
-  "newTask.shellPlaceholder": "Auszuführender Befehl, z. B. pnpm dev (leer lassen für eine normale Shell)"
+  "newTask.shellPlaceholder": "Befehl, der im Terminal läuft, z. B. pnpm dev (leer lassen für eine normale Shell)"
 }

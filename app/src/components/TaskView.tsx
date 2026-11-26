@@ -583,9 +583,15 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
               ? t(agent.status === "failed" ? "shell.failed" : "shell.exited")
               : t(agent.status === "failed" ? "task.agentFailed" : "task.agentExited", { agent: agent.name })}
           </span>
-          <button className="btn" onClick={() => void start()} disabled={starting}>
-            {t(agent.kind !== "shell" ? "task.resume" : agent.role === "writer" && task.prompt ? "shell.rerun" : "shell.reopen")}
+          <button className="btn primary" onClick={() => void start()} disabled={starting}>
+            {t(agent.kind === "shell" ? "shell.reopen" : "task.resume")}
           </button>
+          {/* Agent 退出了，可能是想在这个文件夹里自己跑点命令：就地开终端，之后还能回到 Agent 的会话。 */}
+          {agent.kind !== "shell" && (
+            <button className="btn" onClick={() => requestShell(task.id, "new")}>
+              {t("shell.openHere")}
+            </button>
+          )}
         </div>
       )}
     </div>

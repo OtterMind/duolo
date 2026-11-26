@@ -518,10 +518,9 @@
   "shell.close": "Bu terminali kapat",
   "shell.new": "Yeni terminal",
   "shell.hide": "Terminalleri gizle",
-  "shell.exited": "Komut bitti",
-  "shell.failed": "Komut başarısız oldu (çıkış kodu 0 değil)",
-  "shell.rerun": "Yeniden çalıştır",
+  "shell.exited": "Terminal kapandı",
+  "shell.failed": "Terminal bir hatayla kapandı",
   "shell.reopen": "Yeniden aç",
   "newTask.shell": "Terminal, yapay zekâ yok: bu görevin klasöründe bir komut çalıştır ya da yalnızca bir kabuk aç",
-  "newTask.shellPlaceholder": "Çalıştırılacak komut, ör. pnpm dev (yalnızca kabuk için boş bırakın)"
+  "newTask.shellPlaceholder": "Terminalde çalıştırılacak komut, ör. pnpm dev (yalnızca kabuk için boş bırakın)"
 }

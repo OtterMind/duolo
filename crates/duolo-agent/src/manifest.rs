@@ -376,20 +376,19 @@ impl Manifest {
     }
 
     /// 内置的终端：用户自己的 shell（macOS / Linux 是 `$SHELL`，Windows 是 PowerShell）。
-    /// 带着一条命令启动时运行完就结束（退出码就是它的结果），不带命令时是一个能打字的 shell。
+    /// 总是一个能打字的 shell；带着命令启动时，等它准备好把命令打进去运行，运行完终端还在，可以接着用。
     pub fn shell() -> Self {
         let mut manifest = Self::plain(duolo_core::AgentKind::SHELL);
-        let (command, args, separator) = if cfg!(windows) {
-            ("powershell".to_string(), vec!["-NoLogo".to_string()], "-Command")
+        let (command, args) = if cfg!(windows) {
+            ("powershell".to_string(), vec!["-NoLogo".to_string()])
         } else {
             let fallback = if cfg!(target_os = "macos") { "/bin/zsh" } else { "/bin/sh" };
             // 登录 shell：读用户的配置，PATH 里有 nvm、Homebrew 装的命令。
-            (std::env::var("SHELL").unwrap_or_else(|_| fallback.into()), vec!["-l".to_string()], "-c")
+            (std::env::var("SHELL").unwrap_or_else(|_| fallback.into()), vec!["-l".to_string()])
         };
         manifest.command = command;
         manifest.start.args = args;
-        manifest.start.prompt = PromptVia::Argument;
-        manifest.start.separator = Some(separator.into());
+        manifest.start.prompt = PromptVia::Paste;
         manifest.keys = Keys { interrupt: "\u{3}".into(), newline: "\r".into() };
         manifest
     }

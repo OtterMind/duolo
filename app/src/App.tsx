@@ -730,7 +730,16 @@ export function App() {
           />
         )}
       </main>
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} onError={fail} />}
+      {settingsOpen && (
+        <SettingsDialog
+          env={env}
+          onClose={() => {
+            setSettingsOpen(false);
+            void api.agentDefaults().then(setAgentDefaults, () => {});
+          }}
+          onError={fail}
+        />
+      )}
       {setupOption && (
         <SetupDialog
           agent={setupOption}

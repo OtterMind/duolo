@@ -749,6 +749,17 @@ impl Engine {
     /// 叫 `kind` 来审阅任务的改动，并记下这次的选择（这个任务和以后的新任务都先用它）。
     pub fn review_with(&mut self, id: TaskId, kind: AgentKind) -> Result<()> {
         self.set_reviewer(id, kind.clone())?;
+        self.set_default_reviewer(kind)?;
+        self.start_review(id)
+    }
+
+    /// 没选过审阅 Agent 的任务用谁：上次叫的，没有就按配置。
+    pub fn default_reviewer(&self) -> AgentKind {
+        self.last_reviewer.clone().unwrap_or_else(|| self.config.reviewer.clone())
+    }
+
+    /// 设置里选的默认审阅 Agent（和叫它审阅一次一样记下来）。
+    pub fn set_default_reviewer(&mut self, kind: AgentKind) -> Result<()> {
         if self.last_reviewer.as_ref() != Some(&kind) {
             let path = self.paths.settings_file();
             let mut settings = Settings::load(&path)?;
@@ -756,7 +767,7 @@ impl Engine {
             settings.save(&path)?;
             self.last_reviewer = Some(kind);
         }
-        self.start_review(id)
+        Ok(())
     }
 
     pub fn cancel_review(&mut self, id: TaskId) {

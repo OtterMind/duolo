@@ -305,6 +305,10 @@ export const api = {
   resize: (r: AgentRef, rows: number, cols: number) => invoke<void>("resize", { ...r, rows, cols }),
   diffStat: (task: number) => invoke<Diff | null>("diff_stat", { task }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
+  setDefaultReviewer: (agent: string) => invoke<void>("set_default_reviewer", { agent }),
+  setDefaultSurface: (surface: Surface) => invoke<void>("set_default_surface", { surface }),
+  /** 版本，数据和配置文件在哪里。 */
+  appInfo: () => invoke<{ version: string; dataDir: string; configFile: string }>("app_info"),
   openTerminal: (path: string) => invoke<void>("open_terminal", { path }),
   /** 剪贴板里的文件或图片对应的路径（复制的图片先存成临时 PNG）；只有文字时为空。 */
   clipboardPaths: () => invoke<string[]>("clipboard_paths"),

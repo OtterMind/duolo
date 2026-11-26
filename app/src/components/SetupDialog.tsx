@@ -64,7 +64,7 @@ export function SetupDialog({
       cursorStyle: "bar",
       allowTransparency: true,
       scrollback: 2000,
-      theme: THEME,
+      theme: THEME(),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);

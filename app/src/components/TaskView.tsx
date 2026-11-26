@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 
+import { onAppearanceChange } from "../lib/theme";
 import { useT } from "../i18n";
 
 import { api, type Agent, type Diff, type Surface, type Task } from "../lib/api";
@@ -546,8 +547,11 @@ function AgentTerminal({ task, agent, onError }: { task: Task; agent: Agent; onE
     terminals.terminalFor(ref).term.focus();
     const observer = new ResizeObserver(resize);
     observer.observe(el);
+    // 改了终端字号：格子数变了。
+    const offAppearance = onAppearanceChange(() => requestAnimationFrame(resize));
     return () => {
       observer.disconnect();
+      offAppearance();
       unmount();
     };
   }, [task.id, agent.id]);

@@ -11,10 +11,12 @@ import { I18nProvider } from "./i18n";
 import { parkFocusOffInput } from "./lib/focus";
 import { isMac } from "./lib/platform";
 import { loadPlugins } from "./lib/plugins";
+import { apply as applyAppearance } from "./lib/theme";
 import "./styles.css";
 
-// 样式里按系统区分的地方（标题栏留白等）用 .mac / .pc。
+// 样式里按系统区分的地方（标题栏留白等）用 .mac / .pc。主题在显示界面之前应用。
 document.documentElement.classList.add(isMac ? "mac" : "pc");
+applyAppearance();
 if (isMac) parkFocusOffInput();
 
 // 界面报错转给后端写日志。

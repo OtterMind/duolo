@@ -105,14 +105,45 @@ pub fn agent_plugins(state: State<'_, AppState>) -> Vec<PluginView> {
     state.engine().agents().iter().map(Into::into).collect()
 }
 
-/// 配置里默认写代码和审阅的 Agent。
+/// 设置里选的默认审阅 Agent。
+#[tauri::command]
+pub fn set_default_reviewer(state: State<'_, AppState>, agent: String) -> Res<()> {
+    Ok(state.engine().set_default_reviewer(AgentKind(agent))?)
+}
+
+/// 设置里选的新任务默认运行方式。
+#[tauri::command]
+pub fn set_default_surface(state: State<'_, AppState>, surface: Surface) {
+    state.engine().set_default_surface(surface);
+}
+
+/// 设置的"关于"：版本，数据和配置文件在哪里。
+#[tauri::command]
+pub fn app_info(app: AppHandle, state: State<'_, AppState>) -> AppInfo {
+    let engine = state.engine();
+    AppInfo {
+        version: app.package_info().version.to_string(),
+        data_dir: engine.paths().root().display().to_string(),
+        config_file: engine.paths().config_file().display().to_string(),
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    version: String,
+    data_dir: String,
+    config_file: String,
+}
+
+/// 默认写代码和审阅的 Agent（审阅的是上次叫的，没有时按配置）。
 #[tauri::command]
 pub fn agent_defaults(state: State<'_, AppState>) -> AgentDefaults {
     let engine = state.engine();
     let config = engine.config();
     AgentDefaults {
         writer: config.writer.0.clone(),
-        reviewer: config.reviewer.0.clone(),
+        reviewer: engine.default_reviewer().0,
         surface: engine.default_surface(),
     }
 }

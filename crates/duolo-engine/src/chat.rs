@@ -79,6 +79,11 @@ impl Engine {
         self.last_surface = Some(surface);
     }
 
+    /// 设置里选的新任务默认运行方式。
+    pub fn set_default_surface(&mut self, surface: Surface) {
+        self.remember_surface(surface);
+    }
+
     /// 新任务默认用什么方式运行（上次选的）。
     pub fn default_surface(&self) -> Surface {
         self.last_surface.unwrap_or_default()

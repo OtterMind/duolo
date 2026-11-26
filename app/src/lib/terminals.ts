@@ -10,38 +10,17 @@ import "@xterm/xterm/css/xterm.css";
 
 import { agentKey, api, type AgentRef } from "./api";
 import { isMac, modKey } from "./platform";
+import { appearance, onAppearanceChange, terminalInputColor, terminalTheme } from "./theme";
 
-export const THEME: ITheme = {
-  // 背景透明，由外层元素提供底色，这样输入块可以垫在文字下面。
-  background: "rgba(0, 0, 0, 0)",
-  foreground: "#d6d6d6",
-  cursor: "#d6d6d6",
-  cursorAccent: "#161616",
-  selectionBackground: "#3a3a3a",
-  black: "#1e1e1e",
-  red: "#e0716c",
-  green: "#8fc286",
-  yellow: "#d9b45f",
-  blue: "#7aa2d6",
-  magenta: "#c493d1",
-  cyan: "#71bcbc",
-  white: "#d6d6d6",
-  brightBlack: "#6b6b6b",
-  brightRed: "#ec8a85",
-  brightGreen: "#a6d49d",
-  brightYellow: "#e6c57a",
-  brightBlue: "#94b8e6",
-  brightMagenta: "#d4aade",
-  brightCyan: "#8dd0d0",
-  brightWhite: "#f2f2f2",
-};
+/** 现在的主题下终端的配色，见 `lib/theme.ts`。 */
+export const THEME = (): ITheme => terminalTheme();
 
 /** 终端字体：和 Warp 一样默认用 Hack；中文等字形回退到系统字体。 */
 export const FONT_FAMILY =
   'Hack, "SF Mono", Menlo, "Cascadia Mono", Consolas, "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Noto Sans CJK SC", monospace';
 
-/** 输入框底色：比终端背景浅一档，参考 Warp 的输入区。 */
-const INPUT_BG = "#232323";
+/** 输入框底色：比终端背景浅一档，参考 Warp 的输入区。跟着主题变（styles.css 的 --term-input）。 */
+let INPUT_BG = terminalInputColor();
 /** 输入块在输入行上下留出的内边距（像素），参考 Warp。要大于半行，才能盖住被隐藏的横线。 */
 const INPUT_PAD_Y = 12;
 /** 只在光标上下这么多行里找输入框的分隔线。 */
@@ -70,6 +49,17 @@ interface Entry {
 }
 
 const pool = new Map<string, Entry>();
+
+// 换了主题、字号：所有终端跟着换，输入块重画。字号变了格子数也变，界面会重新量（见 TaskView）。
+onAppearanceChange(() => {
+  INPUT_BG = terminalInputColor();
+  for (const entry of pool.values()) {
+    entry.term.options.theme = terminalTheme();
+    entry.term.options.fontSize = appearance().fontSize;
+    entry.input = { key: "", decorations: entry.input.decorations };
+    paintInputBlock(entry);
+  }
+});
 
 /**
  * macOS 的 WebView 里开着中文输入法时，要按 Shift 的标点（？！：）第一下会被 xterm 丢掉，要按两次。
@@ -168,8 +158,8 @@ function create(ref: AgentRef): Entry {
     // 和 Warp 一样默认用 Hack；中文等字形回退到系统字体。
     // Windows 回退到 Cascadia Mono / Consolas，Linux 回退到 DejaVu Sans Mono。
     fontFamily: FONT_FAMILY,
-    // 字号、行高和 Warp 的默认一样。
-    fontSize: 13,
+    // 字号默认和 Warp 一样（13），可以在设置里改；行高和 Warp 一样。
+    fontSize: appearance().fontSize,
     lineHeight: 1.2,
     cursorStyle: "bar",
     allowTransparency: true,
@@ -177,7 +167,7 @@ function create(ref: AgentRef): Entry {
     scrollback: 10000,
     allowProposedApi: true,
     macOptionClickForcesSelection: true,
-    theme: THEME,
+    theme: terminalTheme(),
   });
   const fit = new FitAddon();
   term.loadAddon(fit);

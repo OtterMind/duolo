@@ -3,7 +3,7 @@
 // 页面按 Accept-Language 选语言，`?lang=zh-CN` 可以指定。首页和支持页的文案在 locales/*.json（site.*，14 种语言）；
 // 隐私政策和使用条款是法律文本，只有英文和简体中文两份（site/*.html），别的语言显示英文版并说明。
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -219,6 +219,10 @@ export function registerSite(app: FastifyInstance) {
     app.get(`/${name}`, (_request, reply) =>
       reply.header("content-type", "image/png").header("cache-control", "public, max-age=86400").send(readFileSync(`${dir}/${name}`)),
     );
+  }
+  // Google Search Console 的所有权验证文件（Google Play 开发者账号要验证组织网站），不要删。
+  for (const name of readdirSync(dir).filter((f) => /^google[0-9a-f]+\.html$/.test(f))) {
+    app.get(`/${name}`, (_request, reply) => reply.header("content-type", "text/html; charset=utf-8").send(file(name)));
   }
   for (const { id } of AGENTS) {
     app.get(`/agents/${id}.svg`, (_request, reply) =>

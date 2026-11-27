@@ -47,6 +47,10 @@ describe("site", () => {
     }
   });
 
+  it("serves the Search Console verification file", async () => {
+    expect((await get("/google469b369ac3a3a00d.html")).body).toBe("google-site-verification: google469b369ac3a3a00d.html");
+  });
+
   it("keeps JSON 404s for the API and shows a page to browsers", async () => {
     const api = await get("/v1/nothing", { accept: "text/html" });
     expect(api.statusCode).toBe(404);

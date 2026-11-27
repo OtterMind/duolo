@@ -1,0 +1,179 @@
+name: Release
+
+# 签名打包：Mac 版（Developer ID 签名 + 苹果公证，任何人都能下载安装）和 iPhone 版（上架用的 ipa，可选直接传到 TestFlight）。
+# 推 `v*` 标签时两个都打，Mac 版放进一个草稿 Release；也可以在 Actions 页面手动运行。
+# 用到的密钥都在仓库的 Settings → Secrets（各项是什么见 docs/release.md）。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: 打 Mac 版
+        type: boolean
+        default: true
+      ios:
+        description: 打 iPhone 版
+        type: boolean
+        default: true
+      testflight:
+        description: iPhone 版传到 TestFlight（App Store Connect 里要先建好 App）
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    if: github.event_name == 'push' || inputs.macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: 公证用的 App Store Connect API Key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$key"
+          echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
+      # Tauri 看到这些环境变量会自己导入证书、签名、提交公证并把结果附在安装包上。
+      - name: 打包、签名、公证
+        working-directory: app
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: pnpm tauri build --bundles app,dmg
+      - name: 检查签名和公证
+        run: |
+          app=target/release/bundle/macos/Duolo.app
+          codesign --verify --deep --strict "$app"
+          spctl --assess --type execute -vv "$app"
+          xcrun stapler validate target/release/bundle/dmg/*.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duolo-macos
+          path: target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+      - name: 放进草稿 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "Duolo $tag" --generate-notes
+          gh release upload "$tag" target/release/bundle/dmg/*.dmg --clobber
+
+  ios:
+    if: github.event_name == 'push' || inputs.ios
+    runs-on: macos-latest
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: brew install xcodegen
+      - run: xcodegen
+        working-directory: mobile/ios
+      # 手动签名：发布证书放进一个临时钥匙串，App Store 描述文件装到 Xcode 找得到的地方。
+      # 不用 Xcode 的自动签名：API Key 是 App Manager 权限，用不了它的"云端签名"。
+      - name: 证书和描述文件
+        env:
+          DIST_P12: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE }}
+          DIST_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -hex 16)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$DIST_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$DIST_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm "$RUNNER_TEMP/dist.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          printf '%s' "$PROFILE" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          uuid=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | plutil -extract UUID raw -)
+          for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/profile.mobileprovision" "$dir/$uuid.mobileprovision"
+          done
+          echo "PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+      - name: 版本号
+        run: |
+          # 标签 v1.2.3 → 1.2.3；手动运行时用工程里的。构建号每次运行加一（App Store 要求一次比一次大）。
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "VERSION_ARGS=MARKETING_VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
+          fi
+          echo "BUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
+      - name: 归档
+        working-directory: mobile/ios
+        run: |
+          xcodebuild archive -project Duolo.xcodeproj -scheme Duolo -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Duolo.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" $VERSION_ARGS
+      - name: 导出 ipa
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict><key>io.duolo.app</key><string>$PROFILE_UUID</string></dict>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Duolo.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duolo-ios
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+      - name: 传到 TestFlight
+        if: inputs.testflight
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          # altool 按约定的位置找 API Key。
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_$API_KEY_ID.p8"
+          xcrun altool --upload-app --type ios --file "$RUNNER_TEMP"/export/*.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER"
+      - name: 清掉钥匙串和密钥
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -rf "$HOME/.appstoreconnect/private_keys"

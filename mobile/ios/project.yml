@@ -1,7 +1,7 @@
 # Xcode 工程由 XcodeGen 生成（工程文件不进仓库）：cd mobile/ios && xcodegen
 name: Duolo
 options:
-  bundleIdPrefix: ai.ottermind
+  bundleIdPrefix: io.duolo
   deploymentTarget:
     iOS: "17.0"
   developmentLanguage: en
@@ -34,7 +34,7 @@ targets:
       - package: DuoloKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ai.ottermind.duolo
+        PRODUCT_BUNDLE_IDENTIFIER: io.duolo.app
         PRODUCT_NAME: Duolo
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO

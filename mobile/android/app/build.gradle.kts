@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// 上架签名：发布流程用环境变量传入上传密钥（见 docs/release.md），没有时照常打不签名的包。
+val uploadKeystore = System.getenv("DUOLO_UPLOAD_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+
 android {
     namespace = "io.duolo.app"
     compileSdk = 36
@@ -13,8 +16,20 @@ android {
         applicationId = "io.duolo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // 发布流程传入：每次上传的 versionCode 要比上次大，versionName 取版本标签。
+        versionCode = System.getenv("DUOLO_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("DUOLO_VERSION_NAME") ?: "0.1.0"
+    }
+
+    signingConfigs {
+        if (uploadKeystore != null) {
+            create("upload") {
+                storeFile = uploadKeystore
+                storePassword = System.getenv("DUOLO_UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("DUOLO_UPLOAD_KEY_ALIAS")
+                keyPassword = System.getenv("DUOLO_UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -22,6 +37,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
         }
     }
 

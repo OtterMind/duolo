@@ -1,6 +1,7 @@
 name: Release
 
-# 签名打包：Mac 版（Developer ID 签名 + 苹果公证，任何人都能下载安装）和 iPhone 版（上架用的 ipa，可选直接传到 TestFlight）。
+# 签名打包：Mac 版（Developer ID 签名 + 苹果公证，任何人都能下载安装）、iPhone 版（上架用的 ipa，可选直接传到 TestFlight）
+# 和 Android 版（上传密钥签名的 aab，传到 Google Play）。
 # 推 `v*` 标签时两个都打，Mac 版放进一个草稿 Release；也可以在 Actions 页面手动运行。
 # 用到的密钥都在仓库的 Settings → Secrets（各项是什么见 docs/release.md）。
 on:
@@ -14,6 +15,10 @@ on:
         default: true
       ios:
         description: 打 iPhone 版
+        type: boolean
+        default: true
+      android:
+        description: 打 Android 版
         type: boolean
         default: true
       testflight:
@@ -177,3 +182,38 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
           rm -rf "$HOME/.appstoreconnect/private_keys"
+
+  android:
+    if: github.event_name == 'push' || inputs.android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: 上传密钥和版本号
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+        run: |
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
+          echo "DUOLO_UPLOAD_KEYSTORE=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+          # versionCode 每次运行加一（Google Play 要求一次比一次大）；versionName 取标签。
+          echo "DUOLO_VERSION_CODE=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "DUOLO_VERSION_NAME=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"; fi
+      - name: 打包
+        working-directory: mobile/android
+        env:
+          DUOLO_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          DUOLO_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          DUOLO_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: ./gradlew :app:bundleRelease --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duolo-android
+          path: mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+      - name: 清掉密钥
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.keystore"

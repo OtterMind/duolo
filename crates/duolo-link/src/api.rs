@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::json;
 
-/// 一次请求最长等多久。
-const TIMEOUT: Duration = Duration::from_secs(10);
+/// 一次请求最长等多久。经过 Cloudflare 从国内连，握手有时要好几秒。
+const TIMEOUT: Duration = Duration::from_secs(20);
 
 /// 服务器拒绝时的原因，调用方据此决定重新登录还是重新登记。
 #[derive(Debug, Clone, PartialEq, Eq)]

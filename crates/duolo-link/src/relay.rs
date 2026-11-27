@@ -20,7 +20,7 @@ use crate::{now_ms, Link, Status};
 
 type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// 读一次最多等多久，之后看看有没有要发的。
 const POLL: Duration = Duration::from_millis(200);
 /// 这么久没动静就 ping 一下，免得中间的代理断开空闲连接。

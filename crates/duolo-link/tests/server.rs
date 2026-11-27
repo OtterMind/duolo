@@ -25,7 +25,12 @@ impl Host for FakeHost {
     fn overview(&self) -> Overview {
         let project =
             ProjectOverview { id: "shop".into(), name: "shop".into(), branch: "main".into(), branches: vec![] };
-        Overview { projects: vec![project], writer: "writer".into(), reviewer: "reviewer".into(), ..Overview::default() }
+        Overview {
+            projects: vec![project],
+            writer: "writer".into(),
+            reviewer: "reviewer".into(),
+            ..Overview::default()
+        }
     }
     fn events_since(&self, _task: TaskId, _after: u64) -> Vec<TaskEvent> {
         Vec::new()
@@ -75,7 +80,7 @@ fn pairs_and_talks_through_a_real_server() {
         platform: "mac".into(),
     };
     let link = Link::start(options, host.clone());
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(60);
     while link.status() != Status::Online {
         assert!(Instant::now() < deadline, "desktop did not connect: {:?}", link.status());
         std::thread::sleep(Duration::from_millis(100));
@@ -106,7 +111,10 @@ fn pairs_and_talks_through_a_real_server() {
     let ws_url = server.replacen("http", "ws", 1) + "/v1/connect?token=" + token;
     let (mut socket, _) = tungstenite::connect(ws_url).unwrap();
     if let tungstenite::stream::MaybeTlsStream::Plain(tcp) = socket.get_ref() {
-        tcp.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        tcp.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
+    }
+    if let tungstenite::stream::MaybeTlsStream::Rustls(tls) = socket.get_ref() {
+        tls.sock.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
     }
     // 服务器验证完登录才开始收消息，先等它的 hello（手机也是这样）。
     loop {
@@ -131,7 +139,7 @@ fn pairs_and_talks_through_a_real_server() {
 
     let mut overview = None;
     let mut results = Vec::new();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(60);
     while (overview.is_none() || results.len() < 2) && Instant::now() < deadline {
         let Message::Text(text) = socket.read().unwrap() else { continue };
         let frame: Value = serde_json::from_str(&text).unwrap();

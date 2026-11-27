@@ -15,7 +15,7 @@ Developer ID Application 证书签名，再交给苹果公证，下载后能直�
 
 手动签名：发布证书加上 App Store 描述文件（`IOS_APPSTORE_PROFILE`），导出成上架用的 ipa（`app-store-connect`）。
 不用 Xcode 的自动签名：API Key 是 App Manager 权限，用不了它的"云端签名"。勾上 TestFlight 时用 API Key 上传。
-构建号是这次运行的编号加 100，每次都比上次大；版本号取标签（`v1.2.3` → `1.2.3`），手动运行时用 `mobile/ios/project.yml` 里的。
+构建号是这次运行的编号加 100，每次都比上次大；版本号取标签（`v1.2.3` → `1.2.3`，`v1.2.3-rc1` 也是 `1.2.3`，App Store 只认纯数字），手动运行时用 `mobile/ios/project.yml` 里的。
 
 传到 TestFlight 之前，App Store Connect 里要先建好 Bundle ID 为 `io.duolo.app` 的 App。
 

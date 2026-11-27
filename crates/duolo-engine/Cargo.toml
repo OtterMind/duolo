@@ -11,6 +11,8 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+chrono = "0.4"
+croner = "3"
 duolo-agent.workspace = true
 duolo-chat.workspace = true
 duolo-core.workspace = true

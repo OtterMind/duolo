@@ -69,6 +69,8 @@ export interface Task {
   resumable: string[];
   /** 从哪个任务分出来的。 */
   forkedFrom: number | null;
+  /** 由哪个定时任务自动建的。 */
+  automation: number | null;
 }
 
 export interface Review {
@@ -88,6 +90,7 @@ export interface Project {
   name: string;
   root: string;
   tasks: Task[];
+  automations: Automation[];
 }
 
 /** 克隆的进度：哪一步、这一步的百分比，下载时还有已下载的大小和速度。 */
@@ -95,6 +98,45 @@ export interface CloneProgress {
   phase: "connecting" | "preparing" | "receiving" | "resolving" | "checkingOut";
   percent: number | null;
   detail: string;
+}
+
+/** 定时任务：按时间表在项目里新建任务，交给 Agent。 */
+export interface Automation {
+  id: number;
+  name: string;
+  prompt: string;
+  /** 写代码的 Agent；null 时用默认的。 */
+  agent: string | null;
+  base: string | null;
+  /** 5 段 cron，按这台电脑的时区。 */
+  cron: string;
+  enabled: boolean;
+  /** 下一次（Unix 秒）；暂停了或时间表算不出来时为 null。 */
+  nextRunAt: number | null;
+  runRequested: boolean;
+  /** 最近的执行，新的在前。 */
+  runs: AutomationRun[];
+}
+
+export interface AutomationRun {
+  scheduledFor: number;
+  at: number;
+  manual: boolean;
+  outcome: "starting" | "started" | "skipped" | "failed";
+  task: number | null;
+  /** 跳过的原因（automation.skip.*）或失败的错误码（error.*）。 */
+  code: string | null;
+  /** 失败时填进错误文案的参数。 */
+  params: Record<string, string>;
+}
+
+export interface AutomationInput {
+  name: string;
+  project: string;
+  prompt: string;
+  agent: string | null;
+  base: string | null;
+  cron: string;
 }
 
 export interface Snapshot {
@@ -311,6 +353,14 @@ export const api = {
   closeTask: (task: number) => invoke<Closed>("close_task", { task }),
   /** 移除项目：先关闭它的任务（改动存到各自的分支），再从列表里去掉；磁盘上的文件夹不动。 */
   removeProject: (project: string) => invoke<Closed[]>("remove_project", { project }),
+  /** 新建（id 为 null）或修改定时任务，返回它的编号。 */
+  saveAutomation: (id: number | null, input: AutomationInput) => invoke<number>("save_automation", { id, input }),
+  removeAutomation: (id: number) => invoke<void>("remove_automation", { id }),
+  setAutomationEnabled: (id: number, enabled: boolean) => invoke<void>("set_automation_enabled", { id, enabled }),
+  /** 立即运行一次，返回新建的任务。 */
+  runAutomation: (id: number) => invoke<number[]>("run_automation", { id }),
+  /** 时间表下一次的时间（Unix 秒）；不合法时报错。 */
+  previewSchedule: (cron: string) => invoke<number | null>("preview_schedule", { cron }),
   startAgent: (r: AgentRef) => invoke<void>("start_agent", { ...r }),
   /** 换写代码的 Agent，返回接手的 Agent 的编号。 */
   switchWriter: (task: number, kind: string, request?: string) =>

@@ -184,6 +184,7 @@ impl Engine {
             review: None,
             retired: Vec::new(),
             forked_from: Some(id),
+            automation: None,
         };
         Ok(NewTask { task, repo, like: Some(parent.worktree) })
     }

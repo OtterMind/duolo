@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use anyhow::{bail, Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use duolo_core::text::{format_elapsed, now_secs};
-use duolo_core::{i18n, t, tf, AgentKind, Paths, ProjectId, Settings, TaskId, UserError};
+use duolo_core::{i18n, t, tf, AgentKind, AutomationId, Paths, ProjectId, RunOutcome, Settings, TaskId, UserError};
 use duolo_engine::{check_environment, Engine, TaskOptions};
 
 #[derive(Debug, Parser)]
@@ -68,6 +68,38 @@ enum Cmd {
     },
     Ls,
     Doctor,
+    #[command(subcommand, disable_help_subcommand = true, disable_help_flag = true)]
+    Automation(AutomationCmd),
+}
+
+/// `duolo automation`：定时任务。命令行只改设置，到点由桌面应用执行（见 `duolo_engine::automation`）。
+#[derive(Debug, Subcommand)]
+enum AutomationCmd {
+    Ls,
+    Add {
+        #[arg(required = true)]
+        prompt: Vec<String>,
+        #[arg(short, long)]
+        cron: String,
+        #[arg(short, long)]
+        project: Option<String>,
+        #[arg(short, long)]
+        agent: Option<String>,
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+    Rm {
+        id: u64,
+    },
+    Run {
+        id: u64,
+    },
+    Pause {
+        id: u64,
+    },
+    Resume {
+        id: u64,
+    },
 }
 
 fn main() -> ExitCode {
@@ -184,6 +216,23 @@ fn localized_command() -> clap::Command {
         })
         .mut_subcommand("ls", |c| c.about(t("cli.help.ls")))
         .mut_subcommand("doctor", |c| c.about(t("cli.help.doctor")))
+        .mut_subcommand("automation", |c| {
+            let id = |c: clap::Command| c.mut_arg("id", |a| a.help(t("cli.help.automationId")));
+            c.about(t("cli.help.automation"))
+                .mut_subcommand("ls", |c| c.about(t("cli.help.automationLs")))
+                .mut_subcommand("add", |c| {
+                    c.about(t("cli.help.automationAdd"))
+                        .mut_arg("prompt", |a| a.help(t("cli.help.prompt")))
+                        .mut_arg("cron", |a| a.help(t("cli.help.automationCron")))
+                        .mut_arg("project", |a| a.help(t("cli.help.project")))
+                        .mut_arg("agent", |a| a.help(t("cli.help.automationAgent")))
+                        .mut_arg("name", |a| a.help(t("cli.help.automationName")))
+                })
+                .mut_subcommand("rm", |c| id(c.about(t("cli.help.automationRm"))))
+                .mut_subcommand("run", |c| id(c.about(t("cli.help.automationRun"))))
+                .mut_subcommand("pause", |c| id(c.about(t("cli.help.automationPause"))))
+                .mut_subcommand("resume", |c| id(c.about(t("cli.help.automationResume"))))
+        })
         .arg(clap::Arg::new("version").short('V').long("version").action(clap::ArgAction::Version))
         .mut_arg("version", |a| a.help(t("cli.help.version")));
     localize_chrome(cmd)
@@ -369,6 +418,93 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Some(Cmd::Doctor) => doctor(&paths),
+        Some(Cmd::Automation(cmd)) => automation(paths, &cwd, cmd),
+    }
+}
+
+/// `duolo automation ...`。
+fn automation(paths: Paths, cwd: &std::path::Path, cmd: AutomationCmd) -> Result<()> {
+    let mut engine = open_engine(paths)?;
+    let when = |at: Option<u64>| at.map_or_else(|| t("automation.never"), duolo_engine::automation::local_time);
+    match cmd {
+        AutomationCmd::Ls => {
+            let state = engine.state();
+            if state.automations.is_empty() {
+                println!("{}", t("cli.noAutomations"));
+            }
+            for a in &state.automations {
+                let next = if a.enabled {
+                    tf("automation.next", &[("when", &when(a.next_run_at))])
+                } else {
+                    t("automation.paused")
+                };
+                println!("#{:<4} {:<30} {:<12} {:<16} {}", a.id.0, a.name, a.project.0, a.cron, next);
+                if let Some(run) = a.runs.last() {
+                    let at = duolo_engine::automation::local_time(run.scheduled_for);
+                    println!("      {}", tf("cli.automationLast", &[("when", &at), ("what", &run_text(&run.outcome))]));
+                }
+            }
+        }
+        AutomationCmd::Add { prompt, cron, project, agent, name } => {
+            let project = match project {
+                Some(id) => {
+                    let id = ProjectId(id);
+                    if engine.state().project(&id).is_none() {
+                        bail!(Plain(tf("cli.noSuchProject", &[("id", &id)])));
+                    }
+                    id
+                }
+                None => engine.add_project(cwd)?,
+            };
+            let draft = duolo_engine::AutomationDraft {
+                name: name.unwrap_or_default(),
+                project,
+                prompt: prompt.join(" "),
+                agent: agent.map(AgentKind),
+                base: None,
+                cron,
+            };
+            let id = engine.add_automation(draft)?;
+            let a = engine.state().automation(id).expect("automation was just added");
+            println!(
+                "{}",
+                tf("cli.automationAdded", &[("id", &id), ("name", &a.name), ("when", &when(a.next_run_at))])
+            );
+            println!("  {}", t("automation.note"));
+        }
+        AutomationCmd::Rm { id } => {
+            engine.remove_automation(AutomationId(id))?;
+            println!("{}", tf("cli.automationRemoved", &[("id", &id)]));
+        }
+        AutomationCmd::Run { id } => {
+            engine.request_automation_run(AutomationId(id))?;
+            println!("{}", tf("cli.automationRunRequested", &[("id", &id)]));
+        }
+        AutomationCmd::Pause { id } => {
+            engine.set_automation_enabled(AutomationId(id), false)?;
+            println!("{}", tf("cli.automationPaused", &[("id", &id)]));
+        }
+        AutomationCmd::Resume { id } => {
+            engine.set_automation_enabled(AutomationId(id), true)?;
+            let next = engine.state().automation(AutomationId(id)).and_then(|a| a.next_run_at);
+            println!("{}", tf("cli.automationResumed", &[("id", &id), ("when", &when(next))]));
+        }
+    }
+    Ok(())
+}
+
+/// 一次执行的结果，用和桌面应用一样的说法。
+fn run_text(outcome: &RunOutcome) -> String {
+    match outcome {
+        RunOutcome::Starting => t("automation.runStarting"),
+        RunOutcome::Started { task } => tf("automation.runStartedTask", &[("task", task)]),
+        RunOutcome::Skipped { reason } => t(&format!("automation.skip.{reason}")),
+        RunOutcome::Failed { error, params } if error != "internal" => {
+            let pairs: Vec<(&str, &dyn std::fmt::Display)> =
+                params.iter().map(|(k, v)| (k.as_str(), v as &dyn std::fmt::Display)).collect();
+            tf("automation.runFailed", &[("reason", &tf(&format!("error.{error}"), &pairs))])
+        }
+        RunOutcome::Failed { .. } => t("automation.runFailedUnknown"),
     }
 }
 

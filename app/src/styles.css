@@ -2483,3 +2483,115 @@ body.is-dragging-pane * {
     transform: translateX(330%);
   }
 }
+
+/* 定时任务 */
+.dialog.automations {
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.automations-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog.automations h2 {
+  margin: 0;
+}
+.dialog.automations .dialog-actions {
+  margin-top: 0;
+}
+.automation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.automation-row {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.automation-row.is-paused .automation-name,
+.automation-row.is-paused .automation-when {
+  color: var(--dim);
+}
+.automation-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.automation-name {
+  font-weight: 500;
+}
+.automation-when {
+  font-size: 12px;
+  color: var(--muted);
+}
+.automation-run {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+.automation-run-when {
+  flex: none;
+  color: var(--dim);
+}
+.automation-run.is-failed {
+  color: var(--text);
+}
+.dialog.automations p.automation-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+.automation-prompt {
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+  line-height: 1.5;
+}
+.schedule-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.schedule-inputs:empty {
+  display: none;
+}
+.schedule-inputs select.text-input,
+.time-input {
+  width: auto;
+}
+.schedule-minute {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.schedule-minute .text-input {
+  width: 64px;
+}
+.automation-preview {
+  font-size: 12px;
+  color: var(--dim);
+}
+.automation-preview.is-invalid {
+  color: var(--text);
+}
+.automation-tag {
+  display: inline-flex;
+  color: var(--dim);
+}

@@ -560,6 +560,7 @@ impl Engine {
             review: None,
             retired: Vec::new(),
             forked_from: None,
+            automation: None,
         };
         Ok(NewTask { task, repo, like: None })
     }

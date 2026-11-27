@@ -16,6 +16,7 @@ import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
 import { HandoffDialog, type Handoff } from "./components/HandoffDialog";
+import { AutomationsDialog } from "./components/AutomationsDialog";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneGrid } from "./components/PaneGrid";
@@ -89,6 +90,8 @@ export function App() {
   const [reviewOpen, setReviewOpen] = useState<number | null>(null);
   /** 打开了「交给另一个 Agent」的任务。 */
   const [handoff, setHandoff] = useState<number | null>(null);
+  /** 打开了定时任务的项目。 */
+  const [automationsFor, setAutomationsFor] = useState<string | null>(null);
   /** 新建任务面板（⌘N）和它预选的项目。 */
   const [panel, setPanel] = useState<{ project: string | null } | null>(null);
   /** 正在把文件夹拖进窗口。 */
@@ -125,6 +128,7 @@ export function App() {
         ? [findTask(snap, zoom)].filter((p) => p != null)
         : grid.map((id) => findTask(snap, id)).filter((p) => p != null);
   const handoffTask = handoff != null ? (findTask(snap, handoff)?.task ?? null) : null;
+  const automationsProject = snap?.projects.find((p) => p.id === automationsFor) ?? null;
   /** 并排时关掉一格（任务不关）：关的是正在操作的那格，就换成操作旁边一格；只剩一格时不再并排。 */
   const closePane = (task: number) => {
     const g = gridRef.current;
@@ -601,6 +605,11 @@ export function App() {
             run: run("split"),
           },
           {
+            id: "automations",
+            label: t("command.automations", { project: current.project.name }),
+            run: () => setAutomationsFor(current.project.id),
+          },
+          {
             id: "remove-project",
             label: t("command.removeProject", { project: current.project.name }),
             run: () => requestRemoveProject(current.project.id),
@@ -693,6 +702,7 @@ export function App() {
         onOpenBeside={(task) => addPane(task)}
         onShowProject={showProject}
         onRemoveProject={requestRemoveProject}
+        onAutomations={setAutomationsFor}
         onClosePane={closePane}
         onOpenShell={(task) => {
           openTask(task);
@@ -816,6 +826,18 @@ export function App() {
           agents={agentOptions(env)}
           onRun={(h) => runHandoff(handoffTask.id, h)}
           onDone={() => setHandoff(null)}
+          onError={fail}
+        />
+      )}
+      {automationsProject && (
+        <AutomationsDialog
+          project={automationsProject}
+          agents={agentOptions(env)}
+          onOpenTask={(task) => {
+            setAutomationsFor(null);
+            openTask(task);
+          }}
+          onClose={() => setAutomationsFor(null)}
           onError={fail}
         />
       )}

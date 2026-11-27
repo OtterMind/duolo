@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlarmClock,
   Command as CommandIcon,
   Ellipsis,
   Folder,
@@ -38,6 +39,8 @@ interface Props {
   onShowProject(project: string): void;
   /** 从 Duolo 移除项目（会先确认）。 */
   onRemoveProject(project: string): void;
+  /** 打开项目的定时任务。 */
+  onAutomations(project: string): void;
   /** 把任务从并排的格子里拿掉（任务不关）。 */
   onClosePane(task: number): void;
   /** 打开任务，在它下方开一个终端。 */
@@ -82,6 +85,7 @@ export function Sidebar(props: Props) {
   const projectEntries = (project: { id: string; name: string; root: string; tasks: Task[] }): MenuEntry[] => [
     { label: t("sidebar.newTaskIn", { project: project.name }), kbd: "⌘N", run: () => onNewTask(project.id) },
     ...(project.tasks.length >= 2 ? [{ label: t("sidebar.showProject"), run: () => props.onShowProject(project.id) }] : []),
+    { label: t("automation.menu"), run: () => props.onAutomations(project.id) },
     { label: t(isMac ? "task.reveal" : "task.openFolder"), run: () => void api.reveal(project.root) },
     { sep: true },
     { label: t("project.remove"), danger: true, run: () => props.onRemoveProject(project.id) },
@@ -321,6 +325,11 @@ function TaskRow({
           <span className={`grow ellipsis task-title ${untitled ? "untitled" : ""}`}>{title}</span>
         )}
         {task.repo && <span className="repo-tag">{task.repo}</span>}
+        {task.automation != null && (
+          <span className="automation-tag" title={t("automation.taskTag")}>
+            <AlarmClock size={12} strokeWidth={1.75} />
+          </span>
+        )}
         <ReviewChip task={task} onOpen={() => onOpenReview(task.id)} />
         <span className="row-actions">
           <button

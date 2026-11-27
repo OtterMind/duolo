@@ -57,6 +57,10 @@ pub enum UserError {
     ProjectHasTasks,
     #[error("cancelled")]
     Cancelled,
+    #[error("automation not found")]
+    AutomationNotFound,
+    #[error("\"{expr}\" is not a valid schedule")]
+    InvalidSchedule { expr: String },
     #[error("no agent named \"{kind}\" in config")]
     UnknownAgent { kind: String },
     #[error("{path} already exists")]
@@ -118,6 +122,8 @@ impl UserError {
             Self::ProjectNotFound => "projectNotFound",
             Self::ProjectHasTasks => "projectHasTasks",
             Self::Cancelled => "cancelled",
+            Self::AutomationNotFound => "automationNotFound",
+            Self::InvalidSchedule { .. } => "invalidSchedule",
             Self::UnknownAgent { .. } => "unknownAgent",
             Self::PathExists { .. } => "pathExists",
             Self::InvalidCloneUrl { .. } => "invalidCloneUrl",
@@ -177,6 +183,9 @@ impl UserError {
                 params.insert("path", path.clone());
                 params.insert("detail", detail.clone());
             }
+            Self::InvalidSchedule { expr } => {
+                params.insert("expr", expr.clone());
+            }
             Self::InvalidCloneUrl { url } => {
                 params.insert("url", url.clone());
             }
@@ -229,6 +238,8 @@ mod tests {
             UserError::ProjectNotFound,
             UserError::ProjectHasTasks,
             UserError::Cancelled,
+            UserError::AutomationNotFound,
+            UserError::InvalidSchedule { expr: "e".into() },
             UserError::UnknownAgent { kind: "k".into() },
             UserError::PathExists { path: "/x".into() },
             UserError::InvalidCloneUrl { url: "u".into() },

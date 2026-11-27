@@ -1,7 +1,7 @@
 //! 发给界面的数据。界面只读这些结构，不直接接触领域模型，以后手机端和网页端沿用同一份格式。
 
 use duolo_core::wire::{ReviewFacts, TaskState};
-use duolo_core::{AgentRole, State, Surface, Task, Verdict};
+use duolo_core::{AgentRole, Automation, RunOutcome, RunTrigger, State, Surface, Task, Verdict};
 use duolo_engine::{AgentStatus, Check, CheckKind, DiffStat, Draft, Engine, Plugin};
 use serde::Serialize;
 
@@ -21,6 +21,44 @@ pub struct ProjectView {
     pub name: String,
     pub root: String,
     pub tasks: Vec<TaskView>,
+    /// 项目里的定时任务。
+    pub automations: Vec<AutomationView>,
+}
+
+/// 定时任务。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationView {
+    pub id: u64,
+    pub name: String,
+    pub prompt: String,
+    /// 写代码的 Agent（插件 id）；用默认的时为 None。
+    pub agent: Option<String>,
+    pub base: Option<String>,
+    pub cron: String,
+    pub enabled: bool,
+    /// 下一次（Unix 秒）。
+    pub next_run_at: Option<u64>,
+    /// 已经要求立即运行、还没执行。
+    pub run_requested: bool,
+    /// 最近的执行，新的在前。
+    pub runs: Vec<RunView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunView {
+    pub scheduled_for: u64,
+    pub at: u64,
+    pub manual: bool,
+    /// `starting`、`started`、`skipped` 或 `failed`。
+    pub outcome: &'static str,
+    /// 建的任务（`started`）。
+    pub task: Option<u64>,
+    /// 跳过的原因（`automation.skip.<code>`）或失败的错误码（`error.<code>`）。
+    pub code: Option<String>,
+    /// 失败时填进错误文案的参数。
+    pub params: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -49,6 +87,8 @@ pub struct TaskView {
     pub resumable: Vec<String>,
     /// 从哪个任务分出来的。
     pub forked_from: Option<u64>,
+    /// 由哪个定时任务自动建的。
+    pub automation: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -257,10 +297,41 @@ pub fn snapshot(engine: &mut Engine) -> Snapshot {
                 .filter(|task| !closing.contains(&task.id))
                 .map(|task| task_view(engine, task, &project.root))
                 .collect(),
+            automations: state.automations.iter().filter(|a| a.project == project.id).map(automation_view).collect(),
         })
         .collect();
     let summary = engine.summary();
     Snapshot { projects, running: summary.running, needs_input: summary.needs_input }
+}
+
+fn automation_view(automation: &Automation) -> AutomationView {
+    let runs = automation
+        .runs
+        .iter()
+        .rev()
+        .map(|run| {
+            let (outcome, task, code, params) = match &run.outcome {
+                RunOutcome::Starting => ("starting", None, None, Default::default()),
+                RunOutcome::Started { task } => ("started", Some(task.0), None, Default::default()),
+                RunOutcome::Skipped { reason } => ("skipped", None, Some(reason.clone()), Default::default()),
+                RunOutcome::Failed { error, params } => ("failed", None, Some(error.clone()), params.clone()),
+            };
+            let manual = run.trigger == RunTrigger::Manual;
+            RunView { scheduled_for: run.scheduled_for, at: run.at, manual, outcome, task, code, params }
+        })
+        .collect();
+    AutomationView {
+        id: automation.id.0,
+        name: automation.name.clone(),
+        prompt: automation.prompt.clone(),
+        agent: automation.agent.as_ref().map(|a| a.0.clone()),
+        base: automation.base.clone(),
+        cron: automation.cron.clone(),
+        enabled: automation.enabled,
+        next_run_at: automation.enabled.then_some(automation.next_run_at).flatten(),
+        run_requested: automation.run_requested,
+        runs,
+    }
 }
 
 fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -> TaskView {
@@ -323,6 +394,7 @@ fn task_view(engine: &mut Engine, task: &Task, project_root: &std::path::Path) -
         state,
         resumable: engine.resumable_writers(task.id).into_iter().map(|kind| kind.0).collect(),
         forked_from: task.forked_from.map(|id| id.0),
+        automation: task.automation.map(|id| id.0),
         review: task.review.as_ref().map(|r| ReviewView {
             finished_at: r.finished_at,
             ok: r.ok,

@@ -163,6 +163,7 @@ fn main() {
         .setup(|app| {
             first_launch_size(app);
             spawn_snapshot_loop(app.handle().clone());
+            spawn_automation_loop(app.handle().clone());
             fnkey::start(app.handle().clone());
             Ok(())
         })
@@ -207,6 +208,11 @@ fn main() {
             commands::name_task,
             commands::close_task,
             commands::remove_project,
+            commands::save_automation,
+            commands::remove_automation,
+            commands::set_automation_enabled,
+            commands::run_automation,
+            commands::preview_schedule,
             commands::start_agent,
             commands::start_reviewer,
             commands::switch_writer,
@@ -386,6 +392,15 @@ fn spawn_snapshot_loop(app: AppHandle) {
             }
             thread::sleep(SNAPSHOT_INTERVAL);
         }
+    });
+}
+
+/// 后台定时检查定时任务，到点的建任务、启动 Agent（见 `duolo_engine::automation`）。
+/// 和快照分开：建任务要几秒，不能拖慢 250ms 一次的快照。
+fn spawn_automation_loop(app: AppHandle) {
+    thread::spawn(move || loop {
+        duolo_engine::automation::run_due(&app.state::<AppState>().engine);
+        thread::sleep(duolo_engine::automation::CHECK_EVERY);
     });
 }
 

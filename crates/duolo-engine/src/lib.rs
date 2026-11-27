@@ -4,6 +4,7 @@
 //! 这里的公开方法就是守护进程对外提供的接口，终端、手机和网页客户端都通过它操作。
 
 mod accounts;
+pub mod automation;
 mod chat;
 #[cfg(test)]
 mod conformance;
@@ -23,6 +24,7 @@ mod switch;
 mod updates;
 
 pub use accounts::{account_status, AccountStatus};
+pub use automation::AutomationDraft;
 pub use duolo_agent::{Account, AccountSource, Plugin, Registry};
 pub use duolo_chat::Draft;
 pub use duolo_git::DiffStat;

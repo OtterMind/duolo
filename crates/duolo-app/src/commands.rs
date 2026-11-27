@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use duolo_core::{AgentKey, AgentKind, Command, CommandResult, ProjectId, TaskEvent, TaskId};
+use duolo_core::{AgentKey, AgentKind, AutomationId, Command, CommandResult, ProjectId, TaskEvent, TaskId};
 use duolo_core::{Settings, Surface, UserError, VoiceConfig};
-use duolo_engine::{check_environment, ops, Size, TaskOptions};
+use duolo_engine::{automation, check_environment, ops, AutomationDraft, Size, TaskOptions};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 
@@ -369,6 +369,67 @@ pub async fn remove_project(app: AppHandle, project: String) -> Res<Vec<ClosedVi
         .into_iter()
         .map(|c| ClosedView { saved_to: c.saved_to, left_at: c.left_at.map(|p| p.display().to_string()) })
         .collect())
+}
+
+/// 新建、修改定时任务时填的内容。
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationInput {
+    name: String,
+    project: String,
+    prompt: String,
+    agent: Option<String>,
+    base: Option<String>,
+    cron: String,
+}
+
+impl From<AutomationInput> for AutomationDraft {
+    fn from(input: AutomationInput) -> Self {
+        Self {
+            name: input.name,
+            project: ProjectId(input.project),
+            prompt: input.prompt,
+            agent: input.agent.map(AgentKind),
+            base: input.base,
+            cron: input.cron,
+        }
+    }
+}
+
+/// 新建定时任务（`id` 为空）或修改已有的，返回它的编号。
+#[tauri::command]
+pub async fn save_automation(state: State<'_, AppState>, id: Option<u64>, input: AutomationInput) -> Res<u64> {
+    let mut engine = state.engine();
+    match id {
+        Some(id) => engine.update_automation(AutomationId(id), input.into()).map(|()| id),
+        None => engine.add_automation(input.into()).map(|id| id.0),
+    }
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn remove_automation(state: State<'_, AppState>, id: u64) -> Res<()> {
+    Ok(state.engine().remove_automation(AutomationId(id))?)
+}
+
+#[tauri::command]
+pub async fn set_automation_enabled(state: State<'_, AppState>, id: u64, enabled: bool) -> Res<()> {
+    Ok(state.engine().set_automation_enabled(AutomationId(id), enabled)?)
+}
+
+/// 立即运行一次：记下请求，马上检查一遍（建任务要几秒，不占着界面）。返回新建的任务。
+#[tauri::command]
+pub async fn run_automation(app: AppHandle, id: u64) -> Res<Vec<u64>> {
+    app.state::<AppState>().engine().request_automation_run(AutomationId(id))?;
+    let started = blocking(app, |state| Ok(automation::run_due(&state.engine))).await?;
+    Ok(started.into_iter().map(|t| t.0).collect())
+}
+
+/// 时间表下一次的时间（Unix 秒），编辑时预览用；时间表不合法时报错。
+#[tauri::command]
+pub async fn preview_schedule(cron: String) -> Res<Option<u64>> {
+    automation::parse_cron(&cron)?;
+    Ok(automation::next_run(&cron, duolo_core::text::now_secs()))
 }
 
 #[derive(Debug, serde::Serialize)]

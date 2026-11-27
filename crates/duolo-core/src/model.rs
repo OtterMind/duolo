@@ -30,6 +30,17 @@ impl fmt::Display for TaskId {
     }
 }
 
+/// 定时任务（自动运行）的 id，全局递增。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AutomationId(pub u64);
+
+impl fmt::Display for AutomationId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// 一个任务里某个 Agent 的全局标识。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AgentKey {
@@ -190,6 +201,104 @@ pub struct Task {
     /// 从哪个任务分出来的（见 `Engine::fork_task`）。
     #[serde(default)]
     pub forked_from: Option<TaskId>,
+    /// 由哪个定时任务自动建的（见 `duolo_engine::automation`）。
+    #[serde(default)]
+    pub automation: Option<AutomationId>,
+}
+
+/// 定时任务：按时间表在项目里新建一个任务，交给 Agent 去做。由桌面应用到点执行（Agent 进程属于启动它的进程）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Automation {
+    pub id: AutomationId,
+    pub name: String,
+    pub project: ProjectId,
+    /// 每次交给 Agent 的需求。
+    pub prompt: String,
+    /// 写代码的 Agent；没有时用配置里的默认。
+    #[serde(default)]
+    pub agent: Option<AgentKind>,
+    /// 基于哪个分支；没有时用仓库当时的分支。
+    #[serde(default)]
+    pub base: Option<String>,
+    /// 时间表：5 段的 cron（分 时 日 月 星期），按这台电脑的时区。
+    pub cron: String,
+    pub enabled: bool,
+    /// 下一次的时间（Unix 秒）。时间表不合法时为 None。
+    #[serde(default)]
+    pub next_run_at: Option<u64>,
+    /// 错过了多久以内还补跑一次（分钟），超过了记为错过。
+    #[serde(default = "Automation::default_grace")]
+    pub missed_grace_minutes: u32,
+    /// 有人要求立即运行一次（命令行发的，桌面应用下一次检查时执行）。
+    #[serde(default)]
+    pub run_requested: bool,
+    /// Unix 秒。
+    pub created_at: u64,
+    /// 最近几次执行，旧的在前，只留最近 [`Automation::KEEP_RUNS`] 次。
+    #[serde(default)]
+    pub runs: Vec<AutomationRun>,
+}
+
+impl Automation {
+    /// 留多少次执行记录。
+    pub const KEEP_RUNS: usize = 20;
+
+    pub fn default_grace() -> u32 {
+        12 * 60
+    }
+
+    /// 记下一次执行，超出的旧记录丢掉。
+    pub fn push_run(&mut self, run: AutomationRun) {
+        self.runs.push(run);
+        let extra = self.runs.len().saturating_sub(Self::KEEP_RUNS);
+        self.runs.drain(..extra);
+    }
+
+    /// 最近一次建了任务的执行所建的任务。
+    pub fn last_task(&self) -> Option<TaskId> {
+        self.runs.iter().rev().find_map(|r| match r.outcome {
+            RunOutcome::Started { task } => Some(task),
+            _ => None,
+        })
+    }
+}
+
+/// 定时任务的一次执行。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationRun {
+    /// 按时间表本该执行的时间（Unix 秒）；立即运行时是点的时间。
+    pub scheduled_for: u64,
+    /// 实际处理的时间（Unix 秒）。
+    pub at: u64,
+    pub trigger: RunTrigger,
+    pub outcome: RunOutcome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunTrigger {
+    /// 按时间表。
+    Scheduled,
+    /// 用户点了立即运行。
+    Manual,
+}
+
+/// 一次执行的结果。原因都是错误码，界面按语言显示。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RunOutcome {
+    /// 正在建任务（应用在这期间退出的话，下次检查时改成失败）。
+    Starting,
+    /// 建好了任务，Agent 开始干活。
+    Started { task: TaskId },
+    /// 没有执行：`reason` 是 `automation.skip.<reason>` 的后缀。
+    Skipped { reason: String },
+    /// 建任务失败：`error` 是 `error.<code>` 的后缀，`params` 是填进文案的参数。
+    Failed {
+        error: String,
+        #[serde(default)]
+        params: std::collections::BTreeMap<String, String>,
+    },
 }
 
 /// 一次后台审阅的结果。
@@ -286,17 +395,41 @@ pub struct State {
     pub projects: Vec<Project>,
     #[serde(default)]
     pub tasks: Vec<Task>,
+    #[serde(default)]
+    pub automations: Vec<Automation>,
+    #[serde(default = "State::first_task_id")]
+    pub next_automation_id: u64,
 }
 
 impl Default for State {
     fn default() -> Self {
-        Self { next_task_id: Self::first_task_id(), projects: Vec::new(), tasks: Vec::new() }
+        Self {
+            next_task_id: Self::first_task_id(),
+            projects: Vec::new(),
+            tasks: Vec::new(),
+            automations: Vec::new(),
+            next_automation_id: Self::first_task_id(),
+        }
     }
 }
 
 impl State {
     fn first_task_id() -> u64 {
         1
+    }
+
+    pub fn automation(&self, id: AutomationId) -> Option<&Automation> {
+        self.automations.iter().find(|a| a.id == id)
+    }
+
+    pub fn automation_mut(&mut self, id: AutomationId) -> Option<&mut Automation> {
+        self.automations.iter_mut().find(|a| a.id == id)
+    }
+
+    pub fn allocate_automation_id(&mut self) -> AutomationId {
+        let id = AutomationId(self.next_automation_id);
+        self.next_automation_id += 1;
+        id
     }
 
     pub fn project(&self, id: &ProjectId) -> Option<&Project> {

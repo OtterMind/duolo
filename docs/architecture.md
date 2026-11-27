@@ -173,6 +173,19 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
   文案里的快捷键也自动换算（Rust 侧见 `duolo_core::i18n::pc_keys`）；
 - 打包配置：`tauri.conf.json` 是公共部分，`tauri.{macos,windows,linux}.conf.json` 是各系统的安装包格式和资源。
 
+## 定时任务
+
+按时间表在项目里新建任务交给 Agent（`duolo-engine/src/automation.rs`，参考了 Orca 的 Automations）。
+
+- **存在 `state.json`**：`State.automations`，每个记最近 20 次执行（时间、手动还是按时、结果：建了哪个任务 / 跳过的原因 / 失败的错误码）。
+  时间表是 5 段 cron，按电脑的时区，用 `croner` 计算。任务上的 `automation` 记着是哪个定时任务建的。
+- **只有桌面应用执行**：Agent 进程属于启动它的进程。桌面应用每 30 秒调一次 `automation::run_due`；终端界面和命令行只改设置，
+  命令行的"立即运行"记成 `run_requested`，桌面应用下一次检查时执行。
+- **领取在锁里，建任务在锁外**：`run_due` 先在 `Engine::update` 里把到点的记成"正在建任务"、把下一次往后推，同一次只会被领一次；
+  再用 `ops::create_task` 建任务、启动 Agent，最后把结果写回。建任务时应用退出了，10 分钟后记为中断。
+- **错过和重叠**：错过了好几次只算最近一次；离现在超过宽限期（默认 12 小时）记为错过，不补跑。上一次建的任务还在干活
+  （在跑或在等用户）时这次跳过，不排队。暂停期间的不补跑。
+
 ## 事件流和远程命令（手机端的基础）
 
 每个任务有一条事件流，电脑端界面、手机端和以后的云端同步都用它（格式在 `duolo-core/src/event.rs`）：

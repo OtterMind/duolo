@@ -175,6 +175,9 @@ body.is-resizing * {
 .square-btn:hover {
   background: var(--hover);
 }
+.square-btn.is-on {
+  border-color: var(--focus);
+}
 .side-scroll {
   flex: 1;
   overflow-y: auto;
@@ -289,6 +292,18 @@ body.is-resizing * {
 }
 .project-grid:focus-visible {
   opacity: 1;
+}
+/* 项目里开着的定时任务：闹钟和个数，点了只看这个项目的定时任务 */
+.project-automations {
+  width: auto;
+  height: 22px;
+  gap: 3px;
+  padding: 0 4px;
+  color: var(--faint);
+  font: 11.5px var(--mono);
+}
+.side-project-head:hover .project-automations {
+  color: var(--muted);
 }
 .side-empty {
   padding: 2px 12px 6px;
@@ -2484,12 +2499,22 @@ body.is-dragging-pane * {
   }
 }
 
-/* 定时任务 */
-.dialog.automations {
-  width: 520px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 64px);
+/* 定时任务页面 */
+.automations-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.automations-scroll {
+  flex: 1;
   overflow-y: auto;
+}
+.automations-body {
+  width: 640px;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  padding: 8px 0 32px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -2499,11 +2524,36 @@ body.is-dragging-pane * {
   align-items: center;
   gap: 8px;
 }
-.dialog.automations h2 {
+.automations-head h1 {
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
-.dialog.automations .dialog-actions {
+.automations-body .dialog-actions {
   margin-top: 0;
+}
+.automations-empty {
+  padding: 24px 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.automations-empty p {
+  margin: 0 0 6px;
+}
+.automations-empty .dim {
+  color: var(--dim);
+}
+.automation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.automation-group h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
 }
 .automation-list {
   list-style: none;
@@ -2551,7 +2601,7 @@ body.is-dragging-pane * {
 .automation-run.is-failed {
   color: var(--text);
 }
-.dialog.automations p.automation-note {
+.automations-body p.automation-note {
   font-size: 12px;
   line-height: 1.5;
   color: var(--dim);

@@ -189,6 +189,7 @@ mod tests {
             session: None,
             hooks: None,
             prompt,
+            instructions: None,
         };
         // 总是一个能打字的 shell，命令等它准备好再打进去。
         let launch = shell.launch(start(Some("pnpm dev")));

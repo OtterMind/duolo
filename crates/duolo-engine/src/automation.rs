@@ -1,4 +1,5 @@
-//! 定时任务（自动运行）：按时间表在项目里新建一个任务，交给 Agent 去做。
+//! 定时任务（自动运行）：按时间表交给 Agent 一个需求。每次在项目里新建一个任务，或者发进一个已有的任务
+//! 接着对话；不针对哪个项目的，放在专门的项目里（[`Engine::automations_project`]）。
 //!
 //! 时间表是 5 段的 cron，按这台电脑的时区。桌面应用每 [`CHECK_EVERY`] 调一次 [`run_due`]：
 //! 到点的先在 [`Engine::update`] 的锁里"领取"（记下这次执行、把下一次往后推），领到的再在锁外建任务、
@@ -9,6 +10,7 @@
 //! （`missed_grace_minutes`，默认 12 小时）的补跑一次，更早的记为错过。同一个定时任务上一次建的任务
 //! 还在干活时，这次跳过，不排队。
 
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -26,6 +28,9 @@ use crate::status::AgentStatus;
 
 /// 桌面应用多久检查一次。时间表精确到分钟，半分钟查一次不会错过。
 pub const CHECK_EVERY: Duration = Duration::from_secs(30);
+
+/// 专门放"不针对哪个项目"的定时任务的文件夹，在 `~/DuoloProjects` 里。
+pub const AUTOMATIONS_FOLDER: &str = "Automations";
 
 /// 一直停在"正在建任务"超过这么久（应用在建任务时退出了），记为中断。
 const STALE_STARTING_SECS: u64 = 10 * 60;
@@ -45,7 +50,10 @@ pub mod skip {
 pub struct AutomationDraft {
     /// 空的时候按需求起名。
     pub name: String,
-    pub project: ProjectId,
+    /// 每次在哪个项目里新建任务；None 时不针对哪个项目（见 [`Engine::automations_project`]）。
+    pub project: Option<ProjectId>,
+    /// 发进这个任务接着对话，不新建任务；这时不看 `project`、`agent`、`base`。
+    pub task: Option<TaskId>,
     pub prompt: String,
     pub agent: Option<AgentKind>,
     pub base: Option<String>,
@@ -214,9 +222,14 @@ pub fn run_due(engine: &Mutex<Engine>) -> Vec<TaskId> {
     started
 }
 
-/// 建任务、启动写代码的 Agent（第一次启动带着需求）。
+/// 建任务、启动写代码的 Agent（第一次启动带着需求）；发进已有任务的，像用户发消息一样发过去
+/// （Agent 没在运行时接着上次的会话启动）。
 fn launch_one(engine: &Mutex<Engine>, launch: &Launch) -> Result<TaskId> {
     let automation = &launch.automation;
+    if let Some(task) = automation.task {
+        lock(engine).send_message(task, &automation.prompt)?;
+        return Ok(task);
+    }
     let opts =
         TaskOptions { writer: automation.agent.clone(), base: automation.base.clone(), ..TaskOptions::default() };
     let task = crate::ops::create_task(engine, &automation.project, &automation.prompt, &opts)?;
@@ -233,10 +246,10 @@ fn launch_one(engine: &Mutex<Engine>, launch: &Launch) -> Result<TaskId> {
 }
 
 impl Engine {
-    /// 上一次建的任务还在干活（在跑、或在等用户回答）的定时任务。
+    /// 上一次建的任务（发进已有任务的：那个任务）还在干活（在跑、或在等用户回答）的定时任务。
     fn busy_automations(&mut self) -> Vec<AutomationId> {
         let last: Vec<(AutomationId, TaskId)> =
-            self.state.automations.iter().filter_map(|a| Some((a.id, a.last_task()?))).collect();
+            self.state.automations.iter().filter_map(|a| Some((a.id, a.task.or_else(|| a.last_task())?))).collect();
         last.into_iter()
             .filter(|&(_, task)| {
                 self.writer_key(task)
@@ -246,9 +259,35 @@ impl Engine {
             .collect()
     }
 
-    /// 检查填的内容，补上默认的名字。
-    fn check_draft(&self, draft: &AutomationDraft) -> Result<(String, Cron)> {
-        self.state.project(&draft.project).ok_or(UserError::ProjectNotFound)?;
+    /// 专门放"不针对哪个项目"的定时任务的项目：`~/DuoloProjects/Automations`，第一次用时新建。
+    /// 它在侧边栏里和别的项目一样，这些定时任务建的任务都在这里，不混进用户的代码项目。
+    pub fn automations_project(&mut self) -> Result<ProjectId> {
+        self.automations_project_in(&duolo_core::process::projects_dir())
+    }
+
+    fn automations_project_in(&mut self, parent: &Path) -> Result<ProjectId> {
+        if let Some(id) = self.state.automations_project.clone().filter(|id| self.state.project(id).is_some()) {
+            return Ok(id);
+        }
+        let dir = parent.join(AUTOMATIONS_FOLDER);
+        let id = if dir.is_dir() {
+            // 用户移除过这个项目，文件夹还在：接着用。
+            if !duolo_git::is_repo_root(&dir) {
+                duolo_git::init_repo(&dir)?;
+            }
+            self.add_project(&dir)?
+        } else {
+            self.create_project_folder(parent, AUTOMATIONS_FOLDER)?
+        };
+        self.update(|state| {
+            state.automations_project = Some(id.clone());
+            Ok(())
+        })?;
+        Ok(id)
+    }
+
+    /// 检查填的内容，补上默认的名字，定下在哪个项目。
+    fn check_draft(&mut self, draft: &AutomationDraft) -> Result<(String, Cron, ProjectId)> {
         if let Some(agent) = &draft.agent {
             self.agents.get(agent)?;
         }
@@ -257,22 +296,32 @@ impl Engine {
             "" => derive_title(&draft.prompt),
             name => name.to_string(),
         };
-        Ok((name, cron))
+        let project = match (draft.task, &draft.project) {
+            (Some(task), _) => self.state.task(task).ok_or(UserError::TaskNotFound)?.project.clone(),
+            (None, Some(project)) => {
+                self.state.project(project).ok_or(UserError::ProjectNotFound)?;
+                project.clone()
+            }
+            (None, None) => self.automations_project()?,
+        };
+        Ok((name, cron, project))
     }
 
     /// 新建定时任务。
     pub fn add_automation(&mut self, draft: AutomationDraft) -> Result<AutomationId> {
-        let (name, cron) = self.check_draft(&draft)?;
+        let (name, cron, project) = self.check_draft(&draft)?;
         let now = now_secs();
+        let in_task = draft.task.is_some();
         self.update(|state| {
             let id = state.allocate_automation_id();
             state.automations.push(Automation {
                 id,
                 name,
-                project: draft.project,
+                project,
                 prompt: draft.prompt.trim().to_string(),
-                agent: draft.agent,
-                base: draft.base.filter(|b| !b.trim().is_empty()),
+                task: draft.task,
+                agent: draft.agent.filter(|_| !in_task),
+                base: draft.base.filter(|b| !in_task && !b.trim().is_empty()),
                 cron: draft.cron.trim().to_string(),
                 enabled: true,
                 next_run_at: next_in(&cron, now, &Local),
@@ -287,15 +336,18 @@ impl Engine {
 
     /// 修改定时任务。执行记录保留，下一次的时间按新的时间表重新算。
     pub fn update_automation(&mut self, id: AutomationId, draft: AutomationDraft) -> Result<()> {
-        let (name, cron) = self.check_draft(&draft)?;
+        self.state.automation(id).ok_or(UserError::AutomationNotFound)?;
+        let (name, cron, project) = self.check_draft(&draft)?;
         let next = next_in(&cron, now_secs(), &Local);
+        let in_task = draft.task.is_some();
         self.update(|state| {
             let automation = state.automation_mut(id).ok_or(UserError::AutomationNotFound)?;
             automation.name = name;
-            automation.project = draft.project;
+            automation.project = project;
             automation.prompt = draft.prompt.trim().to_string();
-            automation.agent = draft.agent;
-            automation.base = draft.base.filter(|b| !b.trim().is_empty());
+            automation.task = draft.task;
+            automation.agent = draft.agent.filter(|_| !in_task);
+            automation.base = draft.base.filter(|b| !in_task && !b.trim().is_empty());
             automation.cron = draft.cron.trim().to_string();
             automation.next_run_at = next;
             Ok(())
@@ -355,6 +407,7 @@ mod tests {
             name: "Nightly".into(),
             project: ProjectId("shop".into()),
             prompt: "Fix flaky tests".into(),
+            task: None,
             agent: None,
             base: None,
             cron: cron.into(),
@@ -471,7 +524,8 @@ mod tests {
         let project = opened.add_project(&repo).unwrap();
         let draft = AutomationDraft {
             name: String::new(),
-            project: project.clone(),
+            project: Some(project.clone()),
+            task: None,
             prompt: "Fix flaky tests".into(),
             agent: None,
             base: None,
@@ -485,13 +539,59 @@ mod tests {
         lock(&engine).request_automation_run(id).unwrap();
         let started = run_due(&engine);
         assert_eq!(started.len(), 1);
-        let mut engine = lock(&engine);
-        let task = engine.state().task(started[0]).unwrap().clone();
-        assert_eq!((task.automation, task.prompt.as_str()), (Some(id), "Fix flaky tests"));
-        let automation = engine.state().automation(id).unwrap();
-        assert!(!automation.run_requested);
-        let run = automation.runs.last().unwrap();
-        assert_eq!((run.trigger, &run.outcome), (RunTrigger::Manual, &RunOutcome::Started { task: task.id }));
-        engine.shutdown();
+        let (existing, in_task, tasks) = {
+            let mut guard = lock(&engine);
+            let task = guard.state().task(started[0]).unwrap().clone();
+            assert_eq!((task.automation, task.prompt.as_str()), (Some(id), "Fix flaky tests"));
+            let automation = guard.state().automation(id).unwrap();
+            assert!(!automation.run_requested);
+            let run = automation.runs.last().unwrap();
+            assert_eq!((run.trigger, &run.outcome), (RunTrigger::Manual, &RunOutcome::Started { task: task.id }));
+
+            // 发进已有的任务：项目跟着那个任务，不看 Agent 和分支。
+            let existing = guard.create_task_with(&project, "Keep the docs in sync", &TaskOptions::default()).unwrap();
+            let draft = AutomationDraft {
+                name: "Docs".into(),
+                project: None,
+                task: Some(existing),
+                prompt: "Check the docs again".into(),
+                agent: Some(AgentKind("claude".into())),
+                base: Some("main".into()),
+                cron: "@daily".into(),
+            };
+            let in_task = guard.add_automation(draft).unwrap();
+            let saved = guard.state().automation(in_task).unwrap();
+            assert_eq!(
+                (&saved.project, saved.task, &saved.agent, &saved.base),
+                (&project, Some(existing), &None, &None)
+            );
+            guard.request_automation_run(in_task).unwrap();
+            (existing, in_task, guard.state().tasks.len())
+        };
+        // 不新建任务，记下发进去的那个。
+        assert_eq!(run_due(&engine), vec![existing]);
+        let mut guard = lock(&engine);
+        assert_eq!(guard.state().tasks.len(), tasks);
+        let run = guard.state().automation(in_task).unwrap().runs.last().unwrap();
+        assert_eq!(run.outcome, RunOutcome::Started { task: existing });
+        guard.shutdown();
+    }
+
+    /// 不针对哪个项目的定时任务：第一次用时建专门的项目，之后接着用；被移除了再用时重新加回来。
+    #[cfg(unix)]
+    #[test]
+    fn makes_a_project_for_automations() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        std::fs::create_dir(&home).unwrap();
+        let mut engine = Engine::open(duolo_core::Paths::at(&home)).unwrap();
+        let parent = dir.path().join("DuoloProjects");
+        let id = engine.automations_project_in(&parent).unwrap();
+        assert!(duolo_git::is_repo_root(&parent.join(AUTOMATIONS_FOLDER)));
+        assert_eq!(engine.state().automations_project.as_ref(), Some(&id));
+        assert_eq!(engine.automations_project_in(&parent).unwrap(), id);
+        engine.remove_project(&id).unwrap();
+        assert_eq!(engine.automations_project_in(&parent).unwrap(), id, "文件夹还在，加回来");
+        assert_eq!(engine.state().projects.len(), 1);
     }
 }

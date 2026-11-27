@@ -10,6 +10,10 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub projects: Vec<ProjectView>,
+    /// 所有定时任务（"定时任务"页面），按建的先后。
+    pub automations: Vec<AutomationView>,
+    /// 专门放"不针对哪个项目"的定时任务的项目，界面把它的定时任务显示为"不指定项目"。
+    pub automations_project: Option<String>,
     pub running: usize,
     pub needs_input: usize,
 }
@@ -21,8 +25,6 @@ pub struct ProjectView {
     pub name: String,
     pub root: String,
     pub tasks: Vec<TaskView>,
-    /// 项目里的定时任务。
-    pub automations: Vec<AutomationView>,
 }
 
 /// 定时任务。
@@ -31,6 +33,10 @@ pub struct ProjectView {
 pub struct AutomationView {
     pub id: u64,
     pub name: String,
+    /// 在哪个项目。
+    pub project: String,
+    /// 发进这个任务接着对话；为 None 时每次在项目里新建任务。
+    pub task: Option<u64>,
     pub prompt: String,
     /// 写代码的 Agent（插件 id）；用默认的时为 None。
     pub agent: Option<String>,
@@ -297,11 +303,16 @@ pub fn snapshot(engine: &mut Engine) -> Snapshot {
                 .filter(|task| !closing.contains(&task.id))
                 .map(|task| task_view(engine, task, &project.root))
                 .collect(),
-            automations: state.automations.iter().filter(|a| a.project == project.id).map(automation_view).collect(),
         })
         .collect();
     let summary = engine.summary();
-    Snapshot { projects, running: summary.running, needs_input: summary.needs_input }
+    Snapshot {
+        projects,
+        automations: state.automations.iter().map(automation_view).collect(),
+        automations_project: state.automations_project.map(|p| p.0),
+        running: summary.running,
+        needs_input: summary.needs_input,
+    }
 }
 
 fn automation_view(automation: &Automation) -> AutomationView {
@@ -323,6 +334,8 @@ fn automation_view(automation: &Automation) -> AutomationView {
     AutomationView {
         id: automation.id.0,
         name: automation.name.clone(),
+        project: automation.project.0.clone(),
+        task: automation.task.map(|t| t.0),
         prompt: automation.prompt.clone(),
         agent: automation.agent.as_ref().map(|a| a.0.clone()),
         base: automation.base.clone(),

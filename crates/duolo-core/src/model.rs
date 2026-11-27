@@ -206,7 +206,10 @@ pub struct Task {
     pub automation: Option<AutomationId>,
 }
 
-/// 定时任务：按时间表在项目里新建一个任务，交给 Agent 去做。由桌面应用到点执行（Agent 进程属于启动它的进程）。
+/// 定时任务：按时间表交给 Agent 一个需求。由桌面应用到点执行（Agent 进程属于启动它的进程）。
+///
+/// 在哪里做：`task` 有值时发进这个任务，接着上次的对话；否则每次在 `project` 里新建一个任务。
+/// 不针对哪个项目的，`project` 是专门放定时任务的项目（[`State::automations_project`]）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Automation {
     pub id: AutomationId,
@@ -214,6 +217,9 @@ pub struct Automation {
     pub project: ProjectId,
     /// 每次交给 Agent 的需求。
     pub prompt: String,
+    /// 每次发进这个任务（接着对话），不新建任务。`project` 是它所在的项目。
+    #[serde(default)]
+    pub task: Option<TaskId>,
     /// 写代码的 Agent；没有时用配置里的默认。
     #[serde(default)]
     pub agent: Option<AgentKind>,
@@ -399,6 +405,9 @@ pub struct State {
     pub automations: Vec<Automation>,
     #[serde(default = "State::first_task_id")]
     pub next_automation_id: u64,
+    /// 专门放"不针对哪个项目"的定时任务所建任务的项目（第一次用时在 `~/DuoloProjects/Automations` 建）。
+    #[serde(default)]
+    pub automations_project: Option<ProjectId>,
 }
 
 impl Default for State {
@@ -409,6 +418,7 @@ impl Default for State {
             tasks: Vec::new(),
             automations: Vec::new(),
             next_automation_id: Self::first_task_id(),
+            automations_project: None,
         }
     }
 }

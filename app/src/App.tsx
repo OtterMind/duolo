@@ -16,7 +16,7 @@ import { Empty } from "./components/Empty";
 import { TaskView } from "./components/TaskView";
 import { Confirm, type ConfirmSpec } from "./components/Confirm";
 import { HandoffDialog, type Handoff } from "./components/HandoffDialog";
-import { AutomationsDialog } from "./components/AutomationsDialog";
+import { AutomationsPage } from "./components/AutomationsPage";
 import { Notice } from "./components/Notice";
 import { NewTaskPanel } from "./components/NewTaskPanel";
 import { PaneGrid } from "./components/PaneGrid";
@@ -54,7 +54,11 @@ const EXTRA_SHORTCUTS: [string, string][] = [
   ["settings", "⌘,"],
 ];
 
-export type View = { kind: "empty" } | { kind: "task"; task: number };
+export type View =
+  | { kind: "empty" }
+  | { kind: "task"; task: number }
+  /** 定时任务页面：`project` 只看这个项目的；`near` 是打开前在看的任务所在的项目（新建时默认用它）。 */
+  | { kind: "automations"; project: string | null; near: string | null };
 
 export function App() {
   const t = useT();
@@ -90,8 +94,6 @@ export function App() {
   const [reviewOpen, setReviewOpen] = useState<number | null>(null);
   /** 打开了「交给另一个 Agent」的任务。 */
   const [handoff, setHandoff] = useState<number | null>(null);
-  /** 打开了定时任务的项目。 */
-  const [automationsFor, setAutomationsFor] = useState<string | null>(null);
   /** 新建任务面板（⌘N）和它预选的项目。 */
   const [panel, setPanel] = useState<{ project: string | null } | null>(null);
   /** 正在把文件夹拖进窗口。 */
@@ -128,7 +130,12 @@ export function App() {
         ? [findTask(snap, zoom)].filter((p) => p != null)
         : grid.map((id) => findTask(snap, id)).filter((p) => p != null);
   const handoffTask = handoff != null ? (findTask(snap, handoff)?.task ?? null) : null;
-  const automationsProject = snap?.projects.find((p) => p.id === automationsFor) ?? null;
+  /** 打开定时任务页面，`project` 不为空时只看这个项目的。 */
+  const openAutomations = (project: string | null) => {
+    const v = viewRef.current;
+    const near = v.kind === "task" ? (findTask(snapRef.current, v.task)?.project.id ?? null) : v.kind === "automations" ? v.near : null;
+    setView({ kind: "automations", project, near });
+  };
   /** 并排时关掉一格（任务不关）：关的是正在操作的那格，就换成操作旁边一格；只剩一格时不再并排。 */
   const closePane = (task: number) => {
     const g = gridRef.current;
@@ -596,6 +603,7 @@ export function App() {
     { id: "prev-task", label: t("menu.prevTask"), keys: "⌘⌥↑", run: run("prev-task") },
     { id: "settings", label: t("settings.title"), keys: "⌘,", run: run("settings") },
     { id: "next-task", label: t("menu.nextTask"), keys: "⌘⌥↓", run: run("next-task") },
+    { id: "automations", label: t("command.automations"), run: () => openAutomations(null) },
     ...(current
       ? [
           {
@@ -603,11 +611,6 @@ export function App() {
             label: t(split ? "command.unsplit" : "command.split"),
             keys: "⌘\\",
             run: run("split"),
-          },
-          {
-            id: "automations",
-            label: t("command.automations", { project: current.project.name }),
-            run: () => setAutomationsFor(current.project.id),
           },
           {
             id: "remove-project",
@@ -702,7 +705,7 @@ export function App() {
         onOpenBeside={(task) => addPane(task)}
         onShowProject={showProject}
         onRemoveProject={requestRemoveProject}
-        onAutomations={setAutomationsFor}
+        onAutomations={openAutomations}
         onClosePane={closePane}
         onOpenShell={(task) => {
           openTask(task);
@@ -758,6 +761,16 @@ export function App() {
                 />
               );
             }}
+          />
+        ) : view.kind === "automations" && snap ? (
+          <AutomationsPage
+            snap={snap}
+            filter={view.project}
+            currentProject={view.near}
+            agents={agentOptions(env)}
+            onFilter={(project) => setView({ ...view, project })}
+            onOpenTask={openTask}
+            onError={fail}
           />
         ) : (
           <Empty
@@ -826,18 +839,6 @@ export function App() {
           agents={agentOptions(env)}
           onRun={(h) => runHandoff(handoffTask.id, h)}
           onDone={() => setHandoff(null)}
-          onError={fail}
-        />
-      )}
-      {automationsProject && (
-        <AutomationsDialog
-          project={automationsProject}
-          agents={agentOptions(env)}
-          onOpenTask={(task) => {
-            setAutomationsFor(null);
-            openTask(task);
-          }}
-          onClose={() => setAutomationsFor(null)}
           onError={fail}
         />
       )}

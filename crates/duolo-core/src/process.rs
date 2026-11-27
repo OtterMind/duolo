@@ -323,6 +323,11 @@ pub fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_default()
 }
 
+/// Duolo 新建文件夹和克隆仓库的默认位置：`~/DuoloProjects`，不和用户自己的 `~/projects` 混在一起。
+pub fn projects_dir() -> PathBuf {
+    home_dir().join("DuoloProjects")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

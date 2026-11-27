@@ -61,6 +61,7 @@ resume_args = ["--continue"]     # 恢复这个目录里上一次会话（还不
 resume_session_args = ["--resume", "{session}"]  # 按编号恢复，{session} 换成会话编号
 session_id_args = ["--session-id", "{session}"]  # 新开会话时由 Duolo 定编号（UUID）。没有这个参数的，从会话记录里认
 review_args = []           # 作为审阅者在终端里启动时追加
+instructions_args = ["--append-system-prompt", "{instructions}"]  # 写代码时追加到系统提示的说明（怎么用 duolo 命令），{instructions} 换成说明；没有"追加"这种参数的不写
 
 [review]                   # 后台审阅：在临时副本里只读运行，结论打印到 stdout。没有这一段就不能当审阅者
                            # 改动由 Duolo 写进副本里的 DUOLO_REVIEW.md，审阅者不用自己运行 git

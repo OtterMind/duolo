@@ -257,7 +257,8 @@ fn code_dirs() -> Vec<PathBuf> {
 }
 
 const CODE_DIRS: &[&str] = &[
-    PROJECTS_DIR,
+    // Duolo 自己的（见 duolo_core::process::projects_dir）。
+    "DuoloProjects",
     "projects",
     "Projects",
     "code",
@@ -272,15 +273,12 @@ const CODE_DIRS: &[&str] = &[
     "git",
 ];
 
-/// Duolo 新建文件夹和克隆仓库的默认位置：`~/DuoloProjects`，不和用户自己的 `~/projects` 混在一起。
-const PROJECTS_DIR: &str = "DuoloProjects";
-
 fn home() -> Option<PathBuf> {
     Some(duolo_core::process::home_dir()).filter(|p| !p.as_os_str().is_empty())
 }
 
 fn projects_dir() -> PathBuf {
-    home().unwrap_or_default().join(PROJECTS_DIR)
+    duolo_core::process::projects_dir()
 }
 
 /// 新建文件夹和克隆仓库默认放在哪里（界面里显示给用户）。
@@ -376,7 +374,10 @@ pub async fn remove_project(app: AppHandle, project: String) -> Res<Vec<ClosedVi
 #[serde(rename_all = "camelCase")]
 pub struct AutomationInput {
     name: String,
-    project: String,
+    /// 每次在这个项目里新建任务；为空时不针对哪个项目。
+    project: Option<String>,
+    /// 发进这个任务接着对话。
+    task: Option<u64>,
     prompt: String,
     agent: Option<String>,
     base: Option<String>,
@@ -387,7 +388,8 @@ impl From<AutomationInput> for AutomationDraft {
     fn from(input: AutomationInput) -> Self {
         Self {
             name: input.name,
-            project: ProjectId(input.project),
+            project: input.project.map(ProjectId),
+            task: input.task.map(TaskId),
             prompt: input.prompt,
             agent: input.agent.map(AgentKind),
             base: input.base,

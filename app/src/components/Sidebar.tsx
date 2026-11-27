@@ -39,8 +39,8 @@ interface Props {
   onShowProject(project: string): void;
   /** 从 Duolo 移除项目（会先确认）。 */
   onRemoveProject(project: string): void;
-  /** 打开项目的定时任务。 */
-  onAutomations(project: string): void;
+  /** 打开定时任务页面；`project` 不为空时只看这个项目的。 */
+  onAutomations(project: string | null): void;
   /** 把任务从并排的格子里拿掉（任务不关）。 */
   onClosePane(task: number): void;
   /** 打开任务，在它下方开一个终端。 */
@@ -92,6 +92,8 @@ export function Sidebar(props: Props) {
   ];
   const search = useRef<HTMLInputElement>(null);
   const projects = snap?.projects ?? [];
+  /** 项目里开着的定时任务有几个。 */
+  const automations = (project: string) => snap?.automations.filter((a) => a.project === project && a.enabled).length ?? 0;
   const waiting = projects.flatMap((p) => p.tasks).filter((task) => writerOf(task)?.status === "needs_input").length;
 
   useEffect(() => {
@@ -137,6 +139,14 @@ export function Sidebar(props: Props) {
           />
           {!query && <kbd>{kbd("⌘K")}</kbd>}
         </label>
+        <button
+          className={`square-btn ${view.kind === "automations" ? "is-on" : ""}`}
+          title={t("automation.title")}
+          aria-pressed={view.kind === "automations"}
+          onClick={() => props.onAutomations(null)}
+        >
+          <AlarmClock {...ICON} />
+        </button>
         <button className="square-btn" title={t("sidebar.addProjectShortcut")} onClick={onAddProject}>
           <FolderPlus {...ICON} />
         </button>
@@ -180,6 +190,16 @@ export function Sidebar(props: Props) {
                   <span className="ellipsis">{project.name}</span>
                 </button>
                 {folded && project.tasks.length > 0 && <FoldedCounts tasks={project.tasks} />}
+                {automations(project.id) > 0 && (
+                  <button
+                    className="icon-btn project-automations"
+                    title={t("automation.ofProject", { count: automations(project.id) })}
+                    onClick={() => props.onAutomations(project.id)}
+                  >
+                    <AlarmClock size={13} strokeWidth={1.75} />
+                    {automations(project.id)}
+                  </button>
+                )}
                 {project.tasks.length >= 2 && (
                   <button
                     className="icon-btn project-grid"

@@ -1,4 +1,4 @@
-//! 各个系统不一样的地方：在文件管理器 / 终端里打开目录、打开系统设置。
+//! 各个系统不一样的地方：在文件管理器 / 终端里打开目录、打开系统设置、给 Agent 用的 `duolo` 命令。
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -116,6 +116,46 @@ pub fn open_settings(pane: &str) -> io::Result<()> {
     }
 }
 
+/// 在 `dir` 里放一个叫 `duolo` 的小脚本，带上 `__cli` 运行桌面应用自己（`exe`）：Agent 的 PATH 里有这个目录，
+/// 在对话里就能用 `duolo automation add` 之类的命令。每次启动都重写，应用换了位置也跟得上。
+pub fn install_cli(dir: &Path, exe: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let exe = exe.display().to_string();
+    if cfg!(windows) {
+        // 批处理里 % 要写成 %%。
+        let script = format!("@\"{}\" {} %*\r\n@exit /b %ERRORLEVEL%\r\n", exe.replace('%', "%%"), duolo_cli::CLI_ARG);
+        return write_if_changed(&dir.join("duolo.cmd"), &script);
+    }
+    // 单引号里的单引号写成 '\''。
+    let quoted = format!("'{}'", exe.replace('\'', "'\\''"));
+    let script =
+        format!("#!/bin/sh\n# Duolo 的命令行，由桌面应用生成。\nexec {quoted} {} \"$@\"\n", duolo_cli::CLI_ARG);
+    let file = dir.join("duolo");
+    write_if_changed(&file, &script)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(())
+}
+
+fn write_if_changed(file: &Path, text: &str) -> io::Result<()> {
+    if std::fs::read_to_string(file).is_ok_and(|old| old == text) {
+        return Ok(());
+    }
+    std::fs::write(file, text)
+}
+
+/// 当命令行用时接上启动它的终端：Windows 的正式版是窗口程序，不接的话输出看不到。其他系统什么也不做。
+pub fn attach_console() {
+    #[cfg(windows)]
+    // SAFETY: 只是请求接上父进程的控制台，失败（本来就有、或父进程没有）时什么也不变。
+    unsafe {
+        windows_sys::Win32::System::Console::AttachConsole(windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS);
+    }
+}
+
 #[cfg(test)]
 mod url_tests {
     use super::open_url;
@@ -126,5 +166,27 @@ mod url_tests {
         for url in ["file:///etc/passwd", "javascript:alert(1)", "ssh://host", "/Applications/Calculator.app"] {
             assert_eq!(open_url(url).unwrap_err().kind(), std::io::ErrorKind::InvalidInput, "{url}");
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod cli_tests {
+    use super::install_cli;
+
+    /// 脚本带上 `__cli` 和原来的参数运行应用；路径里有空格、单引号也不出错。
+    #[test]
+    fn the_script_runs_the_app_as_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_dir = dir.path().join("It's an app");
+        std::fs::create_dir(&app_dir).unwrap();
+        let exe = app_dir.join("Duolo");
+        std::fs::write(&exe, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
+        let bin = dir.path().join("bin");
+        for _ in 0..2 {
+            install_cli(&bin, &exe).unwrap();
+        }
+        std::process::Command::new("chmod").arg("+x").arg(&exe).status().unwrap();
+        let out = std::process::Command::new(bin.join("duolo")).args(["automation", "add", "a b"]).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "__cli|automation|add|a b|");
     }
 }

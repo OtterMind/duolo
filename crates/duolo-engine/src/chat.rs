@@ -94,7 +94,11 @@ impl Engine {
         self.use_account(key);
         let task = self.state.task(key.task).ok_or(UserError::TaskNotFound)?;
         let agent = task.agent(key.agent).context("agent not found")?.clone();
-        let launch = self.agents.get(&agent.kind)?.chat().ok_or(UserError::ChatUnsupported)?;
+        let plugin = self.agents.get(&agent.kind)?;
+        let mut launch = plugin.chat().ok_or(UserError::ChatUnsupported)?;
+        if let Some(text) = self.instructions(task.id).filter(|_| agent.role == AgentRole::Writer) {
+            launch.args.extend(plugin.instructions_args(&text));
+        }
         let resumed = !fresh && agent.launched;
         // 第一句话只在新开会话时发；接不回原来的会话时也要用，所以总是带上。
         let prompt = agent.prompt.clone().or_else(|| Some(task.prompt.clone()).filter(|p| !p.is_empty()));
@@ -107,6 +111,7 @@ impl Engine {
             resume_args: launch.resume_args,
             env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())]
                 .into_iter()
+                .chain(self.cli_path_var())
                 .chain(launch.env)
                 .chain(self.account_vars(key))
                 .collect(),

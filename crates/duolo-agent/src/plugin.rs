@@ -9,7 +9,9 @@ use duolo_core::text::{is_older, version_in};
 
 use crate::accounts::{self, Account};
 use crate::hooks::{self, HookEvent};
-use crate::manifest::{HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, SESSION, SETTINGS};
+use crate::manifest::{
+    HeadlessSpec, Keys, Manifest, PromptVia, Screen, TrustScope, TrustSpec, INSTRUCTIONS, SESSION, SETTINGS,
+};
 use crate::transcript::{self, Home, Sessions, Watch};
 use crate::trust;
 
@@ -33,6 +35,8 @@ pub struct Start<'a> {
     /// 钩子设置文件（见 [`Plugin::hook_settings`]）；不装钩子时为 None。
     pub hooks: Option<&'a str>,
     pub prompt: Option<&'a str>,
+    /// 给 Agent 的补充说明（例如怎么用 `duolo` 命令），插件声明了 `instructions_args` 时带上，每次启动都带。
+    pub instructions: Option<&'a str>,
 }
 
 /// 启动它的命令。
@@ -318,6 +322,10 @@ impl Plugin {
         if start.role == AgentRole::Reviewer {
             args.extend(spec.review_args.iter().cloned());
         }
+        // 批处理文件经过 cmd.exe，带不了长句子，不带。
+        if let Some(text) = start.instructions.filter(|_| !batch) {
+            args.extend(self.instructions_args(text));
+        }
         if let (Some(file), Some(spec)) = (start.hooks, &self.manifest.hooks) {
             args.extend(spec.args.iter().map(|a| a.replace(SETTINGS, file)));
         }
@@ -342,6 +350,11 @@ impl Plugin {
         }
         let env = spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         Launch { program: self.command().to_string(), args, paste, env }
+    }
+
+    /// 带上补充说明的参数（`instructions_args` 里的 `{instructions}` 换成 `text`）；没声明时为空。
+    pub fn instructions_args(&self, text: &str) -> Vec<String> {
+        self.manifest.start.instructions_args.iter().map(|a| a.replace(INSTRUCTIONS, text)).collect()
     }
 
     /// 在聊天模式下启动它的命令；只能在终端里用时为 None。
@@ -459,7 +472,14 @@ mod tests {
     }
 
     fn write(prompt: &str) -> Start<'_> {
-        Start { role: AgentRole::Writer, resume: false, session: None, hooks: None, prompt: Some(prompt) }
+        Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: None,
+            prompt: Some(prompt),
+            instructions: None,
+        }
     }
 
     #[test]
@@ -489,15 +509,28 @@ mod tests {
     #[test]
     fn resuming_does_not_repeat_the_prompt() {
         let p = plugin("resume_args = [\"-c\"]\nreview_args = [\"--ro\"]");
-        let start =
-            Start { role: AgentRole::Reviewer, resume: true, session: None, hooks: None, prompt: Some("again") };
+        let start = Start {
+            role: AgentRole::Reviewer,
+            resume: true,
+            session: None,
+            hooks: None,
+            prompt: Some("again"),
+            instructions: None,
+        };
         assert_eq!(p.launch_as(start, false).args, ["--ro", "-c"]);
     }
 
     #[test]
     fn resumes_the_known_session() {
         let p = plugin("resume_args = [\"-c\"]\nresume_session_args = [\"-r\", \"{session}\"]");
-        let start = |session| Start { role: AgentRole::Writer, resume: true, session, hooks: None, prompt: None };
+        let start = |session| Start {
+            role: AgentRole::Writer,
+            resume: true,
+            session,
+            hooks: None,
+            prompt: None,
+            instructions: None,
+        };
         assert_eq!(p.launch_as(start(Some("ab-12")), false).args, ["-r", "ab-12"]);
         assert_eq!(p.launch_as(start(None), false).args, ["-c"], "还不知道编号时恢复最近的");
         // 没写按编号怎么恢复的插件，有编号也只能恢复最近的。
@@ -510,8 +543,14 @@ mod tests {
     #[test]
     fn fresh_start_can_take_our_session_id() {
         let p = plugin("separator = \"--\"\nsession_id_args = [\"--session-id\", \"{session}\"]");
-        let start =
-            Start { role: AgentRole::Writer, resume: false, session: Some("u-1"), hooks: None, prompt: Some("- fix") };
+        let start = Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: Some("u-1"),
+            hooks: None,
+            prompt: Some("- fix"),
+            instructions: None,
+        };
         assert_eq!(p.launch_as(start, false).args, ["--session-id", "u-1", "--", "- fix"]);
         assert!(p.assigns_session() && !plugin("").assigns_session());
         let off = p.with(&AgentOverride { session_id_args: Some(Vec::new()), ..Default::default() });
@@ -521,10 +560,33 @@ mod tests {
     #[test]
     fn some_args_cannot_be_replaced() {
         let p = plugin("always_args = [\"--quiet\"]\nargs = [\"-v\"]");
-        let start = Start { role: AgentRole::Writer, resume: false, session: None, hooks: None, prompt: None };
+        let start = Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: None,
+            prompt: None,
+            instructions: None,
+        };
         assert_eq!(p.launch_as(start, false).args, ["-v", "--quiet"]);
         let changed = p.with(&AgentOverride { args: Some(vec!["--model".into(), "x".into()]), ..Default::default() });
         assert_eq!(changed.launch_as(start, false).args, ["--model", "x", "--quiet"], "config.toml 的 args 换不掉它");
+    }
+
+    #[test]
+    fn instructions_go_before_the_prompt() {
+        let p = plugin("instructions_args = [\"--append\", \"{instructions}\"]\nseparator = \"--\"");
+        let start = Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: None,
+            prompt: Some("go"),
+            instructions: Some("use duolo"),
+        };
+        assert_eq!(p.launch_as(start, false).args, ["--append", "use duolo", "--", "go"]);
+        assert!(!p.launch_as(start, true).args.contains(&"use duolo".to_string()), "批处理文件不带");
+        assert!(plugin("").instructions_args("x").is_empty());
     }
 
     #[test]
@@ -547,6 +609,7 @@ mod tests {
             session: None,
             hooks: Some("/h/s.json"),
             prompt: Some("go"),
+            instructions: None,
         };
         assert_eq!(p.launch_as(start, false).args, ["--settings", "/h/s.json", "go"]);
     }

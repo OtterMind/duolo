@@ -175,16 +175,25 @@ xterm.js 画面 ◀─ Channel（原始字节）◀─ Session::attach ◀─┤
 
 ## 定时任务
 
-按时间表在项目里新建任务交给 Agent（`duolo-engine/src/automation.rs`，参考了 Orca 的 Automations）。
+按时间表交给 Agent 一个需求（`duolo-engine/src/automation.rs`，参考了 Orca 的 Automations）。
+
+- **在哪里做**：每次在项目里新建任务（默认）；发进一个已有的任务接着对话（`Automation.task`，像用户发消息一样用
+  `Engine::send_message`）；不针对哪个项目的，放在专门的项目里（`~/DuoloProjects/Automations`，第一次用时新建，
+  记在 `State.automations_project`），这些任务不混进用户的代码项目。界面上是一个单独的页面（侧边栏顶部的闹钟），按在哪里做分组。
+- **Agent 在对话里建**：桌面应用启动时在 `~/.duolo/bin` 放一个叫 `duolo` 的小脚本（Windows 是 `duolo.cmd`），带上 `__cli`
+  运行桌面应用自己，命令都在 `duolo-cli` 库里；这个目录排在 Agent 的 PATH 最前面，不用另外装命令行。命令行按 `DUOLO_TASK_ID`
+  （或当前目录在哪个任务的工作目录里）认出当前任务和项目，`--here` 发进当前任务，`--no-project` 不针对项目。
+  插件用 `instructions_args` 把怎么用这个命令追加到 Agent 的系统提示里（Claude 是 `--append-system-prompt`）；
+  没有"追加"这种参数的 Agent 不写，免得换掉用户自己的设置。
 
 - **存在 `state.json`**：`State.automations`，每个记最近 20 次执行（时间、手动还是按时、结果：建了哪个任务 / 跳过的原因 / 失败的错误码）。
   时间表是 5 段 cron，按电脑的时区，用 `croner` 计算。任务上的 `automation` 记着是哪个定时任务建的。
 - **只有桌面应用执行**：Agent 进程属于启动它的进程。桌面应用每 30 秒调一次 `automation::run_due`；终端界面和命令行只改设置，
   命令行的"立即运行"记成 `run_requested`，桌面应用下一次检查时执行。
 - **领取在锁里，建任务在锁外**：`run_due` 先在 `Engine::update` 里把到点的记成"正在建任务"、把下一次往后推，同一次只会被领一次；
-  再用 `ops::create_task` 建任务、启动 Agent，最后把结果写回。建任务时应用退出了，10 分钟后记为中断。
-- **错过和重叠**：错过了好几次只算最近一次；离现在超过宽限期（默认 12 小时）记为错过，不补跑。上一次建的任务还在干活
-  （在跑或在等用户）时这次跳过，不排队。暂停期间的不补跑。
+  再用 `ops::create_task` 建任务、启动 Agent（或者发进已有任务），最后把结果写回。建任务时应用退出了，10 分钟后记为中断。
+- **错过和重叠**：错过了好几次只算最近一次；离现在超过宽限期（默认 12 小时）记为错过，不补跑。上一次建的任务
+  （发进已有任务的：那个任务）还在干活（在跑或在等用户）时这次跳过，不排队。暂停期间的不补跑。
 
 ## 事件流和远程命令（手机端的基础）
 

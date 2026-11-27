@@ -47,6 +47,8 @@ resume_session_args = ["--resume", "{session}"]
 session_id_args = ["--session-id", "{session}"]
 # 在终端里审阅时用计划模式：只看不改，要改文件得先让用户同意。
 review_args = ["--permission-mode", "plan"]
+# Duolo 的补充说明（怎么用 `duolo` 命令建定时任务）追加到系统提示后面，不换掉 Claude Code 自己的。
+instructions_args = ["--append-system-prompt", "{instructions}"]
 # 不在启动时自己升级（升级由用户决定，也免得升级到一半换了界面）。
 # 打开"下一步建议"：回答完后把建议的下一句灰着写进输入框（Tab 采用），不然要等服务器分批放开。
 env = { DISABLE_AUTOUPDATER = "1", CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = "1" }

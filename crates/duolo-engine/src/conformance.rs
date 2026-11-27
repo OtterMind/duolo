@@ -76,6 +76,7 @@ fn prompt_arrives_whole_and_is_never_an_option() {
                 session: None,
                 hooks: None,
                 prompt: Some(prompt),
+                instructions: None,
             });
             match launch.paste {
                 Some(paste) => assert_eq!(paste, prompt),
@@ -87,11 +88,23 @@ fn prompt_arrives_whole_and_is_never_an_option() {
                 }
             }
         }
-        let blank =
-            p.launch(Start { role: AgentRole::Writer, resume: false, session: None, hooks: None, prompt: None });
+        let blank = p.launch(Start {
+            role: AgentRole::Writer,
+            resume: false,
+            session: None,
+            hooks: None,
+            prompt: None,
+            instructions: None,
+        });
         assert!(blank.paste.is_none() && !blank.args.iter().any(|a| a == "--"), "{}: {:?}", p.id(), blank.args);
-        let resumed =
-            p.launch(Start { role: AgentRole::Writer, resume: true, session: None, hooks: None, prompt: None });
+        let resumed = p.launch(Start {
+            role: AgentRole::Writer,
+            resume: true,
+            session: None,
+            hooks: None,
+            prompt: None,
+            instructions: None,
+        });
         if p.can_resume(None) {
             assert_ne!(resumed.args, blank.args, "{} 不能恢复会话", p.id());
         }
@@ -102,6 +115,7 @@ fn prompt_arrives_whole_and_is_never_an_option() {
             session: Some(SESSION),
             hooks: None,
             prompt: None,
+            instructions: None,
         });
         assert!(by_id.args.iter().any(|a| a.contains(SESSION)), "{} 不能按编号恢复会话", p.id());
         if p.assigns_session() {
@@ -111,6 +125,7 @@ fn prompt_arrives_whole_and_is_never_an_option() {
                 session: Some(SESSION),
                 hooks: None,
                 prompt: Some("- x"),
+                instructions: None,
             };
             let launch = p.launch(start);
             let at = launch.args.iter().position(|a| a.contains(SESSION)).expect("定好的会话编号要交给它");

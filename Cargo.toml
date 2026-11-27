@@ -18,6 +18,7 @@ duolo-pty = { path = "crates/duolo-pty" }
 duolo-voice = { path = "crates/duolo-voice" }
 duolo-engine = { path = "crates/duolo-engine" }
 duolo-tui = { path = "crates/duolo-tui" }
+duolo-cli = { path = "crates/duolo-cli" }
 
 anyhow = "1"
 thiserror = "2"

@@ -193,6 +193,8 @@ pub struct Engine {
     assigning: HashSet<AgentKey>,
     /// 钩子命令用的程序（Duolo 自己，见 `duolo_core::hook`）；没设置时不装钩子。
     hook_program: Option<PathBuf>,
+    /// 放 `duolo` 命令的目录，排在 Agent 的 PATH 最前面（见 [`Engine::set_cli_dir`]）。
+    cli_dir: Option<PathBuf>,
     /// 这次运行里发现不认得"指定会话编号"选项的 Agent（版本太旧，或者以后改了名字），之后不再给它定编号。
     no_session_ids: HashSet<AgentKind>,
     reviews: HashMap<TaskId, ReviewJob>,
@@ -281,6 +283,7 @@ impl Engine {
             resuming: HashSet::new(),
             assigning: HashSet::new(),
             hook_program: None,
+            cli_dir: None,
             no_session_ids: HashSet::new(),
             reviews: HashMap::new(),
             reply_language: duolo_core::config::DEFAULT_REPLY_LANGUAGE.to_string(),
@@ -1097,6 +1100,33 @@ impl Engine {
         self.hook_program = Some(program);
     }
 
+    /// 放 `duolo` 命令的目录：Agent 的 PATH 里排在最前面，它在对话里就能建定时任务、开新任务。
+    pub fn set_cli_dir(&mut self, dir: PathBuf) {
+        self.cli_dir = Some(dir);
+    }
+
+    /// 写代码的 Agent 的补充说明：它在 Duolo 里、可以用 `duolo` 命令建定时任务。没有 `duolo` 命令时为 None。
+    /// 写给模型看的，用英文。
+    pub(crate) fn instructions(&self, task: TaskId) -> Option<String> {
+        self.cli_dir.as_ref()?;
+        Some(format!(
+            "You are running inside Duolo, as task #{task}. When the user asks for a scheduled or recurring job \
+             (every morning, every Monday, hourly...), create a Duolo automation instead of using any other scheduler: \
+             `duolo automation add --cron \"<5-field cron, local time>\" \"<what to do each time>\"` starts a new task \
+             in this project on each run; add `--here` to send it into this task instead, or `--no-project` when the \
+             job is not about this project. Manage them with `duolo automation ls|run|pause|resume|rm <id>`; they run \
+             while the Duolo app is open and the user sees them on its Automations page. See `duolo automation add --help`."
+        ))
+    }
+
+    /// 交给 Agent 的 PATH：放 `duolo` 命令的目录在前，后面是 Duolo 自己的 PATH。没设置目录时为 None（照常继承）。
+    pub(crate) fn cli_path_var(&self) -> Option<(String, String)> {
+        let dir = self.cli_dir.clone()?;
+        let rest = std::env::var_os("PATH").unwrap_or_default();
+        let joined = std::env::join_paths(std::iter::once(dir).chain(std::env::split_paths(&rest))).ok()?;
+        Some(("PATH".to_string(), joined.into_string().ok()?))
+    }
+
     /// Agent 的钩子事件写在哪个目录。
     pub(crate) fn hook_dir(&self, key: AgentKey) -> PathBuf {
         self.paths.hooks().join(format!("{}-{}", key.task, key.agent))
@@ -1140,7 +1170,15 @@ impl Engine {
         };
         let session = if resume { agent.session.as_deref() } else { assigned };
         let hooks = self.prepare_hooks(key, plugin);
-        let start = Start { role: agent.role, resume, session, hooks: hooks.as_deref(), prompt: prompt.as_deref() };
+        let instructions = self.instructions(task.id).filter(|_| agent.role == AgentRole::Writer);
+        let start = Start {
+            role: agent.role,
+            resume,
+            session,
+            hooks: hooks.as_deref(),
+            prompt: prompt.as_deref(),
+            instructions: instructions.as_deref(),
+        };
         let launch = plugin.launch(start);
         let screen = plugin.screen();
         let spec = SessionSpec {
@@ -1149,6 +1187,7 @@ impl Engine {
             cwd: task.worktree.clone(),
             env: [("DUOLO_TASK_ID".to_string(), task.id.to_string())]
                 .into_iter()
+                .chain(self.cli_path_var())
                 .chain(hooks.map(|_| (HOOK_DIR_ENV.to_string(), self.hook_dir(key).display().to_string())))
                 .chain(launch.env)
                 .chain(self.account_vars(key))

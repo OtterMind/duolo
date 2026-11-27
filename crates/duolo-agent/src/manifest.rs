@@ -14,6 +14,8 @@ pub const SCHEMA: u32 = 1;
 pub(crate) const SESSION: &str = "{session}";
 /// `hooks.args` 里换成设置文件路径的占位符。
 pub(crate) const SETTINGS: &str = "{settings}";
+/// `instructions_args` 里换成给 Agent 的补充说明。
+pub(crate) const INSTRUCTIONS: &str = "{instructions}";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -186,6 +188,9 @@ pub struct StartSpec {
     pub session_id_args: Vec<String>,
     /// 作为审阅者启动时追加的参数，例如只读沙箱。
     pub review_args: Vec<String>,
+    /// 写代码时给 Agent 补充说明的参数（追加到它的系统提示里，不替换），`{instructions}` 换成说明。
+    /// 每次启动（包括恢复会话）都带上。没有这样的参数的不写，Agent 就不知道 Duolo 的命令。
+    pub instructions_args: Vec<String>,
     /// 启动时设置的环境变量，例如关掉启动时的升级提示（在那个界面按回车会选"现在升级"）。
     pub env: std::collections::BTreeMap<String, String>,
 }
@@ -426,6 +431,11 @@ impl Manifest {
         {
             ensure!(args.is_empty() || args.iter().any(|a| a.contains(SESSION)), "{name} must contain {SESSION}");
         }
+        let instructions = &self.start.instructions_args;
+        ensure!(
+            instructions.is_empty() || instructions.iter().any(|a| a.contains(INSTRUCTIONS)),
+            "instructions_args must contain {INSTRUCTIONS}"
+        );
         for features in [&self.review, &self.quick].into_iter().flatten().filter_map(|h| h.features.as_ref()) {
             ensure!(!features.list.is_empty(), "features.list is empty");
             ensure!(

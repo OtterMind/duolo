@@ -109,6 +109,15 @@ fn main() {
     if std::env::args_os().nth(1).is_some_and(|arg| arg == duolo_core::hook::HOOK_ARG) {
         return duolo_core::hook::run();
     }
+    // Agent 在对话里运行 `duolo` 时也是这个程序（PATH 里的小脚本带上 `__cli`，见 platform::install_cli）：
+    // 当命令行用，什么界面都不开。
+    if std::env::args_os().nth(1).is_some_and(|arg| arg == duolo_cli::CLI_ARG) {
+        platform::attach_console();
+        // 帮助里的用法写成 `duolo`，不写应用程序的名字。
+        let args = std::iter::once("duolo".into()).chain(std::env::args_os().skip(2));
+        let code = duolo_cli::main(args);
+        std::process::exit(i32::from(code != std::process::ExitCode::SUCCESS));
+    }
     #[cfg(unix)]
     shell_env::load();
     let mut engine = match Paths::discover().and_then(Engine::open) {
@@ -116,6 +125,11 @@ fn main() {
         Err(err) => return cannot_start(&err),
     };
     if let Ok(exe) = std::env::current_exe() {
+        let bin = engine.paths().root().join("bin");
+        match platform::install_cli(&bin, &exe) {
+            Ok(()) => engine.set_cli_dir(bin),
+            Err(err) => eprintln!("cannot install the duolo command: {err}"),
+        }
         engine.set_hook_program(exe);
     }
     let state = AppState {

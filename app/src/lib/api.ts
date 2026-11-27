@@ -90,7 +90,6 @@ export interface Project {
   name: string;
   root: string;
   tasks: Task[];
-  automations: Automation[];
 }
 
 /** 克隆的进度：哪一步、这一步的百分比，下载时还有已下载的大小和速度。 */
@@ -100,10 +99,14 @@ export interface CloneProgress {
   detail: string;
 }
 
-/** 定时任务：按时间表在项目里新建任务，交给 Agent。 */
+/** 定时任务：按时间表交给 Agent 一个需求，每次在项目里新建任务，或者发进一个已有的任务。 */
 export interface Automation {
   id: number;
   name: string;
+  /** 在哪个项目（不针对哪个项目的是 `Snapshot.automationsProject`）。 */
+  project: string;
+  /** 发进这个任务接着对话；null 时每次新建任务。 */
+  task: number | null;
   prompt: string;
   /** 写代码的 Agent；null 时用默认的。 */
   agent: string | null;
@@ -132,7 +135,10 @@ export interface AutomationRun {
 
 export interface AutomationInput {
   name: string;
-  project: string;
+  /** 每次在这个项目里新建任务；null 时不针对哪个项目。 */
+  project: string | null;
+  /** 发进这个任务接着对话。 */
+  task: number | null;
   prompt: string;
   agent: string | null;
   base: string | null;
@@ -141,6 +147,10 @@ export interface AutomationInput {
 
 export interface Snapshot {
   projects: Project[];
+  /** 所有定时任务，按建的先后。 */
+  automations: Automation[];
+  /** 专门放"不针对哪个项目"的定时任务的项目。 */
+  automationsProject: string | null;
   running: number;
   needsInput: number;
 }

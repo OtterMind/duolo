@@ -46,6 +46,7 @@ class WireContractTest {
                     assertEquals(42L, m.overview.tasks[0].prompt?.seq)
                     assertEquals(96, m.overview.tasks[0].diff?.insertions)
                     assertEquals(2, m.overview.tasks[1].review?.issues)
+                    assertEquals(VoiceOverview(true, listOf("Tauri", "Claude Code")), m.overview.voice)
                     "overview"
                 }
                 is DesktopMessage.Events -> {

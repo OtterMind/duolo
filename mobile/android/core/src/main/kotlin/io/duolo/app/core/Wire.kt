@@ -80,7 +80,13 @@ data class Overview(
     val agents: List<AgentOption> = emptyList(),
     val writer: String = "",
     val reviewer: String = "",
+    /** 电脑上的语音设置，手机说话时照着用。 */
+    val voice: VoiceOverview = VoiceOverview(),
 )
+
+/** 语音设置：要认准的词、说完后是否整理成指令（电脑端设置 → 语音）。 */
+@Serializable
+data class VoiceOverview(val organize: Boolean = false, val words: List<String> = emptyList())
 
 /** 任务里发生的一件事。`raw` 是收到时的原样，保存的是它，升级之后能重新读出以前不认识的。 */
 data class TaskEvent(val task: Long, val seq: Long, val at: Long, val kind: Kind, val raw: JsonObject) {

@@ -2,6 +2,7 @@ package io.duolo.app
 
 import io.duolo.app.core.AppError
 import io.duolo.app.core.VoiceHints
+import io.duolo.app.core.VoiceOverview
 import io.duolo.app.core.Command
 import io.duolo.app.core.Computer
 import io.duolo.app.core.LocalStore
@@ -346,10 +347,11 @@ class AppModel(private val app: Application) : DefaultLifecycleObserver {
     fun voiceHints(): VoiceHints {
         val computer = current
         val task = opened?.id?.let { id -> rows.firstOrNull { it.id == id }?.task }
-        if (computer == null || task == null) return VoiceHints.of(currentProject?.name, null, null, emptyList())
+        val voice = overview?.voice ?: VoiceOverview()
+        if (computer == null || task == null) return VoiceHints.of(currentProject?.name, null, null, emptyList(), voice)
         val events = runCatching { store.events(computer.id, task.id) }.getOrDefault(emptyList())
         val name = overview?.projects?.firstOrNull { it.id == task.project }?.name ?: currentProject?.name
-        return VoiceHints.of(name, task.title.takeUnless { task.untitled }, task.branch, events)
+        return VoiceHints.of(name, task.title.takeUnless { task.untitled }, task.branch, events, voice)
     }
 
     /** 错误给用户看的说明。 */

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use duolo_core::wire::{
     AgentOption, DiffOverview, Overview, ProjectOverview, PromptOverview, ReviewOverview, TaskOverview, TaskState,
+    VoiceOverview,
 };
 use duolo_core::{AgentKind, AgentRole, Command, CommandResult, TaskEvent, TaskId};
 use duolo_engine::Engine;
@@ -132,7 +133,17 @@ impl AppHost {
             agents,
             writer: engine.config().writer.0.clone(),
             reviewer: engine.config().reviewer.0.clone(),
+            voice: voice_overview(engine),
         }
+    }
+}
+
+/// 设置 → 语音：没设置过整理时用 `config.toml` 的（和 `commands::voice_config` 一样）。
+fn voice_overview(engine: &Engine) -> VoiceOverview {
+    let settings = duolo_core::Settings::load(&engine.paths().settings_file()).unwrap_or_default();
+    VoiceOverview {
+        organize: settings.voice_organize.unwrap_or(engine.config().voice.organize),
+        words: settings.voice_words,
     }
 }
 

@@ -283,11 +283,13 @@ final class AppModel {
     func voiceHints() -> VoiceHints {
         let projectName = overview?.projects.first { $0.id == project }?.name
         guard let current, let id = opened?.id, let task = rows.first(where: { $0.id == id })?.task else {
-            return VoiceHints(project: projectName, title: nil, branch: nil, events: [])
+            return VoiceHints(project: projectName, title: nil, branch: nil, events: [], voice: overview?.voice ?? VoiceOverview())
         }
         let events = (try? store.events(current.id, id)) ?? []
         let name = overview?.projects.first { $0.id == task.project }?.name ?? projectName
-        return VoiceHints(project: name, title: task.untitled ? nil : task.title, branch: task.branch, events: events)
+        return VoiceHints(
+            project: name, title: task.untitled ? nil : task.title, branch: task.branch, events: events,
+            voice: overview?.voice ?? VoiceOverview())
     }
 
     /// 错误给用户看的说明。

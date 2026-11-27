@@ -81,7 +81,8 @@
         ],
         "agents": [{ "kind": "claude", "name": "Claude" }, { "kind": "codex", "name": "Codex" }],
         "writer": "claude",
-        "reviewer": "codex"
+        "reviewer": "codex",
+        "voice": { "organize": true, "words": ["Tauri", "Claude Code"] }
       }
     },
     {

@@ -39,7 +39,7 @@ public final class VoiceStream: Sendable {
         }
         defer { timer.cancel() }
         do {
-            let start = try JSONSerialization.data(withJSONObject: ["type": "start", "hotwords": hints.hotwords, "context": hints.context])
+            let start = try JSONSerialization.data(withJSONObject: ["type": "start", "hotwords": hints.hotwords, "context": hints.context, "organize": hints.organize])
             try await task.send(.string(String(decoding: start, as: UTF8.self)))
             while true {
                 guard case .string(let text) = try await task.receive() else { continue }
@@ -111,7 +111,7 @@ public final class VoiceStream: Sendable {
         case ready, partial(String), final(String), error(String), other
 
         init(_ text: String) {
-            struct Raw: Decodable { let type: String; let text: String?; let error: String? }
+            struct Raw: Decodable { let type: String; let text: String?; let organized: String?; let error: String? }
             guard let raw = try? JSONDecoder().decode(Raw.self, from: Data(text.utf8)) else {
                 self = .other
                 return
@@ -119,7 +119,8 @@ public final class VoiceStream: Sendable {
             switch raw.type {
             case "ready": self = .ready
             case "partial": self = .partial(raw.text ?? "")
-            case "final": self = .final(raw.text ?? "")
+            // 要了整理且整理出来了时用整理过的。
+            case "final": self = .final(raw.organized ?? raw.text ?? "")
             case "error": self = .error(raw.error ?? "voiceFailed")
             default: self = .other
             }

@@ -77,6 +77,19 @@ pub struct Overview {
     pub writer: String,
     #[serde(default)]
     pub reviewer: String,
+    /// 电脑上的语音设置，手机说话时照着用。
+    #[serde(default)]
+    pub voice: VoiceOverview,
+}
+
+/// 语音设置：要认准的词、说完后是否整理成指令（电脑端设置 → 语音）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceOverview {
+    #[serde(default)]
+    pub organize: bool,
+    #[serde(default)]
+    pub words: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

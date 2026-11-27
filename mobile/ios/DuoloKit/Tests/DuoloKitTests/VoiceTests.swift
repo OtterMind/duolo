@@ -25,6 +25,14 @@ import Testing
         #expect(hints.context.last == "Export orders")
     }
 
+    @Test func wordsFromTheComputerComeFirst() throws {
+        var voice = try JSONDecoder().decode(VoiceOverview.self, from: Data(#"{"organize":true,"words":["Claude Code"," Tauri ",""]}"#.utf8))
+        voice.words.append("Tauri")
+        let hints = VoiceHints(project: "shop", title: nil, branch: nil, events: [], voice: voice)
+        #expect(hints.hotwords == ["Claude Code", "Tauri", "shop"])
+        #expect(hints.organize)
+    }
+
     @Test func codeNamesInPlainText() {
         #expect(VoiceHints.codeNames("Fix exportCsv in orders.ts (see duolo_core::t, https://a.com/x). Then run it.")
             == ["exportCsv", "orders.ts", "duolo_core::t"])

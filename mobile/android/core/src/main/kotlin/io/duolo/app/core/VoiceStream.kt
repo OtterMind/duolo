@@ -96,6 +96,7 @@ class VoiceStream private constructor(private val socket: WebSocket, val events:
             val start = buildJsonObject {
                 put("type", JsonPrimitive("start"))
                 put("hotwords", JsonArray(hints.hotwords.map(::JsonPrimitive)))
+                put("organize", JsonPrimitive(hints.organize))
                 put("context", JsonArray(hints.context.map(::JsonPrimitive)))
             }
             socket.send(start.toString())
@@ -126,7 +127,8 @@ class VoiceStream private constructor(private val socket: WebSocket, val events:
                 return when (field("type")) {
                     "ready" -> Ready
                     "partial" -> Partial(field("text").orEmpty())
-                    "final" -> Final(field("text").orEmpty())
+                    // 要了整理且整理出来了时用整理过的。
+                    "final" -> Final(field("organized") ?: field("text").orEmpty())
                     "error" -> Error(field("error") ?: "voiceFailed")
                     else -> Other
                 }

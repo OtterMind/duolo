@@ -29,6 +29,13 @@ class VoiceTest {
     }
 
     @Test
+    fun wordsFromTheComputerComeFirst() {
+        val hints = VoiceHints.of("shop", null, null, emptyList(), VoiceOverview(true, listOf("Claude Code", " Tauri ", "", "Tauri")))
+        assertEquals(listOf("Claude Code", "Tauri", "shop"), hints.hotwords)
+        assertTrue(hints.organize)
+    }
+
+    @Test
     fun codeNamesInPlainText() {
         assertEquals(
             listOf("exportCsv", "orders.ts", "duolo_core::t"),

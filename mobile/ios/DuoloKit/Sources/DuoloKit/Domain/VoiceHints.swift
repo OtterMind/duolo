@@ -7,20 +7,27 @@ public struct VoiceHints: Hashable, Sendable {
     public var hotwords: [String] = []
     /// 新的在前。
     public var context: [String] = []
+    /// 让服务器把结果整理成指令。
+    public var organize = false
 
     static let maxHotwords = 40
     static let maxContext = 6
     static let maxContextChars = 300
     static let maxWordChars = 40
 
-    public init(hotwords: [String] = [], context: [String] = []) {
+    public init(hotwords: [String] = [], context: [String] = [], organize: Bool = false) {
         self.hotwords = hotwords
         self.context = context
+        self.organize = organize
     }
 
-    /// `events` 旧的在前。
-    public init(project: String?, title: String?, branch: String?, events: [TaskEvent]) {
+    /// `events` 旧的在前。`voice` 是电脑上的语音设置：用户加的词排在最前面（可以带空格，不按代码名字的规矩筛）。
+    public init(project: String?, title: String?, branch: String?, events: [TaskEvent], voice: VoiceOverview = VoiceOverview()) {
         var words: [String] = []
+        for word in voice.words.map({ $0.trimmingCharacters(in: .whitespaces) })
+        where !word.isEmpty && word.count <= Self.maxWordChars && words.count < Self.maxHotwords && !words.contains(word) {
+            words.append(word)
+        }
         func push(_ raw: String) {
             let word = raw.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\"',.:;()"))
             let shaped = !word.isEmpty && word.count <= Self.maxWordChars
@@ -56,7 +63,7 @@ public struct VoiceHints: Hashable, Sendable {
             if dialog.count >= Self.maxContext { break }
         }
         if let title = title?.trimmingCharacters(in: .whitespaces), !title.isEmpty { dialog.append(title) }
-        self.init(hotwords: words, context: dialog)
+        self.init(hotwords: words, context: dialog, organize: voice.organize)
     }
 
     /// 工具的目标是文件路径（不是一条命令）。

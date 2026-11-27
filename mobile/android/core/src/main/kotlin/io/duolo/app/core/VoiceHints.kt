@@ -4,7 +4,12 @@ package io.duolo.app.core
  * 识别前给识别服务的提示：热词（文件名、代码里的名字，重要的在前）和最近的对话（新的在前）。
  * 和电脑端的 crates/duolo-voice/src/hints.rs 一致。
  */
-data class VoiceHints(val hotwords: List<String> = emptyList(), val context: List<String> = emptyList()) {
+data class VoiceHints(
+    val hotwords: List<String> = emptyList(),
+    val context: List<String> = emptyList(),
+    /** 让服务器把结果整理成指令。 */
+    val organize: Boolean = false,
+) {
     /**
      * 按热词改正识别结果里拆开说、或大小写不对的名字："加个 use state" → "加个 useState"。
      * 只改由几段拼成的名字，几段之间只能隔着空格、`_`、`-`、`.`、`/`。
@@ -68,9 +73,13 @@ data class VoiceHints(val hotwords: List<String> = emptyList(), val context: Lis
         private const val MAX_CONTEXT_CHARS = 300
         private const val MAX_WORD_CHARS = 40
 
-        /** `events` 旧的在前。 */
-        fun of(project: String?, title: String?, branch: String?, events: List<TaskEvent>): VoiceHints {
+        /** `events` 旧的在前。`voice` 是电脑上的语音设置：用户加的词排在最前面（可以带空格，不按代码名字的规矩筛）。 */
+        fun of(project: String?, title: String?, branch: String?, events: List<TaskEvent>, voice: VoiceOverview = VoiceOverview()): VoiceHints {
             val words = mutableListOf<String>()
+            for (raw in voice.words) {
+                val word = raw.trim()
+                if (word.isNotEmpty() && word.length <= MAX_WORD_CHARS && words.size < MAX_HOTWORDS && word !in words) words += word
+            }
             fun push(raw: String) {
                 val word = raw.trim().trim('"', '\'', ',', '.', ':', ';', '(', ')')
                 val ok = word.isNotEmpty() && word.length <= MAX_WORD_CHARS && word.none { it.isWhitespace() } && word.any { it.isLetter() }
@@ -101,7 +110,7 @@ data class VoiceHints(val hotwords: List<String> = emptyList(), val context: Lis
                 if (dialog.size >= MAX_CONTEXT) break
             }
             title?.trim()?.takeIf { it.isNotEmpty() }?.let { dialog += it }
-            return VoiceHints(words, dialog)
+            return VoiceHints(words, dialog, voice.organize)
         }
 
         /** 工具的目标是文件路径（不是一条命令）。 */

@@ -50,6 +50,7 @@ extension JSONValue {
                 #expect(o.rev == 7 && o.tasks.count == 2 && o.projects[0].branches == ["main", "develop"])
                 #expect(o.tasks[0].prompt?.seq == 42 && o.tasks[0].diff?.insertions == 96)
                 #expect(o.tasks[1].review?.issues == 2)
+                #expect(o.voice.organize && o.voice.words == ["Tauri", "Claude Code"])
             case .events(let task, let events, let latest):
                 kinds.append("events")
                 #expect(task == 3 && latest == 11 && events.map(\.seq) == Array(1...11))

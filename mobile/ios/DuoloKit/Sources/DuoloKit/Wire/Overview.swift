@@ -127,6 +127,8 @@ public struct Overview: Codable, Hashable, Sendable {
     public var agents: [AgentOption]
     public var writer: String
     public var reviewer: String
+    /// 电脑上的语音设置，手机说话时照着用。
+    public var voice: VoiceOverview
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -136,5 +138,20 @@ public struct Overview: Codable, Hashable, Sendable {
         agents = try c.value(.agents, or: [])
         writer = try c.value(.writer, or: "")
         reviewer = try c.value(.reviewer, or: "")
+        voice = try c.value(.voice, or: VoiceOverview())
+    }
+}
+
+/// 语音设置：要认准的词、说完后是否整理成指令（电脑端设置 → 语音）。
+public struct VoiceOverview: Codable, Hashable, Sendable {
+    public var organize = false
+    public var words: [String] = []
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        organize = try c.value(.organize, or: false)
+        words = try c.value(.words, or: [])
     }
 }

@@ -1,33 +1,82 @@
+<p align="center"><img src="crates/duolo-app/icons/128x128@2x.png" width="96" height="96" alt=""></p>
+
 <h1 align="center">Duolo</h1>
 
-<p align="center">让 Claude 写、Codex 审，在自己的电脑上并行跑一组编程 Agent。</p>
+<p align="center"><b>Claude 写，Codex 审。</b><br>在自己的电脑上并行运行一支编程 Agent 团队。</p>
 
 <p align="center">
+  <a href="https://github.com/OtterMind/duolo/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/OtterMind/duolo"></a>
   <a href="https://github.com/OtterMind/duolo/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/OtterMind/duolo/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-<p align="center"><a href="README.md">English</a> · 简体中文</p>
+<p align="center"><a href="https://duolo.io/?lang=zh-CN">官网</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">下载 Mac 版</a> · <a href="#功能">功能</a> · <a href="README.md">English</a></p>
 
-Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode、pi 或 Grok；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
+<p align="center"><img src="docs/images/duolo.png" width="900" alt="Duolo：侧边栏是各个任务和状态，主区域是 Claude Code，下面是 Codex 对改动的审阅"></p>
 
-> Duolo 还在早期。Mac（Apple 芯片和 Intel）有签名并公证过的安装包；Windows 和 Linux 目前需要从源码构建。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
+Duolo 是一个并行运行编程 Agent 的桌面应用。每个任务有自己的 git 分支和 worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode、pi 或 Grok，可以用它自己的终端，也可以切到聊天视图。写完让另一个模型只读审阅，结论一键交回去修改。侧边栏一眼看清每个 Agent 在做什么、哪些在等你。Agent 用你自己的账号在你的电脑上运行。
 
+## 亮点
+
+- **多个任务并行**，各在自己的 worktree 里，最多六个并排看，不碰你正在用的工作目录。
+- **一个写，一个审**：合并前由另一个模型只读审阅，意见一键交回。
+- **交接**：把任务交给另一个 Agent 审阅、接手，或在新分支上接着做。
+- **终端或聊天**，两种方式是同一个会话。
+- **账号**：Duolo 可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。
+- **语音输入**：按住 Fn 说话，任务里的代码名字也能识别对。
+- **定时任务**：在定时任务页设置，或者直接让 Agent 帮你建。
+- **多个账号**：一个额度用完自动换下一个，接着做。
+- **`duolo` 命令行**和适合 SSH 的终端界面；**14 种语言**。
+
+## 安装
+
+**Mac（Apple 芯片或 Intel）：** 从 [duolo.io](https://duolo.io/?lang=zh-CN) 或 [最新发布](https://github.com/OtterMind/duolo/releases/latest) 下载 dmg，把 Duolo 拖进「应用程序」。安装包签名并公证过；有新版本时「设置 → 关于」里会提示。
+
+还需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)、[Codex](https://github.com/openai/codex)、[OpenCode](https://opencode.ai)、[pi](https://pi.dev) 或 [Grok](https://x.ai/cli)。Duolo 可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录。
+
+<details>
+<summary><b>Windows、Linux 或从源码构建</b></summary>
+
+各 Agent 的安装命令：Claude Code `curl -fsSL https://claude.ai/install.sh | bash`，Codex `curl -fsSL https://chatgpt.com/codex/install.sh | sh`，OpenCode `npm install -g opencode-ai`，pi `npm install -g @earendil-works/pi-coding-agent`，Grok `curl -fsSL https://x.ai/cli/install.sh | bash`。构建需要 Rust 1.89+、Node 20+ 和 pnpm。
+
+```sh
+git clone https://github.com/OtterMind/duolo.git && cd duolo
+cd app && pnpm install && pnpm tauri build
+cargo install --path ../crates/duolo-cli        # 可选：命令行 duolo
 ```
-┌────────────────────────┬─────────────────────────────────────────────────┐
-│ 🔍 搜索任务    ⌘K   ⊞  │ ✳ 订单导出 CSV ✓   feat/order-csv +48 −6   审阅 ⋯│
-│                        ├─────────────────────────────────────────────────┤
-│ ▾ shop               + │                                                 │
-│ ✳ 订单导出 CSV      ✓  │   Claude Code 的原生界面                        │
-│   order-csv +48 −6  2m │   （按键直接交给它）                            │
-│ ✳ Stripe 订阅支付   ◐  │                                                 │
-│ ❀ 修登录页样式      ●  │ ┌─────────────────────────────────────────────┐ │
-│                        │ │ ❯ 金额全部改用整数分                     🎙 │ │
-│ ⚙                      │ └─────────────────────────────────────────────┘ │
-└────────────────────────┴─────────────────────────────────────────────────┘
+
+打出来的安装包在 `target/release/bundle/` 下：
+
+| 系统 | 安装包 | 说明 |
+|---|---|---|
+| macOS 12+ | `macos/Duolo.app` | 拷到"应用程序" |
+| Windows 10 / 11 | `nsis/Duolo_*_x64-setup.exe`、`msi/*.msi` | 安装程序只给当前用户装，不需要管理员权限 |
+| Linux | `deb/*.deb`、`appimage/*.AppImage` | 需要 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 自带）；从源码构建先装 `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev` |
+
+开发时用 `cd app && pnpm tauri dev`，界面改动会热更新。
+
+</details>
+
+## 快速上手
+
+1. **添加项目**（`⌘O`）：打开文件夹、从 GitHub 克隆，或选一个 Duolo 在你电脑上找到的仓库。
+2. **描述任务**（`⌘N`）：打字或说出你要做什么，按回车。Duolo 建好分支和 worktree，启动 Agent；第一句话自动成为任务标题，AI 据此给分支起名。
+3. **审阅**（`⌘⇧R`）：Codex 审阅这个任务改过的全部内容。一键把意见交给写代码的 Agent，然后合并分支。
+
+命令行：
+
+```sh
+cd ~/code/shop
+duolo                          # 打开 Duolo，当前仓库自动加入项目
+duolo new "订单导出 CSV，支持按日期筛选"   # 不打开界面直接建任务
+duolo ls                       # 列出任务
+duolo remove shop --yes        # 从 Duolo 移除项目（文件夹保留）
+duolo handoff 3 --to codex     # 让 Codex 接手 3 号任务
+duolo handoff 3 --to pi --fork "改成游标分页"  # Pi 在新任务里接着做，3 号任务照旧
+duolo tui                      # 在终端里打开（适合 SSH 远程）
 ```
 
-## 能做什么
+## 功能
 
 - **多任务并行**：每个任务一个新分支和独立的工作目录（git worktree，放在 `~/.duolo/wt/`），互不干扰，也不碰你正在用的那份代码。
 - **原生 CLI 嵌入**：右侧就是 Claude Code / Codex / OpenCode / pi / Grok 本身，Duolo 不改变它们的任何行为，每个任务都可以换。
@@ -46,46 +95,7 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 - **不丢改动**：关闭任务时，没提交的改动先提交到任务的分支，再删除工作目录；没法完整保存（例如里面有嵌套仓库）就不关，并说明原因。被 git 忽略的文件（如 `.env`）会删除。
 - **关窗口不停工**（macOS）：`⌘W` 只是收起窗口，Agent 继续在后台运行，点 Dock 图标回来；`⌘Q` 才会结束它们。Windows / Linux 上关窗口就是退出，有 Agent 在运行时会先确认。
 
-## 安装
-
-**Mac（Apple 芯片或 Intel）：** 从 [duolo.io](https://duolo.io) 或 [最新发布](https://github.com/OtterMind/duolo/releases/latest) 下载 dmg，把 Duolo 拖进「应用程序」。安装包签名并公证过，打开不会有警告；有新版本时「设置 → 关于」里会提示。
-
-需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`curl -fsSL https://claude.ai/install.sh | bash`）、[Codex](https://github.com/openai/codex)（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）、[pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）或 [Grok](https://x.ai/cli)（`curl -fsSL https://x.ai/cli/install.sh | bash`）。Duolo 也可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。从源码构建（Windows、Linux）还需要 Rust 1.89+、Node 20+ 和 pnpm。
-
-```sh
-git clone https://github.com/OtterMind/duolo.git && cd duolo
-cd app && pnpm install && pnpm tauri build
-cargo install --path ../crates/duolo-cli        # 可选：命令行 duolo
-```
-
-打出来的安装包在 `target/release/bundle/` 下：
-
-| 系统 | 安装包 | 说明 |
-|---|---|---|
-| macOS 12+ | `macos/Duolo.app` | 拷到"应用程序" |
-| Windows 10 / 11 | `nsis/Duolo_*_x64-setup.exe`、`msi/*.msi` | 安装程序只给当前用户装，不需要管理员权限 |
-| Linux | `deb/*.deb`、`appimage/*.AppImage` | 需要 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 自带）；从源码构建先装 `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev` |
-
-开发时用 `cd app && pnpm tauri dev`，界面改动会热更新。
-
-## 使用
-
-双击 Duolo 打开，直接进入 Claude 的命令行：有任务时打开最近的任务，没有就新建一个。每个任务都在独立的 worktree 里，像平时一样在 Claude 的输入框里说需求；第一次输入的内容会自动成为任务标题，AI 再据此给分支起名。`⌘N` 再开一个任务。
-
-命令行（可选）：
-
-```sh
-cd ~/code/shop
-duolo                          # 打开 Duolo，当前仓库自动加入项目
-duolo new "订单导出 CSV，支持按日期筛选"   # 不打开界面直接建任务
-duolo ls                       # 列出任务
-duolo remove shop --yes        # 从 Duolo 移除项目（文件夹保留）
-duolo handoff 3 --to codex     # 让 Codex 接手 3 号任务
-duolo handoff 3 --to pi --fork "改成游标分页"  # Pi 在新任务里接着做，3 号任务照旧
-duolo tui                      # 在终端里打开（适合 SSH 远程）
-```
-
-### 快捷键
+## 快捷键
 
 下面是 macOS 的写法。Windows / Linux 上 `⌘` 换成 `Ctrl`，`⌥` 换成 `Alt`；`⌘` 加字母的再加上 `Shift`（`⌘N` → `Ctrl+Shift+N`，`⌘K` → `Ctrl+Shift+K`），因为 `Ctrl` 加字母要留给终端里的 Agent。终端里有选中文字时 `Ctrl+C` 复制，`Ctrl+V` 粘贴。界面上的提示会自动按当前系统显示。
 
@@ -159,12 +169,12 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
      └▶ duolo-voice └───────▶ duolo-core  (模型、配置、持久化)
 ```
 
-## 第一版的限制
+## 限制
 
+- Duolo 还在早期。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 - 没有独立的守护进程：退出会结束所有 Agent，重新打开任务时自动恢复会话。
-- 状态识别是启发式的（看输出节奏和确认提示），还没有接入 hooks 和会话日志。
-- Windows 和 Linux 版还没有在真机上完整测过。
-- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iOS 和 Android 原生应用正在做（[docs/mobile.md](docs/mobile.md)），服务端在 [server/](server/README.zh-CN.md)，桌面应用还没有接上。
+- Agent 自己报告状态；OpenCode 还不报告，它的状态靠看画面识别，可能慢一点。
+- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iPhone 和 Android 手机端正在做（[docs/mobile.md](docs/mobile.md)），服务端在 [server/](server/README.zh-CN.md)，桌面应用还没有接上。
 - Linux 上按住说话的全局快捷键只在 X11 下有效，Wayland 下请点麦克风按钮。
 
 ## 参与开发

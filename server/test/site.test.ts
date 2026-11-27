@@ -1,5 +1,7 @@
 // duolo.io 的网页：按语言显示、法律文本只有英文和简体中文、接口的 404 还是 JSON。
 
+import { readFileSync } from "node:fs";
+
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 
@@ -35,6 +37,14 @@ describe("site", () => {
     const icon = await get("/icon.png");
     expect(icon.statusCode).toBe(200);
     expect(icon.headers["content-type"]).toBe("image/png");
+  });
+
+  it("uses the same agent icons as the plugins", async () => {
+    for (const id of ["claude", "codex", "opencode", "pi", "grok"]) {
+      const res = await get(`/agents/${id}.svg`);
+      expect(res.headers["content-type"]).toBe("image/svg+xml");
+      expect(res.body).toBe(readFileSync(new URL(`../../crates/duolo-agent/agents/${id}/icon.svg`, import.meta.url), "utf8"));
+    }
   });
 
   it("keeps JSON 404s for the API and shows a page to browsers", async () => {

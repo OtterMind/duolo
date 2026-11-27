@@ -1,57 +1,42 @@
+<p align="center"><img src="crates/duolo-app/icons/128x128@2x.png" width="96" height="96" alt=""></p>
+
 <h1 align="center">Duolo</h1>
 
-<p align="center">Claude writes, Codex reviews. Run a team of coding agents in parallel on your own machine.</p>
+<p align="center"><b>Claude writes, Codex reviews.</b><br>Run a team of coding agents in parallel on your own machine.</p>
 
 <p align="center">
+  <a href="https://github.com/OtterMind/duolo/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/OtterMind/duolo"></a>
   <a href="https://github.com/OtterMind/duolo/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/OtterMind/duolo/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
+<p align="center"><a href="https://duolo.io">Website</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">Download for Mac</a> · <a href="#features">Features</a> · <a href="README.zh-CN.md">简体中文</a></p>
 
-Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real agent CLI running inside it: Claude Code, Codex, OpenCode, pi or Grok. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
+<p align="center"><img src="docs/images/duolo.png" width="900" alt="Duolo: tasks with their state in the sidebar, Claude Code in the main pane and a Codex review of its changes"></p>
 
-> Duolo is early. A signed and notarized installer is available for Mac (Apple silicon and Intel); on Windows and Linux you build it from source. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
+Duolo is a desktop app for running coding agents side by side. Every task gets its own git branch and worktree with the real agent CLI inside it: Claude Code, Codex, OpenCode, pi or Grok, in its own terminal or in a chat view. When the work is done, a second model reviews it read-only and you send the findings back with one click. The sidebar shows what each agent is doing and which ones are waiting for you. Agents run on your computer with your own accounts.
 
-```
-┌────────────────────────┬─────────────────────────────────────────────────┐
-│ 🔍 Search tasks ⌘K  ⊞  │ ✳ Export orders ✓  feat/order-csv +48 −6 Review ⋯│
-│                        ├─────────────────────────────────────────────────┤
-│ ▾ shop               + │                                                 │
-│ ✳ Export orders     ✓  │   The native Claude Code interface              │
-│   order-csv +48 −6  2m │   (your keystrokes go straight to it)           │
-│ ✳ Stripe billing    ◐  │                                                 │
-│ ❀ Fix login styles  ●  │ ┌─────────────────────────────────────────────┐ │
-│                        │ │ ❯ Store all amounts in integer cents     🎙 │ │
-│ ⚙                      │ └─────────────────────────────────────────────┘ │
-└────────────────────────┴─────────────────────────────────────────────────┘
-```
+## Highlights
 
-## Features
-
-- **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
-- **The real CLIs.** The main pane is Claude Code, Codex, OpenCode, pi or Grok itself, and you can switch between them per task. Duolo doesn't change how they behave.
-- **Terminal or chat.** Claude Code, Codex and agents that speak ACP (OpenCode and Grok for now) can also run in chat mode: Duolo draws the conversation, tool calls and approval buttons itself, and streams the reply as it is written. Switch with the icons in the task's top bar; it continues the same session, and new tasks use your last choice.
-- **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
-- **One writes, one reviews.** Pick Review under Hand off and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews in a temporary copy with only read-only tools: Claude can only read files, and Codex runs in its read-only sandbox with connectors and plugins turned off. Nothing it does can touch your work. One click sends the findings to Claude.
-- **Hand off to another agent.** Click Hand off in the task's top bar (or right-click the task) and pick who and what: review the changes, take over in the same folder, or continue in a new task. A new task copies the current code, uncommitted changes included, to its own branch, and the original agent keeps working, so both run side by side. Either way the new agent gets the request and the recent conversation, plus an optional note from you, and looks at the current changes first. Switch back within a day and the earlier agent picks up its own conversation, told what happened while it was away. From the command line: `duolo handoff <task> --to codex [--fork | --review] [note]`; in the terminal UI, press `t`.
-- **Side by side.** Drag tasks from the sidebar to the right (or `⌘`-click them) to watch up to six at once; drop on a pane's edge to put it beside, in the middle to replace it. The grid icon next to a project shows all its tasks side by side, waiting ones first. Drag the lines between panes to resize them (double-click one to even it out), drag a pane by its handle to move it, enlarge one with `⌘⇧↵`, and close one with its × (the task keeps running). `⌘\` goes back to one.
-- **Built-in terminal.** Press `⌃`` (or the terminal icon in a task's top bar) to open terminals below the agent, in the task's own folder with your own shell; open several as tabs, drag the line above them to resize. If an agent exits (say after `Ctrl+C`), the bar at the bottom resumes its conversation or opens a terminal right there. Pasting a copied image or file (from Finder, a screenshot, or a web page) gives the agent its path, so Claude Code and Codex attach it. Links in any terminal open in your browser with `⌘`-click (`Ctrl`-click on Windows and Linux). Nothing opens outside Duolo ("Open in system terminal" is still in the ⋯ menu). A task doesn't need an AI either: pick Terminal when creating it and type a command such as `pnpm dev` or `cargo test`, or leave it empty for a plain shell. It runs in a shell in the task's own branch, and the terminal stays open afterwards so you can keep typing. From the command line: `duolo new --writer shell "cargo test"`.
-- **Projects.** A project is a folder: one git repository, or a folder holding several. Add one (`⌘O`) by opening a folder, creating one, cloning from GitHub, or picking a repository found on your computer. You can also drop a folder on the window. New folders and clones go to `~/DuoloProjects`. Right-click a project (or its ⋯) to remove it from Duolo: its tasks are closed first with their changes saved on their branches, and the folder stays on your disk (`duolo remove <project> --yes` from the command line).
-- **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
-- **Automations.** Click the alarm clock at the top of the sidebar to open the Automations page and have Duolo do things on a schedule (every day, weekdays, every week, every hour, or any cron). Each automation picks where it runs: a new task in a project each time, handed to the agent you picked; an existing task, continuing its conversation; or no project (tasks go in a separate Automations project). You can also just tell the agent in a task "every weekday at 9, …" and it sets one up with Duolo's `duolo` command (Claude knows about it for now). Run one now, pause it, and see what each recent run did or why it was skipped. Tasks it started carry a clock icon. Automations run while Duolo is open (a closed window counts); if Duolo was quit, a run missed within the last 12 hours runs once when you open it again, and if the previous run is still working the next one is skipped. From the command line: `duolo automation add "Fix the flakiest test" --cron "0 9 * * 1-5"` (`--here` sends it into the current task, `--no-project` keeps it out of your projects), plus `ls`, `run`, `pause`, `resume` and `rm`.
-- **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
-- **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
-- **No startup questions.** Before starting an agent in a task, Duolo marks the folder as trusted in Claude Code (`~/.claude.json`) and Codex (`~/.codex/config.toml`, for the repository) and turns off their update prompts, so they don't stop to ask. Claude's entry is removed when the task closes.
-- **Sessions resume.** Reopening a task continues that agent's own conversation, by session ID (`claude --resume <id>`, `codex resume <id>`).
-- **Keeps working in the background** (macOS). `⌘W` hides the window and agents keep going; `⌘Q` stops them. On Windows and Linux closing the window quits, after asking if agents are running.
-- **14 languages**, in the app, the command line and the terminal UI.
+- **Parallel tasks** in their own worktrees, up to six side by side. Nothing touches the checkout you're working in.
+- **One writes, one reviews.** A read-only review by a second model before you merge, findings sent back in one click.
+- **Hand off** a task to another agent to review it, take over, or continue on a new branch.
+- **Terminal or chat**, the same session either way.
+- **Voice input**: hold Fn and talk; code names from the task come out right.
+- **Automations** on a schedule, set up from the Automations page or by asking the agent.
+- **Several accounts**: when one runs out of usage, Duolo switches to the next and keeps going.
+- **`duolo` command line** and a terminal UI for SSH. **14 languages.**
 
 ## Install
 
-**Mac (Apple silicon or Intel):** download the dmg from [duolo.io](https://duolo.io) or the [latest release](https://github.com/OtterMind/duolo/releases/latest) and drag Duolo into Applications. It's signed and notarized, so it opens without warnings; Settings → About tells you when a new version is out.
+**Mac (Apple silicon or Intel):** download the dmg from [duolo.io](https://duolo.io) or the [latest release](https://github.com/OtterMind/duolo/releases/latest) and drag Duolo into Applications. It's signed and notarized; Settings → About tells you when a new version is out.
 
-You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`curl -fsSL https://claude.ai/install.sh | bash`), [Codex](https://github.com/openai/codex) (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`), [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`) or [Grok](https://x.ai/cli) (`curl -fsSL https://x.ai/cli/install.sh | bash`). Duolo can also install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account. If it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation. To build from source (Windows, Linux) you also need Rust 1.89+, Node 20+ and pnpm.
+You also need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai), [pi](https://pi.dev) or [Grok](https://x.ai/cli). Duolo can install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account.
+
+<details>
+<summary><b>Windows, Linux, or building from source</b></summary>
+
+Install commands for the agents: Claude Code `curl -fsSL https://claude.ai/install.sh | bash`, Codex `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, OpenCode `npm install -g opencode-ai`, pi `npm install -g @earendil-works/pi-coding-agent`, Grok `curl -fsSL https://x.ai/cli/install.sh | bash`. Building needs Rust 1.89+, Node 20+ and pnpm.
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo
@@ -69,9 +54,15 @@ Bundles are written to `target/release/bundle/`:
 
 For development, `cd app && pnpm tauri dev` reloads the interface as you edit.
 
-## Usage
+</details>
 
-Open Duolo and you land in Claude's prompt: your latest task, or a new one. Type your request there as usual. Your first message becomes the task title, and AI names the branch from it. Press `⌘N` for another task.
+## Quick start
+
+1. **Add a project** (`⌘O`): open a folder, clone from GitHub, or pick a repository Duolo found on your computer.
+2. **Describe the task** (`⌘N`): type or say what you want and press Enter. Duolo creates a branch and a worktree and starts the agent; your first message becomes the task title, and AI names the branch.
+3. **Review** (`⌘⇧R`): Codex reviews everything the task changed. Send its findings to the writer with one click, then merge the branch.
+
+From the command line:
 
 ```sh
 cd ~/code/shop
@@ -84,7 +75,28 @@ duolo handoff 3 --to pi --fork "Use cursor paging" # Pi continues in a new task;
 duolo tui                                          # terminal UI, handy over SSH
 ```
 
-### Shortcuts
+## Features
+
+- **Parallel tasks.** Each task has its own branch and working directory (a git worktree under `~/.duolo/wt/`). Tasks don't affect each other or the checkout you are working in.
+- **The real CLIs.** The main pane is Claude Code, Codex, OpenCode, pi or Grok itself, and you can switch between them per task. Duolo doesn't change how they behave.
+- **Terminal or chat.** Claude Code, Codex and agents that speak ACP (OpenCode and Grok for now) can also run in chat mode: Duolo draws the conversation, tool calls and approval buttons itself, and streams the reply as it is written. Switch with the icons in the task's top bar; it continues the same session, and new tasks use your last choice.
+- **Status at a glance.** One row per task: which model, and whether it is running, waiting for you, done or failed, plus the review result. Search, collapse projects, double-click to rename, right-click for more.
+- **One writes, one reviews.** Pick Review under Hand off and Codex reads everything the task changed since it branched off, including uncommitted work and new files. It reviews in a temporary copy with only read-only tools: Claude can only read files, and Codex runs in its read-only sandbox with connectors and plugins turned off. Nothing it does can touch your work. One click sends the findings to Claude.
+- **Hand off to another agent.** Click Hand off in the task's top bar (or right-click the task) and pick who and what: review the changes, take over in the same folder, or continue in a new task. A new task copies the current code, uncommitted changes included, to its own branch, and the original agent keeps working, so both run side by side. Either way the new agent gets the request and the recent conversation, plus an optional note from you, and looks at the current changes first. Switch back within a day and the earlier agent picks up its own conversation, told what happened while it was away. From the command line: `duolo handoff <task> --to codex [--fork | --review] [note]`; in the terminal UI, press `t`.
+- **Side by side.** Drag tasks from the sidebar to the right (or `⌘`-click them) to watch up to six at once; drop on a pane's edge to put it beside, in the middle to replace it. The grid icon next to a project shows all its tasks side by side, waiting ones first. Drag the lines between panes to resize them (double-click one to even it out), drag a pane by its handle to move it, enlarge one with `⌘⇧↵`, and close one with its × (the task keeps running). `⌘\` goes back to one.
+- **Built-in terminal.** Press `⌃`` (or the terminal icon in a task's top bar) to open terminals below the agent, in the task's own folder with your own shell; open several as tabs, drag the line above them to resize. If an agent exits (say after `Ctrl+C`), the bar at the bottom resumes its conversation or opens a terminal right there. Pasting a copied image or file (from Finder, a screenshot, or a web page) gives the agent its path, so Claude Code and Codex attach it. Links in any terminal open in your browser with `⌘`-click (`Ctrl`-click on Windows and Linux). Nothing opens outside Duolo ("Open in system terminal" is still in the ⋯ menu). A task doesn't need an AI either: pick Terminal when creating it and type a command such as `pnpm dev` or `cargo test`, or leave it empty for a plain shell. It runs in a shell in the task's own branch, and the terminal stays open afterwards so you can keep typing. From the command line: `duolo new --writer shell "cargo test"`.
+- **Projects.** A project is a folder: one git repository, or a folder holding several. Add one (`⌘O`) by opening a folder, creating one, cloning from GitHub, or picking a repository found on your computer. You can also drop a folder on the window. New folders and clones go to `~/DuoloProjects`. Right-click a project (or its ⋯) to remove it from Duolo: its tasks are closed first with their changes saved on their branches, and the folder stays on your disk (`duolo remove <project> --yes` from the command line).
+- **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
+- **Automations.** Click the alarm clock at the top of the sidebar to open the Automations page and have Duolo do things on a schedule (every day, weekdays, every week, every hour, or any cron). Each automation picks where it runs: a new task in a project each time, handed to the agent you picked; an existing task, continuing its conversation; or no project (tasks go in a separate Automations project). You can also just tell the agent in a task "every weekday at 9, …" and it sets one up with Duolo's `duolo` command (Claude knows about it for now). Run one now, pause it, and see what each recent run did or why it was skipped. Tasks it started carry a clock icon. Automations run while Duolo is open (a closed window counts); if Duolo was quit, a run missed within the last 12 hours runs once when you open it again, and if the previous run is still working the next one is skipped. From the command line: `duolo automation add "Fix the flakiest test" --cron "0 9 * * 1-5"` (`--here` sends it into the current task, `--no-project` keeps it out of your projects), plus `ls`, `run`, `pause`, `resume` and `rm`.
+- **Accounts.** Duolo can install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account; if it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation.
+- **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
+- **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
+- **No startup questions.** Before starting an agent in a task, Duolo marks the folder as trusted in Claude Code (`~/.claude.json`) and Codex (`~/.codex/config.toml`, for the repository) and turns off their update prompts, so they don't stop to ask. Claude's entry is removed when the task closes.
+- **Sessions resume.** Reopening a task continues that agent's own conversation, by session ID (`claude --resume <id>`, `codex resume <id>`).
+- **Keeps working in the background** (macOS). `⌘W` hides the window and agents keep going; `⌘Q` stops them. On Windows and Linux closing the window quits, after asking if agents are running.
+- **14 languages**, in the app, the command line and the terminal UI.
+
+## Shortcuts
 
 These are the macOS keys. On Windows and Linux `⌘` is `Ctrl` and `⌥` is `Alt`, and `⌘` plus a letter also takes `Shift` (`⌘N` is `Ctrl+Shift+N`), because `Ctrl` plus a letter belongs to the agent in the terminal. `Ctrl+C` copies when text is selected, and `Ctrl+V` pastes.
 
@@ -155,10 +167,10 @@ Details are in [docs/architecture.md](docs/architecture.md), and the localizatio
 
 ## Limitations
 
+- Duolo is early. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 - There is no separate daemon: quitting stops all agents, and their sessions resume when you reopen a task.
-- Agent state is detected from the terminal screen, not from hooks.
-- Windows and Linux haven't been tested end to end on real machines.
-- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. Native iOS and Android apps are in progress ([docs/mobile.md](docs/mobile.md)), with a relay in [server/](server/README.md); the desktop app does not connect to it yet.
+- Agents report their own state; OpenCode doesn't yet, so its state is read from the screen and can lag.
+- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. The iPhone and Android companion apps are in progress ([docs/mobile.md](docs/mobile.md)), with a relay in [server/](server/README.md); the desktop app does not connect to it yet.
 - On Linux the push-to-talk shortcut works on X11 only. On Wayland, click the microphone.
 
 ## Contributing

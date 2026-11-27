@@ -11,7 +11,7 @@ const repo = fileURLToPath(new URL("../../", import.meta.url));
 const plugins = join(repo, "crates/duolo-agent/agents");
 const assets = join(repo, "mobile/ios/Duolo/Assets.xcassets/Agents");
 const drawables = join(repo, "mobile/android/app/src/main/res/drawable");
-const kotlin = join(repo, "mobile/android/app/src/main/kotlin/ai/ottermind/duolo/AgentIcons.kt");
+const kotlin = join(repo, "mobile/android/app/src/main/kotlin/io/duolo/app/AgentIcons.kt");
 
 const attrs = (tag) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
 const num = (v) => Number(v ?? 0);
@@ -121,7 +121,7 @@ for (const id of ids) {
 }
 writeFileSync(
   kotlin,
-  `package ai.ottermind.duolo
+  `package io.duolo.app
 
 // 由 mobile/scripts/gen-agent-icons.mjs 生成，不要手改。
 

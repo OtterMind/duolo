@@ -1237,26 +1237,6 @@ body.is-dragging-pane * {
   color: var(--text);
   word-break: break-word;
 }
-.review-text p,
-.review-text ul,
-.review-text ol {
-  margin: 0 0 10px;
-}
-.review-text ul,
-.review-text ol {
-  padding-left: 18px;
-}
-.review-text h4 {
-  margin: 14px 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.review-text code {
-  font: 11.5px var(--mono);
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--active);
-}
 .review-text.is-failed {
   color: var(--danger);
 }
@@ -1265,6 +1245,134 @@ body.is-dragging-pane * {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--line);
+}
+
+/* Agent 写的 Markdown（聊天、审阅结论）：字号跟着外层 */
+
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md pre,
+.md blockquote,
+.md .md-table {
+  margin: 0 0 12px;
+}
+.md ul,
+.md ol {
+  padding-left: 22px;
+}
+.md li {
+  margin: 3px 0;
+}
+.md li > p {
+  margin: 0;
+}
+.md li > ul,
+.md li > ol {
+  margin: 3px 0 0;
+}
+.md li::marker {
+  color: var(--dim);
+}
+.md ul.contains-task-list {
+  padding-left: 4px;
+  list-style: none;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 20px 0 8px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+.md h1 {
+  font-size: 1.35em;
+}
+.md h2 {
+  font-size: 1.2em;
+}
+.md h3 {
+  font-size: 1.08em;
+}
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 1em;
+}
+.md strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.md a {
+  color: var(--focus);
+  text-decoration: none;
+  cursor: pointer;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md code {
+  font: 0.88em var(--mono);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--active);
+  color: #e8c08a;
+}
+.md pre {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: #1d1d1d;
+  border: 1px solid var(--line);
+  overflow-x: auto;
+}
+.md pre code {
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font-size: 0.86em;
+  line-height: 1.6;
+}
+.md blockquote {
+  padding: 0 0 0 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+}
+.md hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.md .md-table {
+  overflow-x: auto;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.md th,
+.md td {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  text-align: left;
+  vertical-align: top;
+}
+.md th {
+  font-weight: 600;
+  background: var(--raised);
+}
+.md input[type="checkbox"] {
+  margin: 0 6px 0 0;
+  vertical-align: -1px;
 }
 
 /* 语音：入口和状态都在 Agent 的输入块上（输入块左边比文字区多出 8px，见 .input-block） */
@@ -2145,10 +2253,10 @@ body.is-dragging-pane * {
 .chat-column {
   max-width: 760px;
   margin: 0 auto;
-  padding: 20px 24px 12px;
+  padding: 24px 24px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .chat-empty {
   margin: 40px 0 0;
@@ -2158,35 +2266,19 @@ body.is-dragging-pane * {
 .chat-user {
   align-self: flex-end;
   max-width: 80%;
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 8px 14px;
+  border-radius: 14px;
   background: var(--raised);
   border: 1px solid var(--line);
+  font: 13.5px/1.6 var(--sans);
   white-space: pre-wrap;
   word-break: break-word;
 }
 .chat-agent {
-  font: 13px/1.7 var(--sans);
+  font: 13.5px/1.75 var(--sans);
+  color: var(--text);
   word-break: break-word;
 }
-.chat-agent p,
-.chat-agent ul,
-.chat-agent ol {
-  margin: 0 0 8px;
-}
-.chat-agent > :last-child {
-  margin-bottom: 0;
-}
-.chat-agent ul,
-.chat-agent ol {
-  padding-left: 18px;
-}
-.chat-agent h4 {
-  margin: 12px 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.chat-agent code,
 .chat-ask code {
   font: 12px var(--mono);
   padding: 1px 4px;

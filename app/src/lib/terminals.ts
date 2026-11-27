@@ -121,6 +121,12 @@ window.addEventListener("wheel", releaseIfUp, { capture: true, passive: true });
 window.addEventListener("mouseup", () => (pressedInTerminal = false), true);
 
 /** 用户在终端里的输入（发给 Agent 之前），App 用它给新任务起名。 */
+/**
+ * 文字里的网址：和 WebLinksAddon 自带的一样，另外遇到非 ASCII 字符就结束。中文里网址后面紧跟着的
+ * "，看到"这类全角标点和汉字不算进网址，否则打开的是一个不存在的地址。
+ */
+export const URL_IN_TEXT = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\^<>`\u0080-\uffff]*[^\s"':,.!?{}|\\^~[\]`()<>\u0080-\uffff]/;
+
 /** 鼠标停在链接上时的提示（当前语言，由界面设置）。 */
 let linkHint = "";
 export function setLinkHint(text: string) {
@@ -195,15 +201,22 @@ function create(ref: AgentRef): Entry {
   // 输出里的网址：按住 ⌘（Windows / Linux 是 Ctrl）点击用默认浏览器打开。不按住时照常点终端、选文字。
   // 两种链接：文字里看起来像网址的（WebLinksAddon），和程序用终端超链接（OSC 8）标出来的（Claude Code
   // 就这样输出链接）。后一种 xterm 默认先弹浏览器的确认框再 window.open，在桌面应用里打不开，换成一样的处理。
-  const follow = (event: MouseEvent, uri: string) => {
-    if (modKey(event)) void api.openUrl(uri).catch(() => {});
-  };
-  const hover = () => {
+  //
+  // 不用 xterm 的"点了链接"：它要同一个链接上先收到按下、再收到松开。macOS 的 WebView 里终端有焦点、开着第三方
+  // 输入法时，按下要先经过输入法、比松开晚到（见 lib/focus.ts），xterm 就认为没点中。改成记住指针停在哪个链接上，
+  // 自己看松开的那一下。
+  let hovered: string | null = null;
+  const hover = (_event: MouseEvent, uri: string) => {
+    hovered = uri;
     if (linkHint) el.title = linkHint;
   };
-  const leave = () => el.removeAttribute("title");
-  term.loadAddon(new WebLinksAddon(follow, { hover, leave }));
-  term.options.linkHandler = { activate: follow, hover, leave };
+  const leave = () => {
+    hovered = null;
+    el.removeAttribute("title");
+  };
+  const none = () => {};
+  term.loadAddon(new WebLinksAddon(none, { hover, leave, urlRegex: URL_IN_TEXT }));
+  term.options.linkHandler = { activate: none, hover, leave };
   term.unicode.activeVersion = "11";
 
   const el = document.createElement("div");
@@ -211,6 +224,13 @@ function create(ref: AgentRef): Entry {
   // 指针离开终端时暂时拿走它的焦点，见 lib/focus.ts。
   el.dataset.focusHome = "";
   el.addEventListener("mousedown", () => (pressedInTerminal = true), true);
+  el.addEventListener(
+    "mouseup",
+    (e) => {
+      if (hovered && e.button === 0 && modKey(e)) void api.openUrl(hovered).catch(() => {});
+    },
+    true,
+  );
   const block = document.createElement("div");
   block.className = "input-block";
   el.appendChild(block);

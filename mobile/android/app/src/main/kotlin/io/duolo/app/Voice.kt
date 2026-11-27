@@ -103,6 +103,8 @@ class VoiceSession(private val app: Application, private val http: OkHttpClient)
     /** 已经松手了，在等最终结果。 */
     private var finishing = false
     private var timeout: Job? = null
+    /** 识别完按这些名字改正拆开说的词。 */
+    private var hints = VoiceHints()
 
     val allowed: Boolean
         get() = ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -113,6 +115,7 @@ class VoiceSession(private val app: Application, private val http: OkHttpClient)
         if (route == null) return problem(AppError.unauthorized)
         this.done = done
         this.problem = problem
+        this.hints = hints
         target = Target.Send
         handsFree = false
         finishing = false
@@ -205,7 +208,7 @@ class VoiceSession(private val app: Application, private val http: OkHttpClient)
 
     private fun complete() {
         if (!visible) return
-        val said = text.trim()
+        val said = hints.fixNames(text.trim())
         val edit = target == Target.Edit
         end()
         if (said.isEmpty()) problem(AppError("nothingRecognized")) else done(said, edit)

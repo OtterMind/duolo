@@ -16,6 +16,8 @@ final class VoiceInput {
     private var engine: AVAudioEngine?
     private var stream: VoiceStream?
     private var final: String?
+    /// 识别完按这些名字改正拆开说的词。
+    private var hints = VoiceHints()
     private var finished: CheckedContinuation<Void, Never>?
 
     /// 说完后等最终结果最长多久。
@@ -27,6 +29,7 @@ final class VoiceInput {
         text = ""
         level = 0
         final = nil
+        self.hints = hints
         do {
             guard await AVAudioApplication.requestRecordPermission() else { throw AppError("voicePermission") }
             let stream = try await VoiceStream.open(server: server, token: token, hints: hints)
@@ -130,7 +133,7 @@ final class VoiceInput {
                 }
             }
         }
-        let said = (final ?? text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let said = hints.fixNames((final ?? text).trimmingCharacters(in: .whitespacesAndNewlines))
         reset()
         return said
     }

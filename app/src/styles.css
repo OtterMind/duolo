@@ -650,6 +650,25 @@ body.is-resizing * {
   padding: 7px 0;
   font-size: 12.5px;
 }
+.settings-words {
+  padding: 9px 0;
+}
+.settings-words textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--raised);
+  color: var(--text);
+  font: 12px/1.5 var(--mono);
+}
+.settings-words textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+}
 .settings-row select {
   max-width: 190px;
   height: 26px;

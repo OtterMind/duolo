@@ -570,10 +570,12 @@ impl App {
         };
         let task = self.selected_task();
         let project = task.and_then(|t| self.engine.state().project(&t.project)).map(|p| p.name.as_str());
+        let words = duolo_core::Settings::load(&self.engine.paths().settings_file()).unwrap_or_default().voice_words;
         let hints = duolo_voice::hints(&duolo_voice::HintSource {
             project: project.or_else(|| self.home_project_name()),
             task_title: task.map(|t| t.title.as_str()),
             branch: task.map(|t| t.branch.as_str()),
+            words: &words,
             events: &events,
         });
         let (paths, config) = (self.engine.paths().clone(), self.engine.config());

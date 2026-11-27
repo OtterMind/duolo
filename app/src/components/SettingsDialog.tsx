@@ -343,10 +343,15 @@ function isOlder(version: string, than: string) {
 function Voice({ onError }: { onError(err: unknown): void }) {
   const { t } = useI18n();
   const [voice, setVoice] = useState<VoiceSettings | null>(null);
+  // 编辑中的词（逗号、换行分开），离开输入框时保存，后端负责拆开去重。
+  const [words, setWords] = useState("");
   const fn = useFnKeyStatus();
 
   useEffect(() => {
-    api.getVoiceSettings().then(setVoice, onError);
+    api.getVoiceSettings().then((v) => {
+      setVoice(v);
+      setWords(v.words.join(", "));
+    }, onError);
   }, [onError]);
 
   const saveVoice = (next: VoiceSettings) => {
@@ -397,6 +402,21 @@ function Voice({ onError }: { onError(err: unknown): void }) {
             onChange={(e) => voice && saveVoice({ ...voice, organize: e.target.checked })}
           />
         </label>
+      </div>
+      <div className="settings-group-title">{t("settings.voiceWords")}</div>
+      <div className="settings-card">
+        <div className="settings-words">
+          <textarea
+            value={words}
+            disabled={!voice}
+            rows={3}
+            spellCheck={false}
+            placeholder={t("settings.voiceWordsPlaceholder")}
+            onChange={(e) => setWords(e.target.value)}
+            onBlur={() => voice && saveVoice({ ...voice, words: [words] })}
+          />
+          <span className="settings-hint">{t("settings.voiceWordsHint")}</span>
+        </div>
       </div>
     </>
   );

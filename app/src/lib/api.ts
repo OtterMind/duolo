@@ -320,6 +320,8 @@ export interface VoiceStatus {
 
 export interface VoiceSettings {
   organize: boolean;
+  /** 要认准的词，识别时当热词。 */
+  words: string[];
 }
 
 export interface FnKeyStatus {

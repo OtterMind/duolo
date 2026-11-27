@@ -10,5 +10,5 @@ mod mic;
 mod session;
 
 pub use cloud::{Recorder, Transcript};
-pub use hints::{hints, HintSource, Hints};
+pub use hints::{clean_words, hints, HintSource, Hints};
 pub use session::start;

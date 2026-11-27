@@ -20,6 +20,7 @@ use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Connector, Message, WebSocket};
 
+use crate::hints::fix_names;
 use crate::mic::{Chunk, Mic};
 
 /// 连服务器、等它说"可以"最长多久；超过就改用本机识别，免得用户等。
@@ -101,6 +102,8 @@ struct Shared {
 #[derive(Debug)]
 pub struct Recorder {
     started: Instant,
+    /// 识别完按这些名字改正拆开说的词。
+    hotwords: Vec<String>,
     shared: Arc<Mutex<Shared>>,
     stop: Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
@@ -136,7 +139,14 @@ impl Recorder {
                 lock(&shared).result = Some(result.map_err(|e| format!("{e:#}")));
             })
         };
-        Ok(Self { started: Instant::now(), shared, stop, cancel, worker: Some(worker) })
+        Ok(Self {
+            started: Instant::now(),
+            hotwords: request.hotwords.clone(),
+            shared,
+            stop,
+            cancel,
+            worker: Some(worker),
+        })
     }
 
     pub fn elapsed(&self) -> Duration {
@@ -168,11 +178,12 @@ impl Recorder {
             }
             None => return Err(UserError::VoiceFailed.into()),
         };
-        let raw = transcript.raw.trim().to_string();
+        let raw = fix_names(transcript.raw.trim(), &self.hotwords);
         if raw.is_empty() {
             return Err(UserError::NothingRecognized.into());
         }
-        let organized = transcript.organized.map(|o| o.trim().to_string()).filter(|o| !o.is_empty() && *o != raw);
+        let organized =
+            transcript.organized.map(|o| fix_names(o.trim(), &self.hotwords)).filter(|o| !o.is_empty() && *o != raw);
         Ok(Transcript { raw, organized })
     }
 

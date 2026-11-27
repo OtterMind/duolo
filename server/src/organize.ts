@@ -1,5 +1,5 @@
 // 把口述原话整理成一条可以直接发给编程 Agent 的指令：去掉口头语和重复，改口只留最后的说法，
-// 按热词改正代码里的名字（"use state" → useState）。调用 OpenAI 兼容的聊天接口（豆包、通义、DeepSeek、OpenAI 都支持），
+// 按热词和最近的对话改正代码里的名字（"use state" → useState），说的符号写成符号，几件事分条列出。调用 OpenAI 兼容的聊天接口（豆包、通义、DeepSeek、OpenAI 都支持），
 // 模型的地址、密钥、名字都来自环境变量，密钥不进仓库。
 
 export interface OrganizeConfig {
@@ -19,15 +19,20 @@ export interface OrganizeInput {
   context: string[];
 }
 
-const SYSTEM = `You clean up voice transcripts. The user message contains what a user said to a coding agent, from speech recognition; \
+const SYSTEM = `You clean up voice transcripts. The user message contains what a developer said to a coding agent, from speech recognition; \
 it may contain filler words, repetitions, self-corrections or recognition errors.
-Rewrite it as one instruction that can be sent to the coding agent directly:
-- remove filler words and repetitions;
-- when the user corrects themselves, keep only the final version;
-- fix obvious recognition errors; when the speech refers to one of the listed names, use its exact spelling (for example "use state" -> useState);
-- do not add requirements the user did not state; do not answer or explain;
+Rewrite it as text that can be sent to the coding agent directly:
+- remove filler words, hesitations and repetitions;
+- when the user corrects themselves ("no, I mean ..."), keep only the final version;
+- fix recognition errors using the listed names and the recent conversation: a word that sounds like a listed name is that name, \
+spelled exactly as listed (for example "use state" -> useState, "export c s v" -> exportCsv, "orders 点 ts" -> orders.ts);
+- write spoken symbols as symbols in code names and paths (点/dot -> ".", 下划线/underscore -> "_", 斜杠/slash -> "/");
+- keep technical terms in the language the user said them in; put a space between Chinese and English words;
+- if the user lists several separate points, write them as a numbered list; otherwise keep one short paragraph;
+- if the user is answering the agent's latest question, keep it a short, direct answer;
+- do not add requirements the user did not state, do not guess what "this" or "that" refers to, and do not answer or explain;
 - write in the same language the user spoke;
-- output only the instruction itself, without quotes or prefixes.`;
+- output only the rewritten text, without quotes or prefixes.`;
 
 /** 给模型的用户消息：名字、最近的对话、原话。 */
 export function organizePrompt({ text, hotwords, context }: OrganizeInput): string {

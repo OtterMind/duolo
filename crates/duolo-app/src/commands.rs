@@ -647,6 +647,9 @@ fn voice_config(state: &AppState) -> VoiceConfig {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct VoiceSettings {
     organize: bool,
+    /// 要认准的词。
+    #[serde(default)]
+    words: Vec<String>,
 }
 
 #[tauri::command]
@@ -656,7 +659,7 @@ pub fn get_voice_settings(state: State<'_, AppState>) -> Res<VoiceSettings> {
         (engine.config().voice.organize, engine.paths().settings_file())
     };
     let settings = Settings::load(&path)?;
-    Ok(VoiceSettings { organize: settings.voice_organize.unwrap_or(organize) })
+    Ok(VoiceSettings { organize: settings.voice_organize.unwrap_or(organize), words: settings.voice_words })
 }
 
 #[tauri::command]
@@ -664,6 +667,7 @@ pub fn set_voice_settings(state: State<'_, AppState>, voice: VoiceSettings) -> R
     let path = state.engine().paths().settings_file();
     let mut settings = Settings::load(&path)?;
     settings.voice_organize = Some(voice.organize);
+    settings.voice_words = duolo_voice::clean_words(&voice.words);
     Ok(settings.save(&path)?)
 }
 
@@ -690,6 +694,7 @@ pub fn open_system_settings(pane: String) -> Res<()> {
 pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<String>) -> Res<()> {
     eprintln!("voice: start (task {task:?})");
     blocking(app, move |state| {
+        let words = Settings::load(&state.engine().paths().settings_file()).unwrap_or_default().voice_words;
         let (paths, server, hints) = {
             let engine = state.engine();
             let task = task.and_then(|id| engine.state().task(TaskId(id)));
@@ -699,6 +704,7 @@ pub async fn voice_start(app: AppHandle, task: Option<u64>, project: Option<Stri
                 project: project_name.or(project.as_deref()),
                 task_title: task.map(|t| t.title.as_str()),
                 branch: task.map(|t| t.branch.as_str()),
+                words: &words,
                 events: &events,
             });
             (engine.paths().clone(), engine.config().server.clone(), hints)

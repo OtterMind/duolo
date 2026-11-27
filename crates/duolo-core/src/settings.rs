@@ -19,6 +19,9 @@ pub struct Settings {
     pub language: String,
     /// 说完后是否整理成指令；没有设置过时用 `config.toml` 里的 `voice.organize`。
     pub voice_organize: Option<bool>,
+    /// 语音输入要认准的词（产品名、库名、人名……），识别时当热词发给服务器。
+    #[serde(default)]
+    pub voice_words: Vec<String>,
     /// 上次叫来审阅的 Agent（插件 id）。任务自己没选过时用它，再没有就用 `config.toml` 的 `reviewer`。
     pub reviewer: Option<String>,
     /// 上次选的运行方式（`terminal` / `chat`），新任务的 Agent 支持的话照着用。
@@ -34,6 +37,7 @@ impl Default for Settings {
         Self {
             language: LANGUAGE_AUTO.into(),
             voice_organize: None,
+            voice_words: Vec::new(),
             reviewer: None,
             surface: None,
             accounts: Default::default(),

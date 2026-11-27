@@ -16,6 +16,7 @@ duolo-chat = { path = "crates/duolo-chat" }
 duolo-git = { path = "crates/duolo-git" }
 duolo-pty = { path = "crates/duolo-pty" }
 duolo-voice = { path = "crates/duolo-voice" }
+duolo-link = { path = "crates/duolo-link" }
 duolo-engine = { path = "crates/duolo-engine" }
 duolo-tui = { path = "crates/duolo-tui" }
 duolo-cli = { path = "crates/duolo-cli" }
@@ -43,6 +44,14 @@ tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1"
 ureq = { version = "3", features = ["json"] }
+# 电脑和手机之间端到端加密（见 docs/mobile.md、mobile/contract/crypto.json）。
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+rand_core = { version = "0.6", features = ["getrandom"] }
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

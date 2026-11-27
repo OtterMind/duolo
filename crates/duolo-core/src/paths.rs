@@ -56,6 +56,11 @@ impl Paths {
         self.root.join("account.json")
     }
 
+    /// 和手机之间的连接：这台电脑的密钥、配好对的手机（见 `duolo-link`）。
+    pub fn link_file(&self) -> PathBuf {
+        self.root.join("link.json")
+    }
+
     pub fn state_file(&self) -> PathBuf {
         self.root.join("state.json")
     }

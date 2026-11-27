@@ -157,7 +157,7 @@ pub enum Command {
 }
 
 /// 命令的结果。失败时 `error` 是错误码（和桌面界面的 `error.*` 文案对应）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandResult {
     pub ok: bool,

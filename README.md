@@ -11,7 +11,7 @@
 
 Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets its own git worktree with the real agent CLI running inside it: Claude Code, Codex, OpenCode, pi or Grok. When the work is done, a second model reviews it read-only and you hand the findings back with one click. The sidebar shows the state of every task, and you can speak a request instead of typing it. Your code and sessions stay on your computer.
 
-> Duolo is early. There are no released installers yet, so for now you build it from source. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
+> Duolo is early. A signed and notarized installer is available for Macs with Apple silicon; on other systems you build it from source. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 
 ```
 ┌────────────────────────┬─────────────────────────────────────────────────┐
@@ -49,7 +49,9 @@ Duolo is a local-first desktop app for macOS, Windows and Linux. Every task gets
 
 ## Install
 
-You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`curl -fsSL https://claude.ai/install.sh | bash`), [Codex](https://github.com/openai/codex) (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`), [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`) or [Grok](https://x.ai/cli) (`curl -fsSL https://x.ai/cli/install.sh | bash`). Duolo can also install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account. If it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation. Building from source also needs Rust 1.89+, Node 20+ and pnpm.
+**Mac (Apple silicon):** download the dmg from [duolo.io](https://duolo.io) or the [latest release](https://github.com/OtterMind/duolo/releases/latest) and drag Duolo into Applications. It's signed and notarized, so it opens without warnings; Settings → About tells you when a new version is out.
+
+You need git and at least one agent CLI: [Claude Code](https://docs.claude.com/en/docs/claude-code) (`curl -fsSL https://claude.ai/install.sh | bash`), [Codex](https://github.com/openai/codex) (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`), [OpenCode](https://opencode.ai) (`npm install -g opencode-ai`), [pi](https://pi.dev) (`npm install -g @earendil-works/pi-coding-agent`) or [Grok](https://x.ai/cli) (`curl -fsSL https://x.ai/cli/install.sh | bash`). Duolo can also install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account. If it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation. To build from source (Intel Macs, Windows, Linux) you also need Rust 1.89+, Node 20+ and pnpm.
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

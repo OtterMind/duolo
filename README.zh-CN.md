@@ -11,7 +11,7 @@
 
 Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。每个任务一个独立的 git worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode、pi 或 Grok；写完让另一个模型只读审阅，结论一键交回去修改。所有任务的状态在侧边栏一眼看清，也可以直接用语音说需求。代码和会话都留在你自己的电脑上。
 
-> Duolo 还在早期，还没有发布安装包，目前需要从源码构建。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
+> Duolo 还在早期。Apple 芯片的 Mac 有签名并公证过的安装包；其他系统目前需要从源码构建。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 
 ```
 ┌────────────────────────┬─────────────────────────────────────────────────┐
@@ -48,7 +48,9 @@ Duolo 是一个本地优先的桌面应用，支持 macOS、Windows 和 Linux。
 
 ## 安装
 
-需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`curl -fsSL https://claude.ai/install.sh | bash`）、[Codex](https://github.com/openai/codex)（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）、[pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）或 [Grok](https://x.ai/cli)（`curl -fsSL https://x.ai/cli/install.sh | bash`）。Duolo 也可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。从源码构建还需要 Rust 1.89+、Node 20+ 和 pnpm。
+**Mac（Apple 芯片）：** 从 [duolo.io](https://duolo.io) 或 [最新发布](https://github.com/OtterMind/duolo/releases/latest) 下载 dmg，把 Duolo 拖进「应用程序」。安装包签名并公证过，打开不会有警告；有新版本时「设置 → 关于」里会提示。
+
+需要 git，以及至少一个 Agent CLI：[Claude Code](https://docs.claude.com/en/docs/claude-code)（`curl -fsSL https://claude.ai/install.sh | bash`）、[Codex](https://github.com/openai/codex)（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）、[OpenCode](https://opencode.ai)（`npm install -g opencode-ai`）、[pi](https://pi.dev)（`npm install -g @earendil-works/pi-coding-agent`）或 [Grok](https://x.ai/cli)（`curl -fsSL https://x.ai/cli/install.sh | bash`）。Duolo 也可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。从源码构建（Intel Mac、Windows、Linux）还需要 Rust 1.89+、Node 20+ 和 pnpm。
 
 ```sh
 git clone https://github.com/OtterMind/duolo.git && cd duolo

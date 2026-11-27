@@ -664,7 +664,7 @@
   "site.tagline": "Claude schreibt, Codex prüft.",
   "site.intro": "Duolo lässt ein Team von Coding-Agenten parallel auf deinem eigenen Rechner arbeiten. Jede Aufgabe bekommt einen eigenen Git-Worktree: Ein Agent schreibt den Code, ein zweiter prüft ihn, und du entscheidest.",
   "site.download": "Für Mac herunterladen",
-  "site.downloadNote": "Apple Silicon · kostenlos und Open Source (MIT)",
+  "site.downloadNote": "Apple Silicon und Intel · kostenlos und Open Source (MIT)",
   "site.github": "Quellcode auf GitHub",
   "site.parallelTitle": "Viele Aufgaben gleichzeitig",
   "site.parallelBody": "Jede Aufgabe läuft in einem eigenen Worktree mit der echten Agent-CLI, sodass sich die Agenten nie in die Quere kommen.",

@@ -664,7 +664,7 @@
   "site.tagline": "Claude yazar, Codex inceler.",
   "site.intro": "Duolo, bir kodlama ajanı ekibini kendi bilgisayarında paralel çalıştırır. Her görevin kendi git worktree'si vardır: bir ajan kodu yazar, ikincisi inceler, kararı sen verirsin.",
   "site.download": "Mac için indir",
-  "site.downloadNote": "Apple silikon · ücretsiz ve açık kaynak (MIT)",
+  "site.downloadNote": "Apple silikon ve Intel · ücretsiz ve açık kaynak (MIT)",
   "site.github": "GitHub'daki kaynak kod",
   "site.parallelTitle": "Aynı anda birçok görev",
   "site.parallelBody": "Her görev, gerçek ajan CLI'ı ile kendi worktree'sinde çalışır; ajanlar birbirinin işine karışmaz.",

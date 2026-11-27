@@ -664,7 +664,7 @@
   "site.tagline": "Claude пишет, Codex проверяет.",
   "site.intro": "Duolo запускает команду агентов для программирования параллельно на вашем компьютере. У каждой задачи свой git worktree: один агент пишет код, другой проверяет, а решение за вами.",
   "site.download": "Скачать для Mac",
-  "site.downloadNote": "Apple silicon · бесплатно, с открытым исходным кодом (MIT)",
+  "site.downloadNote": "Apple silicon и Intel · бесплатно, с открытым исходным кодом (MIT)",
   "site.github": "Исходный код на GitHub",
   "site.parallelTitle": "Много задач одновременно",
   "site.parallelBody": "Каждая задача работает в своём worktree с настоящим CLI агента, поэтому агенты не мешают друг другу.",

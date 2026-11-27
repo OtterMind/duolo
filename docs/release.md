@@ -9,7 +9,7 @@
 ## Mac 版
 
 Developer ID Application 证书签名，再交给苹果公证，下载后能直接打开。签名后系统强制开启加固运行时，
-`crates/duolo-app/Entitlements.plist` 里声明了麦克风（按住说话要用）。目前只打 Apple 芯片的版本。
+`crates/duolo-app/Entitlements.plist` 里声明了麦克风（按住说话要用）。打的是通用二进制，一个 dmg 同时支持 Apple 芯片和 Intel。
 
 ## iPhone 版
 

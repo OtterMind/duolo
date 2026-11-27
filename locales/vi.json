@@ -664,7 +664,7 @@
   "site.tagline": "Claude viết, Codex duyệt.",
   "site.intro": "Duolo chạy song song một nhóm agent lập trình ngay trên máy của bạn. Mỗi tác vụ có git worktree riêng: một agent viết mã, agent thứ hai duyệt, và bạn là người quyết định.",
   "site.download": "Tải về cho Mac",
-  "site.downloadNote": "Apple silicon · miễn phí và mã nguồn mở (MIT)",
+  "site.downloadNote": "Apple silicon và Intel · miễn phí và mã nguồn mở (MIT)",
   "site.github": "Mã nguồn trên GitHub",
   "site.parallelTitle": "Nhiều tác vụ cùng lúc",
   "site.parallelBody": "Mỗi tác vụ chạy trong worktree riêng với CLI thật của agent, nên các agent không cản trở nhau.",

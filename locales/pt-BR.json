@@ -664,7 +664,7 @@
   "site.tagline": "Claude escreve, Codex revisa.",
   "site.intro": "O Duolo roda uma equipe de agentes de programação em paralelo no seu próprio computador. Cada tarefa tem seu próprio worktree do git: um agente escreve o código, outro revisa, e você decide.",
   "site.download": "Baixar para Mac",
-  "site.downloadNote": "Apple silicon · gratuito e de código aberto (MIT)",
+  "site.downloadNote": "Apple silicon e Intel · gratuito e de código aberto (MIT)",
   "site.github": "Código-fonte no GitHub",
   "site.parallelTitle": "Várias tarefas ao mesmo tempo",
   "site.parallelBody": "Cada tarefa roda no próprio worktree com a CLI real do agente, então um agente nunca atrapalha o outro.",

@@ -664,7 +664,7 @@
   "site.tagline": "Claude menulis, Codex meninjau.",
   "site.intro": "Duolo menjalankan tim agen pemrograman secara paralel di komputer Anda sendiri. Setiap tugas punya git worktree sendiri: satu agen menulis kode, agen kedua meninjaunya, dan Anda yang memutuskan.",
   "site.download": "Unduh untuk Mac",
-  "site.downloadNote": "Apple silicon · gratis dan sumber terbuka (MIT)",
+  "site.downloadNote": "Apple silicon dan Intel · gratis dan sumber terbuka (MIT)",
   "site.github": "Kode sumber di GitHub",
   "site.parallelTitle": "Banyak tugas sekaligus",
   "site.parallelBody": "Setiap tugas berjalan di worktree-nya sendiri dengan CLI agen yang asli, jadi agen tidak saling mengganggu.",

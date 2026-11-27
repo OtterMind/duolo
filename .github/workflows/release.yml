@@ -49,7 +49,10 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: app
+      # 通用二进制：一个安装包同时支持 Apple 芯片和 Intel。
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
       - name: 公证用的 App Store Connect API Key
         env:
@@ -67,24 +70,24 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: pnpm tauri build --bundles app,dmg
+        run: pnpm tauri build --target universal-apple-darwin --bundles app,dmg
       # Tauri 只公证 dmg 里的应用；dmg 本身也交一次公证，没联网时第一次打开也不拦。
       - name: 公证 dmg，检查签名
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
           xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$dmg"
-          app=target/release/bundle/macos/Duolo.app
+          app=target/universal-apple-darwin/release/bundle/macos/Duolo.app
           codesign --verify --deep --strict "$app"
           spctl --assess --type execute -vv "$app"
           xcrun stapler validate "$dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: duolo-macos
-          path: target/release/bundle/dmg/*.dmg
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
       - name: 放进草稿 Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -93,7 +96,7 @@ jobs:
         run: |
           tag="${GITHUB_REF#refs/tags/}"
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "Duolo $tag" --generate-notes
-          gh release upload "$tag" target/release/bundle/dmg/*.dmg --clobber
+          gh release upload "$tag" target/universal-apple-darwin/release/bundle/dmg/*.dmg --clobber
 
   ios:
     if: github.event_name == 'push' || inputs.ios

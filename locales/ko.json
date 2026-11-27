@@ -664,7 +664,7 @@
   "site.tagline": "Claude가 쓰고, Codex가 리뷰합니다.",
   "site.intro": "Duolo는 내 컴퓨터에서 여러 코딩 에이전트를 동시에 실행합니다. 작업마다 별도의 git 워크트리가 있고, 한 에이전트가 코드를 쓰면 다른 에이전트가 리뷰하며, 결정은 사용자가 합니다.",
   "site.download": "Mac용 다운로드",
-  "site.downloadNote": "Apple 실리콘 · 무료 오픈 소스(MIT)",
+  "site.downloadNote": "Apple 실리콘 및 Intel 지원 · 무료 오픈 소스(MIT)",
   "site.github": "GitHub 소스 코드",
   "site.parallelTitle": "여러 작업을 동시에",
   "site.parallelBody": "각 작업은 자체 워크트리에서 실제 에이전트 CLI로 실행되어 서로 방해하지 않습니다.",

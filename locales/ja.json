@@ -664,7 +664,7 @@
   "site.tagline": "Claude が書き、Codex がレビュー。",
   "site.intro": "Duolo は自分のマシンで複数のコーディングエージェントを並行して動かします。タスクごとに専用の git ワークツリーを用意し、一方のエージェントが書き、もう一方がレビューし、最終判断はあなたが行います。",
   "site.download": "Mac 版をダウンロード",
-  "site.downloadNote": "Apple シリコン · 無料のオープンソース（MIT）",
+  "site.downloadNote": "Apple シリコンと Intel に対応 · 無料のオープンソース（MIT）",
   "site.github": "GitHub のソースコード",
   "site.parallelTitle": "複数のタスクを同時に",
   "site.parallelBody": "各タスクは専用のワークツリーで本物のエージェント CLI を動かすので、互いに干渉しません。",

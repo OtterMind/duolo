@@ -664,7 +664,7 @@
   "site.tagline": "Claude 写，Codex 审。",
   "site.intro": "Duolo 在你自己的电脑上同时运行多个编程 Agent。每个任务有自己的 git 工作区：一个 Agent 写代码，另一个审阅，由你决定。",
   "site.download": "下载 Mac 版",
-  "site.downloadNote": "Apple 芯片 · 免费开源（MIT）",
+  "site.downloadNote": "支持 Apple 芯片和 Intel · 免费开源（MIT）",
   "site.github": "GitHub 上的源码",
   "site.parallelTitle": "多个任务同时做",
   "site.parallelBody": "每个任务在自己的工作区里运行真正的 Agent 命令行，互不干扰。",

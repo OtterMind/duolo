@@ -9,6 +9,7 @@
 //   POST   /v1/pairings/claim   手机用配对码登录同一个账号，并拿到电脑端的公钥
 //   GET    /v1/connect          WebSocket 转发（见 relay.ts）
 //   GET    /v1/voice            WebSocket 语音识别（见 voice.ts），匿名登录的也能用
+//   GET    /、/privacy、/terms、/support   duolo.io 的网页（见 site.ts）
 
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
@@ -18,6 +19,7 @@ import { z } from "zod";
 import type { Auth } from "./auth.js";
 import type { Config } from "./config.js";
 import { Hub } from "./relay.js";
+import { registerSite } from "./site.js";
 import { DESKTOP_PLATFORMS, Store, type Device } from "./store.js";
 import { bufferMessages, serveVoice } from "./voice.js";
 import type { Pool } from "pg";
@@ -91,6 +93,7 @@ export async function buildApp({ config, pool, auth }: AppDeps) {
   }
 
   app.get("/health", async () => ({ ok: true }));
+  registerSite(app);
 
   // ---- 设备 ----
 

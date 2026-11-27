@@ -60,6 +60,7 @@ Production runs in Docker behind APISIX and the host Nginx. The deploy script an
 | `POST /v1/pairings/claim` | A phone signs in to the same account with the pairing code: `{ code, device }` → `{ token, device, desktop }` (includes the desktop's public key) |
 | `GET /v1/connect` | WebSocket relay. The protocol is described in `src/relay.ts` |
 | `GET /v1/voice` | WebSocket voice recognition, anonymous sessions allowed. Audio goes to Doubao with the task's hot words and recent conversation. The protocol is described in `src/voice.ts` |
+| `GET /`, `/privacy`, `/terms`, `/support` | The duolo.io web pages (`src/site.ts`). The home and support pages use `site.*` in `locales/`; the privacy policy and terms are legal texts in `site/`, in English and Simplified Chinese only |
 
 Errors are returned as codes, for example `{ "error": "invalidPairingCode" }`, and clients show them in their own language.
 

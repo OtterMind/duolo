@@ -1,5 +1,5 @@
-// 发给用户看的文字（目前只有验证码邮件）按用户的语言显示。
-// 文案和桌面端共用仓库根目录的 locales/*.json（规范见 docs/i18n.md），键是 email.*。
+// 发给用户看的文字（验证码邮件、duolo.io 的页面）按用户的语言显示。
+// 文案和桌面端共用仓库根目录的 locales/*.json（规范见 docs/i18n.md），键是 email.*、site.*。
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

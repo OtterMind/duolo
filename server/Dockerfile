@@ -1,6 +1,6 @@
 # Duolo 服务端的生产镜像。在仓库根目录构建（要带上根目录的 locales/）：
 #   docker build -f server/Dockerfile -t duolo-server .
-# 第一阶段装全部依赖、编译 TypeScript；第二阶段只带运行需要的依赖、编译结果和文案。
+# 第一阶段装全部依赖、编译 TypeScript；第二阶段只带运行需要的依赖、编译结果、文案和网页（site/）。
 
 FROM node:22.22.1-bookworm-slim AS build
 WORKDIR /app
@@ -14,11 +14,12 @@ RUN pnpm build && pnpm prune --prod
 
 FROM node:22.22.1-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=8787 HOST=0.0.0.0 DUOLO_LOCALES_DIR=/app/locales
+ENV NODE_ENV=production PORT=8787 HOST=0.0.0.0 DUOLO_LOCALES_DIR=/app/locales DUOLO_SITE_DIR=/app/site
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY locales ./locales
+COPY server/site ./site
 USER node
 EXPOSE 8787
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \

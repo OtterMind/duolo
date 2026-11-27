@@ -149,5 +149,7 @@ export class Store {
   async purge(mailboxTtlMs: number) {
     await this.pool.query("delete from mailbox where created_at < $1", [new Date(Date.now() - mailboxTtlMs)]);
     await this.pool.query("delete from pairing where expires_at < now()");
+    // 语音用量只用来算每天的额度，留 90 天（隐私政策里写明的期限）。
+    await this.pool.query("delete from voice_usage where day < current_date - 90");
   }
 }

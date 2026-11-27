@@ -61,6 +61,7 @@ pnpm test                 # 端到端测试（每次建一个临时数据库，�
 | `POST /v1/pairings/claim` | 手机用配对码登录同一个账号：`{ code, device }` → `{ token, device, desktop }`（含电脑端的公钥） |
 | `GET /v1/connect` | WebSocket 转发，协议见 `src/relay.ts` |
 | `GET /v1/voice` | WebSocket 语音识别，匿名会话也能用。声音连同任务的热词和最近的对话一起交给豆包识别，协议见 `src/voice.ts` |
+| `GET /`、`/privacy`、`/terms`、`/support` | duolo.io 的网页（`src/site.ts`）。首页和支持页的文案在 `locales/` 的 `site.*`；隐私政策和使用条款是法律文本，在 `site/` 下，只有英文和简体中文 |
 
 错误统一返回错误码，例如 `{ "error": "invalidPairingCode" }`，客户端按自己的语言显示。
 

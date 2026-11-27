@@ -26,7 +26,7 @@ public struct Keychain: SecretStore {
 
     private let service: String
 
-    public init(service: String = "ai.ottermind.duolo.pairing") {
+    public init(service: String = "io.duolo.app.pairing") {
         self.service = service
     }
 

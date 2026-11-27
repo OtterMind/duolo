@@ -3,7 +3,7 @@
   "productName": "Duolo",
   "mainBinaryName": "Duolo",
   "version": "0.1.0",
-  "identifier": "ai.ottermind.duolo",
+  "identifier": "io.duolo.app",
   "build": {
     "frontendDist": "../../app/dist",
     "devUrl": "http://localhost:1420",

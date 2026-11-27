@@ -554,7 +554,7 @@ fn run_text(outcome: &RunOutcome) -> String {
 }
 
 /// 桌面应用的 Bundle ID，与 crates/duolo-app/tauri.conf.json 一致。
-const APP_BUNDLE_ID: &str = "ai.ottermind.duolo";
+const APP_BUNDLE_ID: &str = "io.duolo.app";
 
 /// 打开桌面应用；`dir` 是 git 仓库时交给应用加入项目。没有安装应用时返回 false。
 fn open_app(dir: &std::path::Path) -> Result<bool> {

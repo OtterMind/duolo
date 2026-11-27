@@ -51,6 +51,9 @@ public actor SyncEngine {
     private var sleeper: Task<Void, Never>?
     /// 打开着的任务，电脑上线后接着补它的事件。
     private var focus: Int64?
+    /// 第一次打开、还没有事件的任务：要的是从哪条之后（见 `fetch`）。回来之前电脑推来的新事件不存，
+    /// 否则手机以为已经有到最新的了，随后回来的前面的事件会被当成旧的丢掉。
+    private var opening: [Int64: Int64] = [:]
     /// 在等结果的实时命令（回答、打断）。
     private var live: [String: CheckedContinuation<Void, any Error>] = [:]
     private var observers: [UUID: AsyncStream<Change>.Continuation] = [:]
@@ -225,6 +228,11 @@ public actor SyncEngine {
             // 没打开过的任务不存事件，列表用总览就够了。
             let known = try store.lastSeq(computer.id, task)
             guard task == focus || known > 0 else { return }
+            if known == 0 {
+                // 还没有这个任务的事件：只认刚才要的那一段（从 `after` 的下一条开始），推来的新事件等它回来再补。
+                guard let after = opening[task], events.min(by: { $0.seq < $1.seq })?.seq == after + 1 else { return }
+                opening[task] = nil
+            }
             switch try store.append(events, task: task, latest: latest, for: computer.id) {
             case .applied(let more):
                 emit(.task(task))
@@ -266,6 +274,7 @@ public actor SyncEngine {
             // 第一次打开：只要最近的一段，很长的任务不从头拉。
             after = max(0, seq - 400)
         }
+        if last == 0 { opening[task] = after }
         await request(.fetch(task: task, after: after))
     }
 

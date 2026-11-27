@@ -208,6 +208,24 @@ func events(_ range: ClosedRange<Int>, latest: Int, task: Int = 3) -> String {
         #expect(try rig.store.events("mac", 3).map(\.seq) == Array(1...6))
     }
 
+    @Test func aNewEventPushedBeforeTheFirstPageDoesNotHideTheHistory() async throws {
+        let rig = try Rig()
+        try await rig.online()
+        rig.desktop(overview(rev: 1, tasks: [(3, 6)]), id: "o")
+        try await until("overview") { rig.acked.contains("o") }
+        await rig.engine.open(3)
+        try await until("fetch") { rig.received.contains { $0["type"].string == "fetch" && $0["after"].int == 0 } }
+        // Agent 正在写：要的那一段回来之前，电脑先推来一条新的。
+        rig.desktop(events(7...7, latest: 7), id: "push")
+        try await until("push acked") { rig.acked.contains("push") }
+        #expect(try rig.store.lastSeq("mac", 3) == 0, "先不存，免得把前面的当成旧的丢掉")
+        rig.desktop(events(1...6, latest: 7), id: "page")
+        try await until("the rest") { rig.received.contains { $0["type"].string == "fetch" && $0["after"].int == 6 } }
+        rig.desktop(events(7...7, latest: 7), id: "rest")
+        try await until("all") { try rig.store.lastSeq("mac", 3) == 7 }
+        #expect(try rig.store.events("mac", 3).map(\.seq) == Array(1...7))
+    }
+
     @Test func startsOverWhenTheComputerLostItsHistory() async throws {
         let rig = try Rig()
         try await rig.online()

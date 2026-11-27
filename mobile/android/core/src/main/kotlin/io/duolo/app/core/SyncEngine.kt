@@ -93,6 +93,12 @@ class SyncEngine(
     /** 打开着的任务，电脑上线后接着补它的事件。 */
     private var focus: Long? = null
 
+    /**
+     * 第一次打开、还没有事件的任务：要的是从哪条之后（见 [fetch]）。回来之前电脑推来的新事件不存，
+     * 否则手机以为已经有到最新的了，随后回来的前面的事件会被当成旧的丢掉。
+     */
+    private val opening = mutableMapOf<Long, Long>()
+
     /** 在等结果的实时命令（回答、打断）。 */
     private val live = mutableMapOf<String, CompletableDeferred<Unit>>()
 
@@ -238,7 +244,14 @@ class SyncEngine(
             is DesktopMessage.Events -> {
                 // 没打开过的任务不存事件，列表用总览就够了。
                 val task = message.task
-                if (task != focus && store.lastSeq(computer.id, task) == 0L) return
+                val known = store.lastSeq(computer.id, task)
+                if (task != focus && known == 0L) return
+                if (known == 0L) {
+                    // 还没有这个任务的事件：只认刚才要的那一段（从 after 的下一条开始），推来的新事件等它回来再补。
+                    val after = opening[task] ?: return
+                    if (message.events.minOfOrNull { it.seq } != after + 1) return
+                    opening.remove(task)
+                }
                 when (val result = store.append(message.events, task, message.latest, computer.id)) {
                     is LocalStore.Append.Applied -> {
                         emit(Change.Task(task))
@@ -281,6 +294,7 @@ class SyncEngine(
         val last = store.lastSeq(computer.id, task)
         // 第一次打开：只要最近的一段，很长的任务不从头拉。
         val after = if (last > 0) last else store.overview(computer.id)?.tasks?.firstOrNull { it.id == task }?.let { maxOf(0, it.seq - 400) } ?: 0
+        if (last == 0L) opening[task] = after
         request(PhoneMessage.Fetch(task, after))
     }
 

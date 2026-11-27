@@ -225,6 +225,26 @@ class SyncTest {
     }
 
     @Test
+    fun aNewEventPushedBeforeTheFirstPageDoesNotHideTheHistory() = test {
+        val rig = Rig()
+        rig.online()
+        rig.desktop(overview(1, 3 to 6), "o")
+        until("overview") { "o" in rig.acked }
+        rig.engine.open(3)
+        until("fetch") { rig.asked("fetch", 0) }
+        // Agent 正在写：要的那一段回来之前，电脑先推来一条新的。
+        rig.desktop(events(7..7, 7), "push")
+        until("push acked") { "push" in rig.acked }
+        assertEquals("先不存，免得把前面的当成旧的丢掉", 0L, rig.store.lastSeq("mac", 3))
+        rig.desktop(events(1..6, 7), "page")
+        until("the rest") { rig.asked("fetch", 6) }
+        rig.desktop(events(7..7, 7), "rest")
+        until("all") { rig.store.lastSeq("mac", 3) == 7L }
+        assertEquals((1L..7L).toList(), rig.store.events("mac", 3).map { it.seq })
+        rig.engine.stop()
+    }
+
+    @Test
     fun startsOverWhenTheComputerLostItsHistory() = test {
         val rig = Rig()
         rig.online()

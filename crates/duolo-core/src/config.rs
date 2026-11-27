@@ -27,7 +27,7 @@ pub struct Config {
     /// 根据需求给新分支起名的命令，提示词作为最后一个参数，结果从 stdout 读取。
     /// 没写时用装了的 Agent；写成空的表示不用 AI 起名。
     pub namer: Option<Vec<String>>,
-    /// Duolo 服务器的地址（语音识别等）。写成空的表示不用服务器，语音只用本机的识别。
+    /// Duolo 服务器的地址（语音识别、手机配对和转发）。写成空的表示不用服务器：语音输入和手机都用不了。
     pub server: String,
 }
 
@@ -46,8 +46,8 @@ impl Default for Config {
     }
 }
 
-/// 默认的 Duolo 服务器。
-pub const DEFAULT_SERVER: &str = "";
+/// 默认的 Duolo 服务器（语音识别、手机配对和转发）。
+pub const DEFAULT_SERVER: &str = "https://duolo.io";
 
 /// 没有配置时谁写、谁审。
 const DEFAULT_WRITER: &str = "claude";

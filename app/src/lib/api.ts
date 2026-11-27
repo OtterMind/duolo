@@ -181,6 +181,32 @@ export interface Check {
 }
 
 /** 检查更新的结果。 */
+/** 和手机之间的连接（`duolo_link::Status`）。`error` 是错误码。 */
+export type LinkStatus =
+  | { state: "off" }
+  | { state: "connecting" }
+  | { state: "online" }
+  | { state: "offline"; error: string };
+
+/** 配好对的手机（`duolo_link::PhoneView`）。 */
+export interface PhoneView {
+  id: string;
+  name: string;
+  platform: string;
+  online: boolean;
+  /** Unix 毫秒。 */
+  pairedAt: number;
+}
+
+/** 给手机扫的配对二维码（`duolo_link::Pairing`）。 */
+export interface Pairing {
+  link: string;
+  /** 二维码（SVG）。 */
+  svg: string;
+  /** Unix 毫秒。 */
+  expiresAt: number;
+}
+
 export interface Updates {
   /** Duolo 的新版本，已经是最新时为 null。 */
   duolo: { version: string; url: string } | null;
@@ -403,6 +429,10 @@ export const api = {
   clipboardPaths: () => invoke<string[]>("clipboard_paths"),
   /** 用默认浏览器打开网址（只打开 http / https）。 */
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  linkStatus: () => invoke<LinkStatus>("link_status"),
+  linkPhones: () => invoke<PhoneView[]>("link_phones"),
+  linkPair: () => invoke<Pairing>("link_pair"),
+  linkUnpair: (id: string) => invoke<void>("link_unpair", { id }),
   /** 连上服务器开始录音；`task` 用来带上热词和最近的对话。 */
   voiceStart: (task?: number, project?: string) => invoke<void>("voice_start", { task, project }),
   voiceCancel: () => invoke<void>("voice_cancel"),

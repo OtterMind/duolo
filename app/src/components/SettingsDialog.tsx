@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Info, Mic, SlidersHorizontal, TriangleAlert, UserRound, X } from "lucide-react";
+import { Info, Mic, SlidersHorizontal, Smartphone, TriangleAlert, UserRound, X } from "lucide-react";
 
 import { LOCALES, useI18n, type LanguagePref } from "../i18n";
 import { api, type Check, type FnKeyStatus, type Surface, type Updates, type VoiceSettings } from "../lib/api";
@@ -10,8 +10,9 @@ import { requestSetup, requestUpdate } from "../lib/setup";
 import { FONT_SIZES, setTerminalFontSize, terminalFontSize } from "../lib/terminalFont";
 import { AccountSettings } from "./AccountSettings";
 import { AgentIcon } from "./AgentIcon";
+import { PhoneSettings } from "./PhoneSettings";
 
-type Tab = "general" | "voice" | "accounts" | "about";
+type Tab = "general" | "voice" | "phone" | "accounts" | "about";
 
 const TAB_KEY = "duolo.settingsTab";
 
@@ -32,6 +33,7 @@ export function SettingsDialog({
   const tabs: { id: Tab; label: string; icon: typeof Mic }[] = [
     { id: "general", label: t("settings.general"), icon: SlidersHorizontal },
     { id: "voice", label: t("settings.voice"), icon: Mic },
+    { id: "phone", label: t("settings.phone"), icon: Smartphone },
     ...(hasAccounts ? [{ id: "accounts" as const, label: t("account.title"), icon: UserRound }] : []),
     { id: "about", label: t("settings.about"), icon: Info },
   ];
@@ -86,6 +88,7 @@ export function SettingsDialog({
             {tab === "general" && <General env={env} onError={onError} />}
             {tab === "about" && <About env={env} onError={onError} />}
             {tab === "voice" && <Voice onError={onError} />}
+            {tab === "phone" && <PhoneSettings onError={onError} />}
             {tab === "accounts" && <AccountSettings onError={onError} />}
           </div>
         </section>

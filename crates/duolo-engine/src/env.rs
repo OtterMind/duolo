@@ -223,7 +223,8 @@ mod tests {
                 ("opencode", false),
                 ("pi", false),
                 ("grok", false),
-                ("", false)
+                // 语音：默认连 Duolo 服务器，算配好了。
+                ("", true)
             ]
         );
     }

@@ -686,6 +686,42 @@ body.is-resizing * {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+/* 设置 → 手机 */
+.link-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.link-dot.is-online {
+  background: var(--ins);
+}
+.link-dot.is-connecting {
+  background: var(--need);
+}
+.link-dot.is-offline {
+  background: var(--danger);
+}
+.pair-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 14px;
+}
+.pair-code img {
+  border-radius: 10px;
+  background: #fff;
+}
+.pair-code .settings-hint {
+  max-width: 300px;
+  text-align: center;
+}
+.phone-icon {
+  flex: none;
+  color: var(--dim);
+}
 .account-intro {
   margin: 0 2px;
 }

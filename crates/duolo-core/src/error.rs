@@ -35,6 +35,14 @@ pub enum UserError {
     VoiceOffline,
     #[error("not recording")]
     NotRecording,
+    #[error("no Duolo server is configured")]
+    LinkNotConfigured,
+    #[error("cannot reach the Duolo server")]
+    LinkOffline,
+    #[error("the Duolo server refused the request")]
+    LinkRefused,
+    #[error("signed out of the Duolo server")]
+    LinkSignedOut,
     #[error("review command is not configured (review_command)")]
     ReviewNotConfigured,
     #[error("the agent is not running")]
@@ -111,6 +119,10 @@ impl UserError {
             Self::VoiceQuotaExceeded => "voiceQuotaExceeded",
             Self::VoiceOffline => "voiceOffline",
             Self::NotRecording => "notRecording",
+            Self::LinkNotConfigured => "linkNotConfigured",
+            Self::LinkOffline => "linkOffline",
+            Self::LinkRefused => "linkRefused",
+            Self::LinkSignedOut => "linkSignedOut",
             Self::ReviewNotConfigured => "reviewNotConfigured",
             Self::AgentNotRunning => "agentNotRunning",
             Self::ChatUnsupported => "chatUnsupported",
@@ -229,6 +241,10 @@ mod tests {
             UserError::VoiceQuotaExceeded,
             UserError::VoiceOffline,
             UserError::NotRecording,
+            UserError::LinkNotConfigured,
+            UserError::LinkOffline,
+            UserError::LinkRefused,
+            UserError::LinkSignedOut,
             UserError::ReviewNotConfigured,
             UserError::AgentNotRunning,
             UserError::ChatUnsupported,

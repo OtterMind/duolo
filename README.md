@@ -89,6 +89,7 @@ duolo tui                                          # terminal UI, handy over SSH
 - **New tasks.** Click + next to a project (or press `⌘N`), type a request and press Enter. Everything else has a default you can change: repository, base branch, branch name (AI suggests one such as `feat/order-csv-export`), and who writes and who reviews.
 - **Automations.** Click the alarm clock at the top of the sidebar to open the Automations page and have Duolo do things on a schedule (every day, weekdays, every week, every hour, or any cron). Each automation picks where it runs: a new task in a project each time, handed to the agent you picked; an existing task, continuing its conversation; or no project (tasks go in a separate Automations project). You can also just tell the agent in a task "every weekday at 9, …" and it sets one up with Duolo's `duolo` command (Claude knows about it for now). Run one now, pause it, and see what each recent run did or why it was skipped. Tasks it started carry a clock icon. Automations run while Duolo is open (a closed window counts); if Duolo was quit, a run missed within the last 12 hours runs once when you open it again, and if the previous run is still working the next one is skipped. From the command line: `duolo automation add "Fix the flakiest test" --cron "0 9 * * 1-5"` (`--here` sends it into the current task, `--no-project` keeps it out of your projects), plus `ls`, `run`, `pause`, `resume` and `rm`.
 - **Accounts.** Duolo can install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account; if it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation.
+- **Phone.** Settings → Phone shows a QR code; scan it with the Duolo app on your phone to check on tasks, answer agents and start new tasks while you're away. Messages between the phone and your computer are end-to-end encrypted, and the Duolo server ([server/](server/README.md)) only relays them.
 - **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
 - **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
 - **No startup questions.** Before starting an agent in a task, Duolo marks the folder as trusted in Claude Code (`~/.claude.json`) and Codex (`~/.codex/config.toml`, for the repository) and turns off their update prompts, so they don't stop to ask. Claude's entry is removed when the task closes.
@@ -133,7 +134,7 @@ reviewer = "codex"         # default agent for reviews
 command = "/opt/homebrew/bin/claude"
 args = ["--model", "opus"]
 
-server = "https://duolo.example.com"  # the Duolo server (speech recognition); empty means none
+server = "https://duolo.io"  # the Duolo server (speech recognition, phone pairing and relay); empty means none
 
 [voice]
 organize = false   # have the server tidy up filler words and self-corrections (off by default)
@@ -170,7 +171,7 @@ Details are in [docs/architecture.md](docs/architecture.md), and the localizatio
 - Duolo is early. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 - There is no separate daemon: quitting stops all agents, and their sessions resume when you reopen a task.
 - Agents report their own state; OpenCode doesn't yet, so its state is read from the screen and can lag.
-- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. The iPhone and Android companion apps are in progress ([docs/mobile.md](docs/mobile.md)), with a relay in [server/](server/README.md); the desktop app does not connect to it yet.
+- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. The iPhone and Android companion apps are in testing ([docs/mobile.md](docs/mobile.md)) and not in the stores yet.
 - On Linux the push-to-talk shortcut works on X11 only. On Wayland, click the microphone.
 
 ## Contributing

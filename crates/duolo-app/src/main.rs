@@ -8,6 +8,7 @@
 
 mod commands;
 mod fnkey;
+mod phone;
 mod platform;
 mod setup;
 #[cfg(unix)]
@@ -17,7 +18,7 @@ mod view;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::Duration;
 
@@ -52,6 +53,8 @@ pub struct AppState {
     setup: setup::Setup,
     /// 取消正在进行的克隆（界面上点了取消）。
     clone_cancel: AtomicBool,
+    /// 和手机之间的连接，界面加载前在 setup 里建好。
+    link: OnceLock<(duolo_link::Link, Arc<phone::AppHost>)>,
 }
 
 impl AppState {
@@ -140,6 +143,7 @@ fn main() {
         asking_quit: AtomicBool::new(false),
         setup: setup::Setup::default(),
         clone_cancel: AtomicBool::new(false),
+        link: OnceLock::new(),
     };
 
     let builder = tauri::Builder::default()
@@ -176,6 +180,7 @@ fn main() {
     let app = builder
         .setup(|app| {
             first_launch_size(app);
+            start_link(app.handle());
             spawn_snapshot_loop(app.handle().clone());
             spawn_automation_loop(app.handle().clone());
             fnkey::start(app.handle().clone());
@@ -256,6 +261,10 @@ fn main() {
             commands::reveal,
             commands::open_terminal,
             commands::open_url,
+            commands::link_status,
+            commands::link_phones,
+            commands::link_pair,
+            commands::link_unpair,
             commands::clipboard_paths,
             commands::voice_start,
             commands::voice_cancel,
@@ -381,22 +390,44 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// 后台定时生成状态快照，变化时推送给界面。
+/// 连上服务器，等手机来配对、收发（见 `duolo_link`）。没配置服务器时什么也不做。
+fn start_link(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let (paths, server) = {
+        let engine = state.engine();
+        (engine.paths().clone(), engine.config().server.clone())
+    };
+    let host = Arc::new(phone::AppHost::new(app.clone()));
+    let options =
+        duolo_link::Options { paths, server, name: platform::device_name(), platform: platform::PLATFORM.into() };
+    let link = duolo_link::Link::start(options, host.clone());
+    let _ = state.link.set((link, host));
+}
+
+/// 后台定时生成状态快照，变化时推送给界面；有在线的手机时也推给它们。
 fn spawn_snapshot_loop(app: AppHandle) {
     thread::spawn(move || {
         let mut last = None;
         loop {
             let state = app.state::<AppState>();
-            let (snapshot, events) = {
+            let link = state.link.get();
+            let (snapshot, events, overview) = {
                 let mut engine = state.engine();
                 // `duolo new`、终端界面可能刚改过任务。
                 engine.sync();
                 engine.retry_failed_resumes();
                 engine.poll_reviews();
                 let events = engine.poll_events();
-                (view::snapshot(&mut engine), events)
+                let snapshot = view::snapshot(&mut engine);
+                let overview = link
+                    .filter(|(link, _)| link.wants_updates())
+                    .map(|(_, host)| host.overview(&mut engine, &snapshot));
+                (snapshot, events, overview)
             };
-            // 任务的事件流（对话、工具调用、状态、等你选……），以后手机端也用它。
+            // 任务的事件流（对话、工具调用、状态、等你选……），手机端也用它。
+            if let (Some((link, _)), Some(overview)) = (link, overview) {
+                link.publish(overview, &events);
+            }
             if !events.is_empty() {
                 let _ = app.emit("task-events", &events);
             }

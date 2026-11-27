@@ -31,6 +31,7 @@ pub use duolo_git::DiffStat;
 pub use duolo_pty::{Session, Size};
 pub use engine::{repos_in, Closed, Closing, Engine, NewTask, TaskOptions};
 pub use env::{check_environment, Check, CheckKind};
+pub use live::Digest;
 pub use naming::suggest_branch;
 pub use setup::{signed_in, start_setup, SetupStep};
 pub use status::{AgentStatus, Summary};

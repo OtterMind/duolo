@@ -1449,6 +1449,7 @@ dependencies = [
  "duolo-core",
  "duolo-engine",
  "duolo-git",
+ "duolo-link",
  "duolo-voice",
  "serde",
  "serde_json",

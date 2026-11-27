@@ -53,6 +53,39 @@ pub(crate) struct LiveState {
     settled: HashSet<AgentKey>,
     /// Agent 的家目录：去哪里找它的会话记录、配置文件。
     pub(crate) home: Home,
+    /// 每个任务的事件摘要（读过一次事件文件之后跟着新事件更新）。
+    digests: HashMap<TaskId, Digest>,
+}
+
+/// 任务事件的摘要：手机的列表要用的最后一句话、最后一条的编号和时间、在等你选的提示、改动统计。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Digest {
+    /// 最后一条事件的编号，没有事件时为 0。
+    pub seq: u64,
+    /// 最后一条事件的时间（Unix 毫秒）。
+    pub at: u64,
+    /// 最后一句对话。
+    pub last: String,
+    /// 还在等回答的提示：提示的编号和内容。回答了（状态变了）就清掉。
+    pub prompt: Option<(u64, String, String, Vec<String>)>,
+    /// 改动统计：文件数、增加的行、删掉的行。
+    pub diff: Option<(u32, u32, u32)>,
+}
+
+impl Digest {
+    fn apply(&mut self, event: &TaskEvent) {
+        self.seq = self.seq.max(event.seq);
+        self.at = self.at.max(event.at);
+        match &event.kind {
+            EventKind::Message { text, .. } => self.last.clone_from(text),
+            EventKind::Prompt { question, detail, options, .. } => {
+                self.prompt = Some((event.seq, question.clone(), detail.clone(), options.clone()));
+            }
+            EventKind::Status { status, .. } if status != "needs_input" => self.prompt = None,
+            EventKind::Diff { files, insertions, deletions } => self.diff = Some((*files, *insertions, *deletions)),
+            _ => {}
+        }
+    }
 }
 
 /// 环境变量 `DUOLO_AGENT_HOME` 指定的目录，没设置时是用户的家目录。
@@ -81,6 +114,7 @@ impl LiveState {
             pending: HashMap::new(),
             settled: HashSet::new(),
             home: agent_home(),
+            digests: HashMap::new(),
         }
     }
 }
@@ -101,6 +135,19 @@ impl Engine {
         self.live.status_since.get(&key).copied()
     }
 
+    /// 任务事件的摘要。第一次要时读一遍事件文件，之后跟着新事件更新。
+    pub fn digest(&mut self, task: TaskId) -> Digest {
+        if let Some(digest) = self.live.digests.get(&task) {
+            return digest.clone();
+        }
+        let mut digest = Digest::default();
+        for event in self.live.log.since(task, 0).unwrap_or_default() {
+            digest.apply(&event);
+        }
+        self.live.digests.insert(task, digest.clone());
+        digest
+    }
+
     /// 任务第 `after` 条之后的事件（断线重连时补齐用）。
     pub fn events_since(&self, task: TaskId, after: u64) -> Result<Vec<TaskEvent>> {
         self.live.log.since(task, after)
@@ -110,6 +157,9 @@ impl Engine {
     pub(crate) fn record(&mut self, task: TaskId, kind: EventKind) -> Option<u64> {
         let event = self.live.log.append(task, kind).ok()?;
         let seq = event.seq;
+        if let Some(digest) = self.live.digests.get_mut(&task) {
+            digest.apply(&event);
+        }
         self.live.fresh.push(event);
         Some(seq)
     }

@@ -23,6 +23,7 @@ Duolo 是一个并行运行编程 Agent 的桌面应用。每个任务有自己�
 - **交接**：把任务交给另一个 Agent 审阅、接手，或在新分支上接着做。
 - **终端或聊天**，两种方式是同一个会话。
 - **账号**：Duolo 可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。
+- **手机**：设置 → 手机里显示二维码，用手机上的 Duolo 扫一下，离开电脑也能看任务进度、回答 Agent 的提问、新建任务。手机和电脑之间端到端加密，Duolo 服务器（[server/](server/README.zh-CN.md)）只负责转发。
 - **语音输入**：按住 Fn 说话，任务里的代码名字也能识别对。
 - **定时任务**：在定时任务页设置，或者直接让 Agent 帮你建。
 - **多个账号**：一个额度用完自动换下一个，接着做。
@@ -132,7 +133,7 @@ reviewer = "codex"         # 默认审阅的 Agent
 command = "/opt/homebrew/bin/claude"
 args = ["--model", "opus"]
 
-server = "https://duolo.example.com"  # Duolo 服务器（语音识别），写成空的表示不用
+server = "https://duolo.io"  # Duolo 服务器（语音识别、手机配对和转发），写成空的表示不用
 
 [voice]
 organize = false   # 让服务器整理口头语和改口（默认不整理）
@@ -174,7 +175,7 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
 - Duolo 还在早期。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 - 没有独立的守护进程：退出会结束所有 Agent，重新打开任务时自动恢复会话。
 - Agent 自己报告状态；OpenCode 还不报告，它的状态靠看画面识别，可能慢一点。
-- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iPhone 和 Android 手机端正在做（[docs/mobile.md](docs/mobile.md)），服务端在 [server/](server/README.zh-CN.md)，桌面应用还没有接上。
+- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iPhone 和 Android 手机端在测试中（[docs/mobile.md](docs/mobile.md)），还没有上架。
 - Linux 上按住说话的全局快捷键只在 X11 下有效，Wayland 下请点麦克风按钮。
 
 ## 参与开发

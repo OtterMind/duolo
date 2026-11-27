@@ -4,6 +4,27 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// 登记到 Duolo 服务器上的平台名（手机上按它显示图标）。
+pub const PLATFORM: &str = if cfg!(target_os = "macos") {
+    "mac"
+} else if cfg!(windows) {
+    "windows"
+} else {
+    "linux"
+};
+
+/// 这台电脑的名字（手机上显示）：macOS 上是"电脑名称"，别的系统是主机名。
+pub fn device_name() -> String {
+    let output = if cfg!(target_os = "macos") {
+        duolo_core::process::command("scutil").args(["--get", "ComputerName"]).output()
+    } else {
+        duolo_core::process::command("hostname").output()
+    };
+    let name =
+        output.ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    name.filter(|n| !n.is_empty()).unwrap_or_else(|| "Duolo".into())
+}
+
 /// 在系统的文件管理器里打开目录。
 pub fn reveal(path: &Path) -> io::Result<()> {
     let program = if cfg!(target_os = "macos") {

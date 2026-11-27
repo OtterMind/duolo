@@ -26,6 +26,7 @@ duolo-cli.workspace = true
 duolo-core.workspace = true
 duolo-engine.workspace = true
 duolo-git.workspace = true
+duolo-link.workspace = true
 duolo-voice.workspace = true
 which.workspace = true
 tauri = { version = "2", features = [] }

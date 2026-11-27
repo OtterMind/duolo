@@ -578,6 +578,50 @@ pub async fn clipboard_paths() -> Res<Vec<String>> {
     Ok(crate::platform::clipboard_paths()?)
 }
 
+/// 和手机之间的连接现在怎么样。
+#[tauri::command]
+pub fn link_status(state: State<'_, AppState>) -> duolo_link::Status {
+    state.link.get().map_or(duolo_link::Status::Off, |(link, _)| link.status())
+}
+
+/// 配好对的手机。
+#[tauri::command]
+pub fn link_phones(state: State<'_, AppState>) -> Vec<duolo_link::PhoneView> {
+    state.link.get().map(|(link, _)| link.phones()).unwrap_or_default()
+}
+
+/// 生成给手机扫的配对二维码（要连服务器）。
+#[tauri::command]
+pub async fn link_pair(app: AppHandle) -> Res<duolo_link::Pairing> {
+    blocking(app, |state| {
+        let (link, _) = state.link.get().ok_or(UserError::LinkNotConfigured)?;
+        link.pair().map_err(link_error)
+    })
+    .await
+}
+
+/// 解除一台手机。
+#[tauri::command]
+pub async fn link_unpair(app: AppHandle, id: String) -> Res<()> {
+    blocking(app, move |state| {
+        let (link, _) = state.link.get().ok_or(UserError::LinkNotConfigured)?;
+        link.unpair(&id).map_err(link_error)
+    })
+    .await
+}
+
+/// 连服务器失败：连不上和被拒绝分开说。
+fn link_error(err: anyhow::Error) -> anyhow::Error {
+    if err.downcast_ref::<UserError>().is_some() {
+        return err;
+    }
+    eprintln!("link: {err:#}");
+    match err.downcast_ref::<duolo_link::ApiError>() {
+        Some(_) => UserError::LinkRefused.into(),
+        None => UserError::LinkOffline.into(),
+    }
+}
+
 /// 用默认浏览器打开网址（终端里按住 ⌘ / Ctrl 点链接）。
 #[tauri::command]
 pub fn open_url(url: String) -> Res<()> {

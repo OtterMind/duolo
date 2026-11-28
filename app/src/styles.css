@@ -244,7 +244,7 @@ body.is-resizing * {
   align-items: center;
   gap: 4px;
   height: 30px;
-  /* 文件夹图标和下面任务的状态图标对齐。 */
+  /* 文件夹图标和行的左边对齐，项目名和下面任务的 Agent 图标对齐。 */
   padding: 0 0 0 6px;
   color: var(--muted);
   font-size: 12.5px;
@@ -318,6 +318,13 @@ body.is-resizing * {
   padding: 0 6px 0 10px;
   border-radius: 7px;
   outline: none;
+}
+/* 项目下的任务缩进到和项目名对齐（文件夹图标 14 + 间距 6），一眼看出层级。 */
+.side-project .task-row {
+  padding-left: 30px;
+}
+.side-project .task-row.shell-row {
+  padding-left: 52px;
 }
 .task-row:hover {
   background: var(--hover);

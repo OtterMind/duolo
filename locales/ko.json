@@ -546,7 +546,7 @@
   "shell.reopen": "다시 열기",
   "newTask.shell": "터미널(AI 없음): 이 작업 폴더에서 명령을 실행하거나 셸만 엽니다",
   "newTask.shellPlaceholder": "터미널에서 실행할 명령(예: pnpm dev). 비워 두면 셸만 엽니다",
-  "terminal.openLink": "{key}를 누른 채 클릭하면 브라우저에서 엽니다",
+  "terminal.openLink": "클릭하면 브라우저에서 엽니다",
   "account.title": "AI 계정",
   "account.intro": "Agent가 AI 서비스에 로그인할 때 쓰는 계정입니다. 요금제와 사용 한도는 이 계정에 속합니다. Duolo 자체에는 계정이 필요 없습니다.",
   "account.sourceDuolo": "Duolo에서 로그인",

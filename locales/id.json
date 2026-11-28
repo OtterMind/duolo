@@ -546,7 +546,7 @@
   "shell.reopen": "Buka lagi",
   "newTask.shell": "Terminal tanpa AI: jalankan perintah di folder tugas ini, atau buka shell saja",
   "newTask.shellPlaceholder": "Perintah yang dijalankan di terminal, mis. pnpm dev (kosongkan untuk shell biasa)",
-  "terminal.openLink": "Tahan {key} lalu klik untuk membuka di browser",
+  "terminal.openLink": "Klik untuk membuka di browser",
   "account.title": "Akun AI",
   "account.intro": "Akun yang dipakai agen untuk masuk ke penyedia AI. Paket dan batas penggunaan Anda milik akun-akun ini. Duolo sendiri tidak memerlukan akun.",
   "account.sourceDuolo": "Masuk lewat Duolo",

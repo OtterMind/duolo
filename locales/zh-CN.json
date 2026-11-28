@@ -546,7 +546,7 @@
   "shell.reopen": "重新打开",
   "newTask.shell": "终端，不用 AI：在这个任务的文件夹里运行一条命令，或者只开一个 shell",
   "newTask.shellPlaceholder": "要在终端里运行的命令，例如 pnpm dev（不填就只开一个 shell）",
-  "terminal.openLink": "按住 {key} 点击，在浏览器中打开",
+  "terminal.openLink": "点击在浏览器中打开",
   "account.title": "AI 账号",
   "account.intro": "Agent 登录 AI 服务商用的账号，订阅和额度都属于这些账号。Duolo 本身不需要账号。",
   "account.sourceDuolo": "在 Duolo 里登录",

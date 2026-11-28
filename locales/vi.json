@@ -546,7 +546,7 @@
   "shell.reopen": "Mở lại",
   "newTask.shell": "Terminal, không dùng AI: chạy một lệnh trong thư mục của nhiệm vụ này, hoặc chỉ mở một shell",
   "newTask.shellPlaceholder": "Lệnh chạy trong terminal, vd: pnpm dev (để trống nếu chỉ mở shell)",
-  "terminal.openLink": "Giữ {key} và nhấp để mở trong trình duyệt",
+  "terminal.openLink": "Nhấp để mở trong trình duyệt",
   "account.title": "Tài khoản AI",
   "account.intro": "Các tài khoản Agent dùng để đăng nhập nhà cung cấp AI. Gói và hạn mức sử dụng thuộc về các tài khoản này. Bản thân Duolo không cần tài khoản.",
   "account.sourceDuolo": "Đăng nhập qua Duolo",

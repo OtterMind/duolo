@@ -546,7 +546,7 @@
   "shell.reopen": "もう一度開く",
   "newTask.shell": "ターミナル（AI なし）：このタスクのフォルダーでコマンドを実行、またはシェルだけを開く",
   "newTask.shellPlaceholder": "ターミナルで実行するコマンド（例：pnpm dev）。空ならシェルだけ開きます",
-  "terminal.openLink": "{key} を押しながらクリックでブラウザで開く",
+  "terminal.openLink": "クリックでブラウザで開く",
   "account.title": "AI アカウント",
   "account.intro": "Agent が AI サービスにサインインするためのアカウントです。プランと利用上限はこれらのアカウントに属します。Duolo 自体にアカウントは不要です。",
   "account.sourceDuolo": "Duolo でサインイン",

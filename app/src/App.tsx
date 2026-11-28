@@ -27,7 +27,7 @@ import { onSetupRequest, type SetupRequest } from "./lib/setup";
 import { loadLayout, MAX_PANES, saveLayout, type PaneSizes } from "./lib/layout";
 import { setDropHandler, type DropZone } from "./lib/paneDrag";
 import { requestShell } from "./lib/shellPanel";
-import { isMac, kbd, matches } from "./lib/platform";
+import { isMac, matches } from "./lib/platform";
 
 /** 右侧显示什么：某个任务的某个 Agent，或者没有任务时的空状态。 */
 /** 和原生菜单（crates/duolo-app/src/main.rs 的 build_menu）里一样的快捷键。 */
@@ -414,7 +414,7 @@ export function App() {
   }, [nameIfUntitled]);
 
   // 终端里链接的悬停提示跟着界面语言。
-  useEffect(() => setLinkHint(t("terminal.openLink", { key: kbd("⌘") })), [t]);
+  useEffect(() => setLinkHint(t("terminal.openLink")), [t]);
 
   // ---- 其他操作 ----
 

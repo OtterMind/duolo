@@ -546,7 +546,7 @@
   "shell.reopen": "Open again",
   "newTask.shell": "Terminal, no AI: run a command in this task's folder, or just open a shell",
   "newTask.shellPlaceholder": "A command to run in the terminal, e.g. pnpm dev (leave empty for a plain shell)",
-  "terminal.openLink": "Hold {key} and click to open in your browser",
+  "terminal.openLink": "Click to open in your browser",
   "account.title": "AI accounts",
   "account.intro": "The accounts your agents use to sign in to their AI providers. Your plan and usage limits belong to these accounts. Duolo itself doesn't need an account.",
   "account.sourceDuolo": "Signed in via Duolo",

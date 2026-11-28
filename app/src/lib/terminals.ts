@@ -9,7 +9,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
 import { agentKey, api, type AgentRef } from "./api";
-import { isMac, modKey } from "./platform";
+import { isMac } from "./platform";
 import { onTerminalFontSizeChange, terminalFontSize } from "./terminalFont";
 
 export const THEME: ITheme = {
@@ -198,7 +198,7 @@ function create(ref: AgentRef): Entry {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new Unicode11Addon());
-  // 输出里的网址：按住 ⌘（Windows / Linux 是 Ctrl）点击用默认浏览器打开。不按住时照常点终端、选文字。
+  // 输出里的网址：点一下用默认浏览器打开。按住拖动是选文字，不打开。
   // 两种链接：文字里看起来像网址的（WebLinksAddon），和程序用终端超链接（OSC 8）标出来的（Claude Code
   // 就这样输出链接）。后一种 xterm 默认先弹浏览器的确认框再 window.open，在桌面应用里打不开，换成一样的处理。
   //
@@ -223,11 +223,22 @@ function create(ref: AgentRef): Entry {
   el.className = "xterm-host";
   // 指针离开终端时暂时拿走它的焦点，见 lib/focus.ts。
   el.dataset.focusHome = "";
-  el.addEventListener("mousedown", () => (pressedInTerminal = true), true);
+  // 按下的位置：松开时离得远（拖动选文字）就不算点链接。
+  let down = { x: 0, y: 0 };
+  el.addEventListener(
+    "mousedown",
+    (e) => {
+      pressedInTerminal = true;
+      down = { x: e.clientX, y: e.clientY };
+    },
+    true,
+  );
   el.addEventListener(
     "mouseup",
     (e) => {
-      if (hovered && e.button === 0 && modKey(e)) void api.openUrl(hovered).catch(() => {});
+      if (!hovered || e.button !== 0 || term.hasSelection()) return;
+      if (Math.abs(e.clientX - down.x) > 4 || Math.abs(e.clientY - down.y) > 4) return;
+      void api.openUrl(hovered).catch(() => {});
     },
     true,
   );

@@ -325,11 +325,6 @@ function TaskRow({
       title={writer ? `${title}\n${writer.name} · ${stateLabel}` : title}
     >
       <div className="task-line">
-        {/* 状态在行首，和手机端、GitHub 的列表一样；名字在悬停提示里。 */}
-        {/* 空白任务也画状态（淡一些）：这一列空着，看起来像缩进在上一个任务下面。 */}
-        <span className={`row-status ${untitled && task.state !== "needs_you" ? "is-faded" : ""}`}>
-          <StateIcon task={task} />
-        </span>
         <span className={untitled ? "is-faded" : ""}>
           <AgentIcon kind={writer?.kind ?? ""} title={writer?.name} />
         </span>
@@ -374,6 +369,10 @@ function TaskRow({
             <X {...ICON} />
           </button>
         </span>
+        {/* 状态在行尾，和手机端一样：先看到任务名字；名字在悬停提示里。空白任务的状态淡一些。 */}
+        <span className={`row-status ${untitled && task.state !== "needs_you" ? "is-faded" : ""}`}>
+          <StateIcon task={task} />
+        </span>
       </div>
       {current && (
         <div className="task-meta">
@@ -401,7 +400,6 @@ function TaskRow({
         onKeyDown={(e) => e.key === "Enter" && onOpenShellTab(task.id, shell.id)}
       >
         <div className="task-line">
-          <StatusIcon status={shell.status} />
           <SquareTerminal {...ICON} className="dim" />
           <span className="grow ellipsis">{t("shell.tab", { n: i + 1 })}</span>
           <span className="row-actions">
@@ -415,6 +413,9 @@ function TaskRow({
             >
               <X {...ICON} />
             </button>
+          </span>
+          <span className="row-status">
+            <StatusIcon status={shell.status} />
           </span>
         </div>
       </div>

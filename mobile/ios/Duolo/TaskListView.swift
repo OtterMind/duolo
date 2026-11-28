@@ -240,11 +240,11 @@ struct TaskRowView: View {
 
     var body: some View {
         let style = StatusStyle(row.state, model.t)
+        // 状态在行尾，和电脑侧边栏一样：先看到任务名字。
         HStack(spacing: 14) {
-            StatusBadge(style: style)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看左边的图标。
+                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看右边的图标。
                     HStack(spacing: 6) {
                         AgentMark(agent: row.task.writer).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
                         Text(model.title(row.task)).font(.app(16, .semibold)).lineLimit(1)
@@ -267,9 +267,10 @@ struct TaskRowView: View {
                 }
                 .font(.app(14, relativeTo: .subheadline)).foregroundStyle(Palette.muted).lineLimit(1)
             }
-            .padding(.vertical, 13)
-            .overlay(alignment: .bottom) { Palette.line.frame(height: 1) }
+            StatusBadge(style: style)
         }
+        .padding(.vertical, 13)
+        .overlay(alignment: .bottom) { Palette.line.frame(height: 1) }
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -286,14 +287,14 @@ struct PendingRow: View {
             let t = model.t
             let failed = item.state == .failed
             HStack(spacing: 14) {
-                Icon("clock").foregroundStyle(failed ? Palette.bad : Palette.gray).frame(width: 36, height: 36)
-                    .background((failed ? Palette.bad : Palette.gray).opacity(0.13), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(prompt).font(.app(16, .semibold)).lineLimit(1)
                     Text(failed ? t.error(item.error ?? "internal") : t("mobile.pending"))
                         .font(.app(14, relativeTo: .subheadline)).foregroundStyle(failed ? Palette.bad : Palette.muted)
                 }
                 Spacer(minLength: 0)
+                Icon("clock").foregroundStyle(failed ? Palette.bad : Palette.gray).frame(width: 36, height: 36)
+                    .background((failed ? Palette.bad : Palette.gray).opacity(0.13), in: .rect(cornerRadius: 11))
                 if failed {
                     IconButton(icon: "x", label: t("common.cancel")) { model.discard(item) }
                 }

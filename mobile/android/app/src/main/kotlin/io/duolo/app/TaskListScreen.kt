@@ -259,29 +259,32 @@ private fun TaskRowView(row: TaskRow, onClick: () -> Unit) {
         Arrangement.spacedBy(14.dp),
         Alignment.CenterVertically,
     ) {
-        StatusBadge(style)
         Column(Modifier.weight(1f)) {
-            Column(Modifier.padding(vertical = 12.dp), Arrangement.spacedBy(2.dp)) {
-                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
-                    // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看左边的图标。标题用掉剩下的宽度。
-                    Row(Modifier.weight(1f), Arrangement.spacedBy(6.dp), Alignment.CenterVertically) {
-                        AgentMark(row.task.writer)
-                        Label(model.title(row.task), Modifier.weight(1f, fill = false), weight = FontWeight.SemiBold, maxLines = 1)
-                        if (row.task.repo.isNotEmpty()) RepoTag(row.task.repo)
+            // 状态在行尾，和电脑侧边栏一样：先看到任务名字。
+            Row(Modifier.padding(vertical = 12.dp), Arrangement.spacedBy(14.dp), Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), Arrangement.spacedBy(2.dp)) {
+                    Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
+                        // 和电脑侧边栏一样：写代码的 Agent、标题、项目里的哪个仓库。状态只看右边的图标。标题用掉剩下的宽度。
+                        Row(Modifier.weight(1f), Arrangement.spacedBy(6.dp), Alignment.CenterVertically) {
+                            AgentMark(row.task.writer)
+                            Label(model.title(row.task), Modifier.weight(1f, fill = false), weight = FontWeight.SemiBold, maxLines = 1)
+                            if (row.task.repo.isNotEmpty()) RepoTag(row.task.repo)
+                        }
+                        val time = remember(tick, row, t) { row.since?.let { Times.lasting(t, it) } ?: Times.ago(t, row.task.updatedAt) }
+                        Label(time, size = 12.sp, color = palette.dim, maxLines = 1)
                     }
-                    val time = remember(tick, row, t) { row.since?.let { Times.lasting(t, it) } ?: Times.ago(t, row.task.updatedAt) }
-                    Label(time, size = 12.sp, color = palette.dim, maxLines = 1)
-                }
-                // 第二行是最新的一句话；只有等你确认在前面写出状态名，光看问号不知道要你做什么。
-                val detail = if (row.state == TaskRow.State.NeedsYou) {
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = style.color, fontWeight = FontWeight.SemiBold)) { append(style.label) }
-                        if (row.detail.isNotEmpty()) append(" · ${row.detail}")
+                    // 第二行是最新的一句话；只有等你确认在前面写出状态名，光看问号不知道要你做什么。
+                    val detail = if (row.state == TaskRow.State.NeedsYou) {
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = style.color, fontWeight = FontWeight.SemiBold)) { append(style.label) }
+                            if (row.detail.isNotEmpty()) append(" · ${row.detail}")
+                        }
+                    } else {
+                        AnnotatedString(row.detail)
                     }
-                } else {
-                    AnnotatedString(row.detail)
+                    Text(detail, color = palette.muted, fontSize = 14.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(detail, color = palette.muted, fontSize = 14.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                StatusBadge(style)
             }
             HorizontalDivider(color = palette.line)
         }
@@ -301,15 +304,15 @@ private fun PendingRow(item: OutboxItem) {
         Arrangement.spacedBy(14.dp),
         Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(color.copy(alpha = 0.13f)), Alignment.Center) {
-            Icon(R.drawable.ic_clock, tint = color)
-        }
         Column(Modifier.weight(1f)) {
             Label(command.prompt, weight = FontWeight.SemiBold, maxLines = 1)
             Label(
                 if (failed) t.error(item.error ?: "internal") else t("mobile.pending"), size = 14.sp,
                 color = if (failed) palette.bad else palette.muted,
             )
+        }
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(color.copy(alpha = 0.13f)), Alignment.Center) {
+            Icon(R.drawable.ic_clock, tint = color)
         }
         if (failed) IconButton(R.drawable.ic_x, t("common.cancel")) { model.discard(item) }
     }

@@ -34,7 +34,9 @@ Duolo is a desktop app for running coding agents side by side. Every task gets i
 |---|---|---|---|
 | Second model reviews the change, findings sent back in one click | ✓ | You review the diff and comment on lines | You review the diff |
 | Hand a task to another agent: take over, fork, or review | ✓ | An orchestrator agent splits work among workers | ✓ |
-| Voice input that uses the task's code names, conversation and your word list | ✓ | Dictation | – |
+| Voice input that uses the task's code names, conversation and your word list | ✓ automatic | Dictation with a vocabulary you maintain | – |
+| Phone and computer talk end-to-end encrypted | ✓ | Not stated | Not stated |
+| Uncommitted work saved when a task closes | ✓ | Not stated | Not stated |
 | Switches to the next account at a usage limit and keeps the conversation | ✓ | Usage tracking and account switching | – |
 | Terminal and chat views of the same session | ✓ | ✓ | – |
 | Scheduled automations | ✓ | ✓ | – |
@@ -44,7 +46,7 @@ Duolo is a desktop app for running coding agents side by side. Every task gets i
 | Bots in Slack, GitHub and Linear | – | ✓ | – |
 | Web client | – | – | ✓ |
 
-Based on each project's README in November 2026; "–" means it isn't mentioned there. They move fast, so check their sites for the latest.
+Based on each project's README, website and changelog in November 2026; "–" and "not stated" mean we couldn't find it there. They move fast, so check their sites for the latest.
 
 ## Install
 

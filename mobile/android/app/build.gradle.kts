@@ -18,7 +18,7 @@ android {
         targetSdk = 36
         // 发布流程传入：每次上传的 versionCode 要比上次大，versionName 取版本标签。
         versionCode = System.getenv("DUOLO_VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = System.getenv("DUOLO_VERSION_NAME") ?: "0.1.0"
+        versionName = System.getenv("DUOLO_VERSION_NAME") ?: "0.1.1"
     }
 
     signingConfigs {

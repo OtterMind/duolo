@@ -2,7 +2,7 @@
 
 <h1 align="center">Duolo</h1>
 
-<p align="center"><b>Claude writes, Codex reviews.</b><br>Run a team of coding agents in parallel on your own machine.</p>
+<p align="center"><b>Your coding agents, working as a team.</b><br>Run Claude Code, Codex, OpenCode, pi and Grok in parallel on your own machine. One writes, another reviews,<br>and you steer from your desk, your phone or your voice.</p>
 
 <p align="center">
   <a href="https://github.com/OtterMind/duolo/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/OtterMind/duolo"></a>
@@ -10,22 +10,41 @@
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-<p align="center"><a href="https://duolo.io">Website</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">Download for Mac</a> · <a href="#features">Features</a> · <a href="README.zh-CN.md">简体中文</a></p>
+<p align="center"><a href="https://duolo.io">Website</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">Download for Mac</a> · <a href="#why-duolo">Why Duolo</a> · <a href="#how-duolo-compares">Compare</a> · <a href="#features">Features</a> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center"><img src="docs/images/duolo.png" width="900" alt="Duolo: tasks with their state in the sidebar, Claude Code in the main pane and a Codex review of its changes"></p>
 
 Duolo is a desktop app for running coding agents side by side. Every task gets its own git branch and worktree with the real agent CLI inside it: Claude Code, Codex, OpenCode, pi or Grok, in its own terminal or in a chat view. When the work is done, a second model reviews it read-only and you send the findings back with one click. The sidebar shows what each agent is doing and which ones are waiting for you. Agents run on your computer with your own accounts.
 
-## Highlights
+## Why Duolo
 
-- **Parallel tasks** in their own worktrees, up to six side by side. Nothing touches the checkout you're working in.
-- **One writes, one reviews.** A read-only review by a second model before you merge, findings sent back in one click.
-- **Hand off** a task to another agent to review it, take over, or continue on a new branch.
-- **Terminal or chat**, the same session either way.
-- **Voice input**: hold Fn and talk; code names from the task come out right.
-- **Automations** on a schedule, set up from the Automations page or by asking the agent.
-- **Several accounts**: when one runs out of usage, Duolo switches to the next and keeps going.
-- **`duolo` command line** and a terminal UI for SSH. **14 languages.**
+- **A second model checks every change.** Review is built in, not something you do by reading diffs: any agent reviews another's work read-only, in a throwaway copy with read-only tools, and its findings go back to the writer in one click. Hand a task to another agent to take over, or fork it so both versions run side by side, and switch back without losing either conversation.
+- **Voice that knows your code.** Hold Fn and talk. Each recording carries the task's file names, code names and recent conversation, names said in pieces are put back together ("use state" → `useState`), and your own word list covers product and library names. Duolo can also tidy what you said into a clean instruction. It works the same on your phone.
+- **Doesn't stop at a usage limit.** Sign in to several Claude or ChatGPT accounts. When one runs out, Duolo switches to the next and continues the same conversation.
+- **A waiting task is really waiting for you.** Agents report their own state instead of Duolo guessing from the screen, and they start without trust or update prompts. One row per task tells you which ones need you; `⌥↓` jumps to the next.
+- **Nothing gets lost.** Every task has its own branch and worktree. Closing a task commits its uncommitted changes to that branch first, and reopening it resumes the agent's own session.
+- **Local and light.** A native Rust core in a Tauri shell, the agents' real CLIs, your own accounts. Messages between your phone and computer are end-to-end encrypted; the Duolo server only relays them.
+- **Not only a window.** A `duolo` command line, a terminal UI for SSH, and scheduled automations that agents can set up for you. **14 languages** in the app, the command line, the terminal UI and the phone apps.
+
+## How Duolo compares
+
+[Orca](https://github.com/stablyai/orca) and [T3 Code](https://github.com/pingdotgg/t3code) are good open-source tools in the same space. All three run the agents' real CLIs with your own subscriptions, in parallel git worktrees, with a phone app. Where they differ:
+
+| | Duolo | Orca | T3 Code |
+|---|---|---|---|
+| Second model reviews the change, findings sent back in one click | ✓ | You review the diff and comment on lines | You review the diff |
+| Hand a task to another agent: take over, fork, or review | ✓ | An orchestrator agent splits work among workers | ✓ |
+| Voice input that uses the task's code names, conversation and your word list | ✓ | Dictation | – |
+| Switches to the next account at a usage limit and keeps the conversation | ✓ | Usage tracking and account switching | – |
+| Terminal and chat views of the same session | ✓ | ✓ | – |
+| Scheduled automations | ✓ | ✓ | – |
+| Terminal UI and command line | ✓ | Command line | – |
+| Diff viewer, commit and pull request buttons | Not yet | ✓ | ✓ |
+| Agents on remote machines | – | SSH hosts, remote server, cloud VMs | Local network, Tailscale, T3 Connect |
+| Bots in Slack, GitHub and Linear | – | ✓ | – |
+| Web client | – | – | ✓ |
+
+Based on each project's README in November 2026; "–" means it isn't mentioned there. They move fast, so check their sites for the latest.
 
 ## Install
 
@@ -90,7 +109,7 @@ duolo tui                                          # terminal UI, handy over SSH
 - **Automations.** Click the alarm clock at the top of the sidebar to open the Automations page and have Duolo do things on a schedule (every day, weekdays, every week, every hour, or any cron). Each automation picks where it runs: a new task in a project each time, handed to the agent you picked; an existing task, continuing its conversation; or no project (tasks go in a separate Automations project). You can also just tell the agent in a task "every weekday at 9, …" and it sets one up with Duolo's `duolo` command (Claude knows about it for now). Run one now, pause it, and see what each recent run did or why it was skipped. Tasks it started carry a clock icon. Automations run while Duolo is open (a closed window counts); if Duolo was quit, a run missed within the last 12 hours runs once when you open it again, and if the previous run is still working the next one is skipped. From the command line: `duolo automation add "Fix the flakiest test" --cron "0 9 * * 1-5"` (`--here` sends it into the current task, `--no-project` keeps it out of your projects), plus `ls`, `run`, `pause`, `resume` and `rm`.
 - **Accounts.** Duolo can install Claude Code and Codex for you and sign you in with your existing Claude or ChatGPT account; if it sees the Claude or ChatGPT desktop app, it offers to. You can sign in to several accounts (or use the ones already signed in to Orca); when one runs out of usage, Duolo switches to the next and continues the conversation.
 - **Phone.** Settings → Phone shows a QR code; scan it with the Duolo app on your phone to check on tasks, answer agents and start new tasks while you're away. Messages between the phone and your computer are end-to-end encrypted, and the Duolo server ([server/](server/README.md)) only relays them.
-- **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. macOS and Windows use the built-in recognizer with no setup. Duolo can tidy up what you said before inserting it, and you can switch back to your exact words.
+- **Voice.** Hold `Fn` to talk (`Ctrl+Shift+Space` on Windows and Linux) and release to insert. Recognition knows the task's file and code names and puts names said in pieces back together ("use state" → `useState`); add your own words in Settings → Voice. Duolo can tidy up what you said into an instruction before inserting it, and you can switch back to your exact words.
 - **Nothing lost on close.** Closing a task commits uncommitted changes to its branch before deleting the working directory. If something can't be saved, such as a nested repository, the task stays open and Duolo tells you why. Files ignored by git, such as `.env`, are deleted.
 - **No startup questions.** Before starting an agent in a task, Duolo marks the folder as trusted in Claude Code (`~/.claude.json`) and Codex (`~/.codex/config.toml`, for the repository) and turns off their update prompts, so they don't stop to ask. Claude's entry is removed when the task closes.
 - **Sessions resume.** Reopening a task continues that agent's own conversation, by session ID (`claude --resume <id>`, `codex resume <id>`).
@@ -149,7 +168,8 @@ Every agent is a plugin: an `agent.toml` that says how to start, resume and revi
 Speech is recognized by the Duolo server (which passes it to Doubao streaming speech recognition), the same on macOS, Windows and Linux:
 
 - Duolo records from the current input device, so a headset's microphone works when you wear one. The system asks for microphone access the first time.
-- Each recording carries hints from the current task (recently touched files, code names the agent mentioned, the branch and project names) and the latest conversation, so mixed-language speech and code names come out right more often.
+- Each recording carries hints from the current task (your word list from Settings → Voice, recently touched files, code names from the conversation, the branch and project names) and the latest conversation, so mixed-language speech and code names come out right more often. Names that still come back in pieces are joined using the same hints ("export CSV" → `exportCsv`).
+- The phone apps use the word list and the tidy-up setting from your computer.
 - No sign-up: the first time, Duolo gets an anonymous identity from the server and keeps it in `~/.duolo/account.json`. The server limits use per identity per day.
 - Your voice and these hints are sent to the Duolo server and the recognition service. If the server can't be reached, voice input is unavailable and Duolo says why.
 
@@ -171,7 +191,7 @@ Details are in [docs/architecture.md](docs/architecture.md), and the localizatio
 - Duolo is early. macOS gets the most use; Windows and Linux are compiled and tested in CI but haven't been used end to end on real machines.
 - There is no separate daemon: quitting stops all agents, and their sessions resume when you reopen a task.
 - Agents report their own state; OpenCode doesn't yet, so its state is read from the screen and can lag.
-- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. The iPhone and Android companion apps are in testing ([docs/mobile.md](docs/mobile.md)) and not in the stores yet.
+- There is no diff viewer, merge or pull request support, system notifications or automatic updates yet. The iPhone app is in App Store review and the Android app is on its way to Google Play ([docs/mobile.md](docs/mobile.md)).
 - On Linux the push-to-talk shortcut works on X11 only. On Wayland, click the microphone.
 
 ## Contributing
@@ -188,4 +208,4 @@ Conventions are in [AGENTS.md](AGENTS.md): all user-facing text must exist in al
 
 ## License
 
-[MIT](LICENSE). Claude and Claude Code are trademarks of Anthropic, and Codex is a trademark of OpenAI. Duolo is an independent project and is not affiliated with either company.
+[MIT](LICENSE). Claude and Claude Code are trademarks of Anthropic, and Codex is a trademark of OpenAI. Duolo is an independent project and is not affiliated with either company, or with Orca or T3 Code.

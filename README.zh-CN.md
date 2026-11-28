@@ -2,7 +2,7 @@
 
 <h1 align="center">Duolo</h1>
 
-<p align="center"><b>Claude 写，Codex 审。</b><br>在自己的电脑上并行运行一支编程 Agent 团队。</p>
+<p align="center"><b>让你的编程 Agent 像团队一样干活。</b><br>在自己的电脑上并行运行 Claude Code、Codex、OpenCode、pi 和 Grok。一个写，一个审，<br>你在电脑前、手机上或者动动嘴就能指挥。</p>
 
 <p align="center">
   <a href="https://github.com/OtterMind/duolo/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/OtterMind/duolo"></a>
@@ -10,24 +10,41 @@
   <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-<p align="center"><a href="https://duolo.io/?lang=zh-CN">官网</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">下载 Mac 版</a> · <a href="#功能">功能</a> · <a href="README.md">English</a></p>
+<p align="center"><a href="https://duolo.io/?lang=zh-CN">官网</a> · <a href="https://github.com/OtterMind/duolo/releases/latest">下载 Mac 版</a> · <a href="#为什么选-duolo">为什么选 Duolo</a> · <a href="#和同类工具对比">对比</a> · <a href="#功能">功能</a> · <a href="README.md">English</a></p>
 
 <p align="center"><img src="docs/images/duolo.png" width="900" alt="Duolo：侧边栏是各个任务和状态，主区域是 Claude Code，下面是 Codex 对改动的审阅"></p>
 
 Duolo 是一个并行运行编程 Agent 的桌面应用。每个任务有自己的 git 分支和 worktree，里面跑的就是原生的 Agent CLI：Claude Code、Codex、OpenCode、pi 或 Grok，可以用它自己的终端，也可以切到聊天视图。写完让另一个模型只读审阅，结论一键交回去修改。侧边栏一眼看清每个 Agent 在做什么、哪些在等你。Agent 用你自己的账号在你的电脑上运行。
 
-## 亮点
+## 为什么选 Duolo
 
-- **多个任务并行**，各在自己的 worktree 里，最多六个并排看，不碰你正在用的工作目录。
-- **一个写，一个审**：合并前由另一个模型只读审阅，意见一键交回。
-- **交接**：把任务交给另一个 Agent 审阅、接手，或在新分支上接着做。
-- **终端或聊天**，两种方式是同一个会话。
-- **账号**：Duolo 可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。
-- **手机**：设置 → 手机里显示二维码，用手机上的 Duolo 扫一下，离开电脑也能看任务进度、回答 Agent 的提问、新建任务。手机和电脑之间端到端加密，Duolo 服务器（[server/](server/README.zh-CN.md)）只负责转发。
-- **语音输入**：按住 Fn 说话，任务里的代码名字也能识别对。
-- **定时任务**：在定时任务页设置，或者直接让 Agent 帮你建。
-- **多个账号**：一个额度用完自动换下一个，接着做。
-- **`duolo` 命令行**和适合 SSH 的终端界面；**14 种语言**。
+- **每次改动都有另一个模型把关。** 审阅是内置的，不靠你自己看 diff：任何 Agent 都能只读审阅另一个的改动，在临时副本里、只给只读工具，审完的意见一键交回给写代码的。还可以把任务交给另一个 Agent 接手，或者分叉出去两个版本并排做，切回来时两边的对话都还在。
+- **听得懂代码的语音输入。** 按住 Fn 说话。每次识别都带上任务里的文件名、代码里的名字和最近的对话；拆开说的名字会拼回去（"use state" → `useState`）；产品名、库名可以加进自己的词表。还可以把说的话整理成一条清楚的指令。手机上也一样。
+- **额度用完不停工。** 可以登录多个 Claude 或 ChatGPT 账号，一个额度用完，自动换下一个，接着原来的对话做。
+- **显示在等你，就是真的在等你。** 状态由 Agent 自己报告，不靠认屏幕上的字；启动时也不会卡在"信任这个文件夹吗""要更新吗"的提示上。每个任务一行，哪些要你处理一眼看清，`⌥↓` 跳到下一个。
+- **什么都不会丢。** 每个任务有自己的分支和 worktree。关闭任务前先把没提交的改动提交到它的分支；重新打开时接着 Agent 自己的会话。
+- **本地、轻量。** Rust 写的内核加 Tauri 外壳，跑的是 Agent 原生的 CLI，用的是你自己的账号。手机和电脑之间端到端加密，Duolo 服务器只负责转发。
+- **不止一个窗口。** 有 `duolo` 命令行、适合 SSH 的终端界面，还有 Agent 能替你建的定时任务。应用、命令行、终端界面和手机端都支持 **14 种语言**。
+
+## 和同类工具对比
+
+[Orca](https://github.com/stablyai/orca) 和 [T3 Code](https://github.com/pingdotgg/t3code) 都是同类里不错的开源工具。三者都跑 Agent 原生的 CLI、用你自己的订阅、在各自的 git worktree 里并行，也都有手机端。不同的地方：
+
+| | Duolo | Orca | T3 Code |
+|---|---|---|---|
+| 另一个模型审阅改动，意见一键交回 | ✓ | 你自己看 diff、按行评论 | 你自己看 diff |
+| 把任务交给另一个 Agent：接手、分叉或审阅 | ✓ | 一个总控 Agent 把活分给几个干活的 | ✓ |
+| 语音输入带上任务里的代码名字、对话和自己的词表 | ✓ | 听写 | – |
+| 额度用完自动换下一个账号，接着原来的对话 | ✓ | 看用量、切换账号 | – |
+| 同一个会话可以用终端看，也可以用聊天看 | ✓ | ✓ | – |
+| 定时任务 | ✓ | ✓ | – |
+| 终端界面和命令行 | ✓ | 命令行 | – |
+| 看 diff、提交、提 PR 的按钮 | 还没有 | ✓ | ✓ |
+| 在远程机器上跑 Agent | – | SSH 主机、远程服务器、云虚拟机 | 局域网、Tailscale、T3 Connect |
+| Slack、GitHub、Linear 里的机器人 | – | ✓ | – |
+| 网页版 | – | – | ✓ |
+
+依据是各项目 2026 年 11 月的 README，"–"表示里面没有提到。它们更新很快，最新情况以各自官网为准。
 
 ## 安装
 
@@ -90,11 +107,14 @@ duolo tui                      # 在终端里打开（适合 SSH 远程）
 - **项目**：项目就是一个工作文件夹，可以是一个 git 仓库，也可以是装了几个仓库的文件夹。侧边栏顶部"添加项目"（`⌘O`）：打开现有文件夹、新建文件夹、从 GitHub 克隆，或者点这台电脑上找到的仓库；也可以把文件夹拖进窗口。新建和克隆默认放在 `~/DuoloProjects`。右键项目（或点它的 ⋯）可以从 Duolo 移除：先关闭它的任务，改动保存在各自的分支上，磁盘上的文件夹保留（命令行：`duolo remove <项目> --yes`）。
 - **新建任务**：点项目名后面的 +（或 `⌘N`），写一句需求回车就开始。其他都有默认值，想改再点：改项目里的哪个仓库、基于哪个分支、新分支叫什么（AI 根据需求起名，比如 `feat/order-csv-export`），以及谁写、谁审（Claude / Codex，没装的会给出安装命令）。
 - **定时任务**：点侧边栏顶部的闹钟打开定时任务页面，让 Duolo 按时间表做事（每天、工作日、每周、每小时，或者任意 cron）。每个定时任务选在哪里做：每次在某个项目里新建任务交给你选的 Agent、发进一个已有的任务接着对话，或者不指定项目（任务放在单独的 Automations 项目里）。也可以直接在任务里跟 Agent 说"每个工作日 9 点……"，它会用 Duolo 的 `duolo` 命令建好（目前 Claude 知道这个命令）。可以立即运行、暂停，也能看到最近几次各建了什么任务、为什么跳过。它建的任务带一个闹钟图标。Duolo 开着时才执行（关掉窗口也算开着）；退出了 Duolo 的话，再次打开时补跑一次 12 小时内错过的；上一次还没做完时，这次跳过。命令行：`duolo automation add "修掉最不稳定的测试" --cron "0 9 * * 1-5"`（加 `--here` 发进当前任务、`--no-project` 不指定项目），还有 `ls`、`run`、`pause`、`resume`、`rm`。
-- **语音输入**：按住 `Fn` 说话（Windows / Linux 是 `Ctrl+Shift+Space`），松开插入（按住 Fn 再点空格可以锁定）；macOS 和 Windows 用系统自带的识别，免配置。说话时输入块变成录音条，实时出字、显示音量，没声音会提示。整理后填进 Agent 的输入框，可以换回原话或撤销。
+- **账号**：Duolo 可以替你一键安装 Claude Code 和 Codex，并用你已有的 Claude 或 ChatGPT 账号登录；发现电脑上装了 Claude 或 ChatGPT 桌面版时会主动提示。可以登录多个账号（也能直接用 Orca 里登录好的），一个账号额度用完时自动换下一个，接着原来的对话继续做。
+- **手机**：设置 → 手机里显示二维码，用手机上的 Duolo 扫一下，离开电脑也能看任务进度、回答 Agent 的提问、新建任务。手机和电脑之间端到端加密，Duolo 服务器（[server/](server/README.zh-CN.md)）只负责转发。
+- **语音输入**：按住 `Fn` 说话（Windows / Linux 是 `Ctrl+Shift+Space`），松开插入（按住 Fn 再点空格可以锁定）；识别时认得任务里的文件名和代码名字，拆开说的名字会拼回去（"use state" → `useState`），自己的词可以加在设置 → 语音里。说话时输入块变成录音条，实时出字、显示音量，没声音会提示。整理后填进 Agent 的输入框，可以换回原话或撤销。
 - **启动时不停下来问**：在任务里启动 Agent 之前，Duolo 先在 Claude Code（`~/.claude.json`）和 Codex（`~/.codex/config.toml`，按仓库记）里把这个文件夹记为已信任，并关掉它们启动时的升级提示，它们就不会停下来问。Claude 的那一项在任务关闭时删掉。
 - **会话恢复**：重新打开任务时按会话编号接着这个 Agent 自己的那次会话（`claude --resume <id>` / `codex resume <id>`）；没有可恢复的会话时带着原始需求重新开始。
 - **不丢改动**：关闭任务时，没提交的改动先提交到任务的分支，再删除工作目录；没法完整保存（例如里面有嵌套仓库）就不关，并说明原因。被 git 忽略的文件（如 `.env`）会删除。
 - **关窗口不停工**（macOS）：`⌘W` 只是收起窗口，Agent 继续在后台运行，点 Dock 图标回来；`⌘Q` 才会结束它们。Windows / Linux 上关窗口就是退出，有 Agent 在运行时会先确认。
+- **14 种语言**：应用、命令行和终端界面都支持。
 
 ## 快捷键
 
@@ -148,8 +168,9 @@ organize = false   # 让服务器整理口头语和改口（默认不整理）
 语音用 Duolo 服务器识别（服务端转给豆包的流式语音识别），macOS、Windows、Linux 都一样：
 
 - 录系统当前的输入设备，戴耳机时用耳机的麦克风。第一次使用时系统会请求麦克风权限。
-- 开始录音时带上当前任务的热词（最近改过的文件、Agent 提到的代码名字、分支名、项目名）和最近的对话，
-  中英混说、代码里的名字更容易认对。
+- 开始录音时带上当前任务的热词（设置 → 语音里自己加的词、最近改过的文件、对话里的代码名字、分支名、项目名）和最近的对话，
+  中英混说、代码里的名字更容易认对。识别结果里还拆开的名字，按同样的热词拼回去（"export CSV" → `exportCsv`）。
+- 手机端用电脑上的词表和"整理成指令"的设置。
 - 不用注册：第一次使用时自动在服务器上领一个匿名身份，存在 `~/.duolo/account.json`；服务器按身份每天限额。
 - 声音和这些提示会发给 Duolo 服务器和识别服务；服务器连不上时语音输入不可用，会提示原因。
 
@@ -175,7 +196,7 @@ duolo-tui ─┴▶ duolo-engine ─▶ duolo-pty   (PTY + 输出订阅 + 状态
 - Duolo 还在早期。macOS 用得最多；Windows 和 Linux 由 CI 编译和测试，还没有在真机上完整用过。
 - 没有独立的守护进程：退出会结束所有 Agent，重新打开任务时自动恢复会话。
 - Agent 自己报告状态；OpenCode 还不报告，它的状态靠看画面识别，可能慢一点。
-- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iPhone 和 Android 手机端在测试中（[docs/mobile.md](docs/mobile.md)），还没有上架。
+- 还没有查看 diff、合并、提 PR 的界面，也没有系统通知和自动更新；iPhone 版在 App Store 审核中，Android 版正在上架 Google Play（[docs/mobile.md](docs/mobile.md)）。
 - Linux 上按住说话的全局快捷键只在 X11 下有效，Wayland 下请点麦克风按钮。
 
 ## 参与开发
@@ -192,4 +213,4 @@ cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && carg
 
 ## 许可证
 
-[MIT](LICENSE)。Claude、Claude Code 是 Anthropic 的商标，Codex 是 OpenAI 的商标；Duolo 是独立的项目，和这两家公司没有隶属关系。
+[MIT](LICENSE)。Claude、Claude Code 是 Anthropic 的商标，Codex 是 OpenAI 的商标；Duolo 是独立的项目，和这两家公司没有隶属关系，和 Orca、T3 Code 也没有关系。
